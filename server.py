@@ -57,6 +57,97 @@ def _enrich_box_columns(box: pd.DataFrame) -> pd.DataFrame:
         box[c] = pd.to_numeric(box[c], errors="coerce").fillna(0)
     return box
 
+def compute_custom_player_rating(box: pd.DataFrame, matches: pd.DataFrame) -> pd.DataFrame:
+    """Calcule la Note Impact Handball (/10) et le temps de jeu estimé sur 100 % des saisons."""
+    if box is None or box.empty:
+        return box
+
+    b = box.copy()
+    # 1. Contexte du match (buts encaissés par l'équipe et résultat)
+    m_sub = matches[["match_id", "home_team", "away_team", "home_ft_goals", "away_ft_goals", "played"]].drop_duplicates("match_id")
+    b = b.merge(m_sub, on="match_id", how="left")
+
+    is_home = b["team"] == b["home_team"]
+    gf_team = np.where(is_home, b["home_ft_goals"], b["away_ft_goals"])
+    ga_team = np.where(is_home, b["away_ft_goals"], b["home_ft_goals"])
+    league_avg_ga = float(np.nanmean(ga_team)) if np.notna(ga_team).any() else 29.5
+
+    win_bonus = np.where(
+        b["played"].fillna(False),
+        np.where(gf_team > ga_team, 0.45, np.where(gf_team == ga_team, 0.15, 0.0)),
+        0.0,
+    )
+
+    # 2. Détection par match de la présence du chrono et des stats défensives individuelles
+    match_clock = b.groupby("match_id")["seconds_played"].transform("sum") > 0
+    adv_sum = b["br"] + b["tc"] + b["pp"] + b["2p"]
+    match_has_adv = adv_sum.groupby(b["match_id"]).transform("sum") > 0
+
+    total_events = (
+        b["shots"] + b["shots_faced"] + b["a"] + b["br"] + b["tc"]
+        + b["pp"] + b["2p"] + b["bp"] + b["dp"] + b["2min"] + b["d"]
+    )
+    b["played_match"] = np.where(match_clock, b["seconds_played"] > 0, total_events > 0)
+    b["has_real_clock"] = match_clock
+
+    # 3. Composantes Joueur de champ vs Gardien
+    open_goals = np.maximum(0.0, b["goals"] - b["goals_7m"])
+    open_shots = np.maximum(open_goals, b["shots"] - b["shots_7m"])
+    open_miss = np.maximum(0.0, open_shots - open_goals)
+    miss_7m = np.maximum(0.0, b["shots_7m"] - b["goals_7m"])
+
+    off_field = (
+        1.50 * open_goals
+        - 0.65 * open_miss
+        + 1.10 * b["goals_7m"]
+        - 0.90 * miss_7m
+        + 1.15 * b["a"]
+        + 0.95 * b["pp"]
+        + 1.10 * b["2p"]
+        + 0.40 * b["dp"]
+        - 1.25 * b["bp"]
+    )
+
+    team_def_delta = np.clip((league_avg_ga - np.nan_to_num(ga_team, nan=league_avg_ga)) / 4.5, -1.2, 1.5)
+    w_coll = np.where(match_has_adv, 1.0, 1.65)
+    disc_pen = -0.85 * b["2min"] - 2.50 * b["d"]
+
+    def_field = 1.65 * b["br"] + 1.35 * b["tc"] + w_coll * team_def_delta + disc_pen
+
+    # Gardiens
+    open_saves = np.maximum(0.0, b["saves"] - b["saves_7m"])
+    open_faced = np.maximum(open_saves, b["shots_faced"] - b["shots_faced_7m"])
+    open_ga = np.maximum(0.0, open_faced - open_saves)
+    ga_7m = np.maximum(0.0, b["shots_faced_7m"] - b["saves_7m"])
+
+    off_gk = 1.60 * b["goals"] + 1.25 * b["a"] - 1.25 * b["bp"]
+    def_gk = 1.35 * open_saves - 0.52 * open_ga + 2.20 * b["saves_7m"] - 0.15 * ga_7m + 1.40 * b["br"] + disc_pen
+
+    b["impact_off"] = np.where(b["is_gk"], off_gk, off_field)
+    b["impact_def"] = np.where(b["is_gk"], def_gk, def_field)
+    raw_impact = b["impact_off"] + b["impact_def"] + win_bonus
+
+    b["impact_score"] = np.where(b["played_match"], raw_impact, 0.0)
+    note_raw = 1.0 + 9.0 / (1.0 + np.exp(-(raw_impact - 2.0) / 5.2))
+    b["match_note"] = np.where(b["played_match"], np.clip(note_raw, 1.0, 10.0), np.nan)
+
+    # 4. Estimation du temps de jeu (proxy) uniquement quand seconds_played est absent
+    team_faced = b.groupby(["match_id", "team"])["shots_faced"].transform("sum").clip(lower=1.0)
+    gk_est_sec = np.clip(3600.0 * (b["shots_faced"] / team_faced), 300.0, 3600.0)
+
+    usage = np.where(
+        b["played_match"] & (~b["is_gk"]),
+        1.0 + b["shots"] + b["a"] + b["bp"] + b["pp"] + b["2p"] + 1.5 * (b["br"] + b["tc"]) + 0.5 * b["dp"],
+        0.0,
+    )
+    team_usage = usage.groupby([b["match_id"], b["team"]]).transform("sum").clip(lower=1.0)
+    field_est_sec = np.clip(21600.0 * (usage / team_usage), 300.0, 3600.0)  # 6 joueurs * 3600s = 21600s
+
+    proxy_sec = np.where(b["played_match"], np.where(b["is_gk"], gk_est_sec, field_est_sec), 0.0)
+    b["est_seconds"] = np.where(match_clock, b["seconds_played"], proxy_sec)
+
+    drop_tmp = [c for c in ["home_team", "away_team", "home_ft_goals", "away_ft_goals", "played"] if c not in box.columns]
+    return b.drop(columns=drop_tmp)
 
 def load_data():
     """Charge matchs + feuilles de match une seule fois (rechargé si les CSV changent)."""
@@ -72,6 +163,7 @@ def load_data():
         mapped = box["match_id"].map(season_by_match)
         box["season"] = mapped.fillna(box["season"].astype(str).str.replace("-", "/", regex=False))
         box = _enrich_box_columns(box)
+        box = compute_custom_player_rating(box, m)
     _cache.update(stamp=st, m=m, box=box, seasons=seasons)
     return m, box, seasons
 
@@ -146,10 +238,11 @@ def top_players(box: pd.DataFrame | None, season: str | None) -> dict:
     b = box if season is None else box[box["season"] == season]
     if b.empty:
         return empty
-    b = b.assign(name=(b["first_name"].fillna("") + " " + b["last_name"].fillna("")).str.strip())
+    b = b[b["played_match"]].assign(name=(b["first_name"].fillna("") + " " + b["last_name"].fillna("")).str.strip())
     g = b.groupby(["name", "team"]).agg(
         games=("match_id", "nunique"),
-        seconds=("seconds_played", "sum"),
+        seconds=("est_seconds", "sum"),
+        real_clock_share=("has_real_clock", "mean"),
         goals=("goals", "sum"),
         shots=("shots", "sum"),
         goals_7m=("goals_7m", "sum"),
@@ -163,9 +256,15 @@ def top_players(box: pd.DataFrame | None, season: str | None) -> dict:
         a=("a", "sum"),
         bp=("bp", "sum"),
         two_min=("2min", "sum"),
-        lnh=("lnh_score", "sum"),
+        lnh=("impact_score", "sum"),
+        note=("match_note", "mean"),
+        impact_def=("impact_def", "sum"),
         gk=("is_gk", "max"),
     ).reset_index()
+
+    g["note"] = g["note"].fillna(5.0).round(2)
+    g["impact_def"] = g["impact_def"].round(1)
+    g["est_clock"] = g["real_clock_share"] < 0.5
 
     g["minutes"] = (g["seconds"] / 60.0).round(1)
     g["lnh"] = g["lnh"].round(1)
@@ -178,13 +277,18 @@ def top_players(box: pd.DataFrame | None, season: str | None) -> dict:
     cols = [
         "name", "team", "games", "minutes", "goals", "shots", "pct",
         "goals_7m", "shots_7m", "pct_7m", "saves", "faced", "save_pct",
-        "saves_7m", "faced_7m", "br", "tc", "def_act", "a", "bp", "two_min", "lnh", "gk",
+        "saves_7m", "faced_7m", "br", "tc", "def_act", "a", "bp", "two_min",
+        "lnh", "note", "impact_def", "est_clock", "gk",
     ]
     rec = lambda d: d[cols].to_dict("records")
     min_faced = 60 if season else 150
     min_7m = 10 if season else 25
+    min_games_mvp = 5 if season else 15
+    mvp_pool = g[g["games"] >= min_games_mvp]
+    if len(mvp_pool) < 5:
+        mvp_pool = g
     return {
-        "mvp": rec(g.sort_values("lnh", ascending=False).head(30)),
+        "mvp": rec(mvp_pool.sort_values(["note", "lnh"], ascending=False).head(30)),
         "scorers": rec(g[~g.gk].sort_values("goals", ascending=False).head(30)),
         "keepers": rec(g[g.gk & (g.faced >= min_faced)].sort_values("save_pct", ascending=False).head(30)),
         "seven_m": rec(g[g.shots_7m >= min_7m].sort_values(["goals_7m", "pct_7m"], ascending=False).head(30)),

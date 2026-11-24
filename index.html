@@ -267,11 +267,7 @@ function halftimeForPeriod(key){
   return [...acc.values()].sort((a,b)=>b.cb_pts-a.cb_pts||b.cb_w-a.cb_w);
 }
 
-function playersForPeriod(key){
-  const empty={mvp:[],scorers:[],keepers:[],seven_m:[],defense:[],discipline:[]};
-  if(!H.players)return empty;
-  if(key!=='__range__')return H.players[key]||H.players.all||empty;
-  const mergeList=(prop,sortKey)=>{
+const mergeList=(prop,sortKey)=>{
     const acc=new Map();
     for(const s of selectedSeasons()){
       for(const p of (H.players[s]?.[prop]||[])){
@@ -279,11 +275,14 @@ function playersForPeriod(key){
         const cur=acc.get(id)||{
           name:p.name,team:p.team,games:0,minutes:0,goals:0,shots:0,
           goals_7m:0,shots_7m:0,saves:0,faced:0,saves_7m:0,faced_7m:0,
-          br:0,tc:0,def_act:0,a:0,bp:0,two_min:0,lnh:0,gk:p.gk||0
+          br:0,tc:0,def_act:0,a:0,bp:0,two_min:0,lnh:0,impact_def:0,
+          note_sum:0,est_games:0,gk:p.gk||0
         };
-        for(const f of ['games','minutes','goals','shots','goals_7m','shots_7m','saves','faced','saves_7m','faced_7m','br','tc','def_act','a','bp','two_min','lnh']){
+        for(const f of ['games','minutes','goals','shots','goals_7m','shots_7m','saves','faced','saves_7m','faced_7m','br','tc','def_act','a','bp','two_min','lnh','impact_def']){
           cur[f]+=(p[f]||0);
         }
+        cur.note_sum+=(p.note||5.0)*(p.games||0);
+        if(p.est_clock)cur.est_games+=(p.games||0);
         acc.set(id,cur);
       }
     }
@@ -292,17 +291,18 @@ function playersForPeriod(key){
       pct:p.shots>0?100*p.goals/p.shots:0,
       pct_7m:p.shots_7m>0?100*p.goals_7m/p.shots_7m:0,
       save_pct:p.faced>0?100*p.saves/p.faced:0,
+      note:p.games>0?p.note_sum/p.games:5.0,
+      est_clock:p.est_games>(p.games/2),
     })).sort((a,b)=>b[sortKey]-a[sortKey]);
   };
   return {
-    mvp:mergeList('mvp','lnh'),
+    mvp:mergeList('mvp','note'),
     scorers:mergeList('scorers','goals'),
     keepers:mergeList('keepers','save_pct'),
     seven_m:mergeList('seven_m','goals_7m'),
     defense:mergeList('defense','def_act'),
     discipline:mergeList('discipline','a'),
   };
-}
 
 function renderKpis(){
   const k=H.kpis;
@@ -405,10 +405,12 @@ function players(){
   const card=(title,arr,sortFn,mainFn,subFn)=>`<div class="card"><h3 style="margin-bottom:6px">${title}</h3>${arr.length?sortAndSlicePlayers(arr,sortFn).map((p,i)=>`<div class="rank clickable" data-player="${esc(p.name)}"><b class="num">${i+1}</b><div><b>${esc(p.name)}</b><br><small>${esc(p.team)} · ${p.games} m. (${Math.round(p.minutes||0)} min)</small></div><div style="text-align:right"><b class="num">${mainFn(p)}</b><br><i>${subFn(p)}</i></div></div>`).join(''):'<div class="empty">Aucune feuille de match pour cette période.</div>'}</div>`;
 
   $('#players').innerHTML=
-    card('Évaluation LNH',d.mvp,
-      p=>scalePlayerVal(p,p.lnh),
-      p=>fmt(scalePlayerVal(p,p.lnh),PL_MODE==='total'?1:2)+suffix,
-      p=>`${p.goals} buts · ${fmt(p.lnh,1)} tot.`)+
+    card('Note Impact (/10)', d.mvp,
+      p => PL_MODE === 'total' ? p.lnh : (PL_MODE === 'match' ? p.note : scalePlayerVal(p, p.lnh)),
+      p => PL_MODE === 'total'
+        ? fmt(p.lnh, 1) + ' pts'
+        : (PL_MODE === 'match' ? fmt(p.note, 2) + ' / 10' : fmt(scalePlayerVal(p, p.lnh), 2) + suffix),
+      p => `${fmt(p.note, 2)}/10 · Déf. ${p.impact_def >= 0 ? '+' : ''}${fmt(p.impact_def, 1)} · ${p.est_clock ? '~' : ''}${Math.round(p.minutes || 0)} min`)+
     card('Meilleurs buteurs',d.scorers,
       p=>scalePlayerVal(p,p.goals),
       p=>PL_MODE==='total'?String(p.goals):fmt(scalePlayerVal(p,p.goals),2)+suffix,
