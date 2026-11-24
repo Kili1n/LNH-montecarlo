@@ -49,12 +49,16 @@ label{font-size:12.5px;color:var(--mute);display:flex;flex-direction:column;gap:
 select,input[type=number]{font:500 14px Inter;border:1px solid var(--rule);border-radius:5px;padding:8px 10px;background:#fff;color:var(--ink);min-width:110px}
 button.go{background:var(--ball);color:#fff;border:0;border-radius:5px;padding:10px 18px;font:600 14px Inter;cursor:pointer}
 button.go:disabled{opacity:.5;cursor:wait}button.alt{background:#fff;border:1px solid var(--rule);border-radius:5px;padding:7px 12px;font:500 13px Inter;cursor:pointer}
+button.alt:hover{background:var(--tint);border-color:var(--blue)}
 svg text{font-family:Inter,sans-serif}
 .tbl{width:100%;border-collapse:collapse;font-size:13.5px}.tbl th{font-weight:600;color:var(--mute);text-align:right;padding:8px 8px;border-bottom:2px solid var(--ink);font-size:12px}
 .tbl td{padding:7px 8px;border-bottom:1px solid var(--rule);text-align:right}.tbl th:nth-child(-n+2),.tbl td:nth-child(-n+2){text-align:left}
 .scroll{overflow-x:auto}.cell{border-radius:3px;padding:2px 6px;display:inline-block;min-width:46px}
-.rank{display:grid;grid-template-columns:24px 1fr auto;gap:8px;padding:7px 0;border-bottom:1px solid var(--rule);font-size:13.5px;align-items:baseline}
+.rank{display:grid;grid-template-columns:24px 1fr auto;gap:8px;padding:7px 6px;border-bottom:1px solid var(--rule);font-size:13.5px;align-items:baseline;border-radius:4px}
 .rank small{color:var(--mute)}.rank i{font-style:normal;color:var(--mute);font-size:12px}
+.rank.clickable{cursor:pointer}.rank.clickable:hover{background:var(--tint)}
+.link-btn{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left}
+.link-btn:hover{color:var(--blue);text-decoration:underline}
 .tip{position:fixed;pointer-events:none;background:var(--ink);color:#fff;padding:7px 10px;border-radius:5px;font-size:12.5px;z-index:50;display:none;max-width:240px}
 .panel{background:var(--card);border:1px solid var(--rule);border-left:5px solid var(--ball);border-radius:6px;padding:18px;margin-top:24px}
 .prog{height:4px;background:var(--rule);border-radius:2px;overflow:hidden;margin-top:12px;display:none}.prog i{display:block;height:100%;width:30%;background:var(--ball);animation:sl 1.1s infinite ease-in-out}
@@ -70,7 +74,49 @@ svg text{font-family:Inter,sans-serif}
 .chip{display:inline-block;padding:3px 9px;border-radius:99px;background:var(--tint);color:var(--blue);font-weight:600;font-size:13px}
 .empty{color:var(--mute);padding:28px;text-align:center;border:1px dashed var(--rule);border-radius:6px}
 .err{color:var(--red);font-weight:500}
-@media(max-width:760px){.match{grid-template-columns:1fr 84px}.match .oc,.match>small:first-child{grid-column:1/-1}.calc{grid-template-columns:1fr}}
+.exp-bar{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:0 0 14px}
+.seg-btn{display:inline-flex;background:#E9ECF2;border-radius:6px;padding:3px;gap:2px}
+.seg-btn button{border:0;background:transparent;padding:7px 14px;border-radius:5px;font:600 13px Inter;color:var(--mute);cursor:pointer;min-height:36px}
+.seg-btn button[aria-pressed=true]{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(14,22,38,.08)}
+.exp-bar input[type=search]{font:500 14px Inter;border:1px solid var(--rule);border-radius:5px;padding:8px 10px;background:#fff;color:var(--ink);min-width:190px;min-height:38px}
+.exp-actions{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+.exp-tbl{min-width:720px}
+.exp-tbl th[data-sort]{cursor:pointer;user-select:none;white-space:nowrap}
+.exp-tbl th[data-sort]:hover{color:var(--ink);background:var(--paper)}
+.exp-tbl th.sorted{color:var(--blue)}
+.exp-tbl th:first-child,.exp-tbl td:first-child{position:sticky;left:0;background:var(--card);z-index:1;border-right:1px solid var(--rule)}
+.exp-tbl th:first-child{z-index:2}
+.pager{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding-top:12px;margin-top:8px;border-top:1px solid var(--rule);font-size:13px;color:var(--mute)}
+.pager-btns{display:flex;gap:8px;align-items:center}
+
+/* Fiches détaillées Club & Joueur (Modal / Sheet responsive) */
+.modal-bg{position:fixed;inset:0;background:rgba(14,22,38,.55);backdrop-filter:blur(3px);z-index:60;display:none;align-items:center;justify-content:center;padding:16px}
+.modal-bg.open{display:flex}
+.modal-box{background:var(--paper);border:1px solid var(--rule);border-radius:10px;width:100%;max-width:880px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 50px rgba(14,22,38,.3)}
+.modal-hd{background:#fff;padding:14px 20px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:12px;justify-content:space-between}
+.modal-hd h3{font-size:24px;line-height:1.15}
+.modal-close{background:var(--paper);border:1px solid var(--rule);border-radius:6px;padding:6px 12px;font:600 13px Inter;cursor:pointer}
+.modal-close:hover{background:var(--tint)}
+.modal-bd{padding:18px 20px 28px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
+.kpi-mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.kpi-mini div{background:#fff;border:1px solid var(--rule);border-radius:6px;padding:10px 12px}
+.kpi-mini b{display:block;font:700 22px/1.15 Newsreader,serif;color:var(--ink)}
+.kpi-mini span{font-size:11.5px;color:var(--mute)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.form-dots{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.dot-res{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:5px;font-size:12px;font-weight:600;border:1px solid var(--rule);background:#fff}
+.dot-res i{font-style:normal;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;color:#fff;font-size:11px}
+.dot-V i{background:var(--green)}.dot-N i{background:#7A8396}.dot-D i{background:var(--red)}
+.split-bar{display:flex;height:10px;border-radius:99px;overflow:hidden;background:#E9ECF2;margin:8px 0}
+.badge-pos{color:var(--green);font-weight:600}.badge-neg{color:var(--red);font-weight:600}
+
+@media(max-width:760px){
+  .match{grid-template-columns:1fr 84px}.match .oc,.match>small:first-child{grid-column:1/-1}.calc{grid-template-columns:1fr}
+  .exp-bar>*{flex:1 1 100%}.seg-btn{width:100%}.seg-btn button{flex:1}.exp-actions{margin-left:0}.exp-actions button{flex:1}
+  .pager{justify-content:center}.pager-btns{width:100%;justify-content:space-between}.pager-btns button{flex:1;padding:9px 12px}
+  .modal-bg{padding:0;align-items:flex-end}
+  .modal-box{max-width:100%;max-height:94dvh;border-radius:14px 14px 0 0;border-bottom:0}
+}
 @media(prefers-reduced-motion:reduce){*{animation:none!important}}
 </style>
 </head>
@@ -94,6 +140,16 @@ svg text{font-family:Inter,sans-serif}
 </header>
 <div class="tip" id="tip"></div>
 
+<div class="modal-bg" id="detailModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-box">
+    <div class="modal-hd">
+      <div><small id="modalSub" style="color:var(--mute);display:block;font-size:12px"></small><h3 id="modalTitle">Fiche détaillée</h3></div>
+      <button type="button" class="modal-close" id="modalClose">Fermer ✕</button>
+    </div>
+    <div class="modal-bd" id="modalBody"></div>
+  </div>
+</div>
+
 <main id="v-hist">
 <div class="hero">
 <h1>Vingt ans de buts, tous les clubs, un seul tableau.</h1>
@@ -102,14 +158,47 @@ svg text{font-family:Inter,sans-serif}
 
 <section><h2>Le jeu a-t-il changé ?</h2><p class="lede">Buts par match, victoires à domicile et avantage du terrain, saison après saison.</p><div class="grid3" id="spark"></div></section>
 
-<section><h2>La carte tactique : qui marque, qui encaisse</h2><p class="lede">Chaque club selon ses buts marqués et encaissés par match. En haut à droite : les attaques de feu qui verrouillent aussi leur défense. La taille du point suit les points par match.</p>
+<section><h2>La carte tactique : qui marque, qui encaisse</h2><p class="lede">Chaque club selon ses buts marqués et encaissés par match. En haut à droite : les attaques de feu qui verrouillent aussi leur défense. Cliquez sur un club pour ouvrir sa fiche.</p>
 <div class="card"><svg id="scatter" viewBox="0 0 900 520" width="100%"></svg></div></section>
 
-<section><h2>Les classements, saison par saison</h2><p class="lede">Rang final de chaque club. Cliquez sur un club pour suivre sa trajectoire.</p>
-<div class="row"><label>Club<select id="bumpTeam"></select></label></div><div class="card scroll"><svg id="bump" width="100%"></svg></div></section>
+<section><h2>Les classements, saison par saison</h2><p class="lede">Rang final de chaque club. Sélectionnez un club pour suivre sa trajectoire ou ouvrir sa fiche complète.</p>
+<div class="row">
+  <label>Club<select id="bumpTeam"></select></label>
+  <button type="button" class="alt" id="bumpOpenClub" style="align-self:end">Ouvrir la fiche du club</button>
+</div>
+<div class="card scroll"><svg id="bump" width="100%"></svg></div></section>
 
-<section><h2>Les joueurs qui font la différence</h2><p class="lede">Évaluation LNH cumulée, meilleurs buteurs et gardiens les plus efficaces.</p>
-<div class="grid3" id="players"></div></section>
+<section><h2>Mi-temps vs score final : les rois de la remontada</h2><p class="lede">Capacité à renverser un match après avoir été mené à la pause, tenue du score et domination en seconde période.</p>
+<div class="grid2" id="htCards"></div></section>
+
+<section><h2>Les joueurs qui font la différence</h2><p class="lede">Classements généraux et spécialistes par secteur de jeu. Cliquez sur un joueur pour ouvrir sa fiche détaillée et son radar.</p>
+<div class="row">
+  <div class="seg-btn" role="group" aria-label="Mode d'affichage joueurs" id="plModeGroup">
+    <button type="button" data-plmode="total" aria-pressed="true">Total</button>
+    <button type="button" data-plmode="match" aria-pressed="false">Par match</button>
+    <button type="button" data-plmode="p60" aria-pressed="false">Par 60 min</button>
+  </div>
+</div>
+<div class="grid3" id="players"></div>
+<div class="grid3" id="specialists" style="margin-top:16px"></div></section>
+
+<section><h2>Explorer les données</h2><p class="lede">Parcourez les feuilles de match et statistiques individuelles sur la période sélectionnée, triez par colonne ou téléchargez les fichiers CSV.</p>
+<div class="exp-bar">
+  <div class="seg-btn" role="group" aria-label="Type de données">
+    <button type="button" id="expTypeM" aria-pressed="true">Matchs</button>
+    <button type="button" id="expTypeP" aria-pressed="false">Joueurs</button>
+  </div>
+  <label>Club<select id="expTeam"></select></label>
+  <label>Recherche<input type="search" id="expSearch" placeholder="Joueur, adversaire, salle…"></label>
+  <div class="exp-actions">
+    <button type="button" class="alt" id="expCsvSel">Télécharger la sélection (CSV)</button>
+    <button type="button" class="go" id="expCsvAll" style="padding:8px 14px">Tout le CSV brut</button>
+  </div>
+</div>
+<div class="card">
+  <div class="scroll"><table class="tbl exp-tbl num" id="expTable"></table></div>
+  <div class="pager" id="expPager"></div>
+</div></section>
 </main>
 
 <main id="v-mc" hidden>
@@ -137,6 +226,8 @@ const opts=(el,arr,sel)=>el.innerHTML=arr.map(([v,t])=>`<option value="${esc(v)}
 const heat=(v,col)=>`<span class="cell num" style="background:color-mix(in srgb,${col} ${Math.round(v*100)}%,transparent);color:${v>.55?'#fff':'inherit'}">${pc(v)}</span>`;
 let H=null,M=null,SIM=null,UP=[];
 let SEL={start:0,end:0};
+let PL_MODE='total';
+let EXP={dataset:'matches',sort:'date',dir:'desc',page:1,timer:null};
 
 // ---------- Onglets ----------
 function showTab(t){for(const k of['hist','mc']){$('#v-'+k).hidden=k!==t;$('#t-'+k).setAttribute('aria-selected',k===t)}history.replaceState(0,'','#'+t)}
@@ -146,6 +237,8 @@ $('#t-hist').onclick=()=>showTab('hist');$('#t-mc').onclick=()=>showTab('mc');
 function selectedSeasons(){return H.seasons.slice(SEL.start,SEL.end+1)}
 function isFullRange(){return SEL.start===0&&SEL.end===H.seasons.length-1}
 function periodKey(){if(isFullRange())return 'all';if(SEL.start===SEL.end)return H.seasons[SEL.start];return '__range__'}
+function periodLabel(){const N=H.seasons.length,s0=SEL.start,s1=SEL.end;return isFullRange()?`Toutes les saisons (${H.seasons[0]} → ${H.seasons[N-1]})`:s0===s1?`Saison ${H.seasons[s0]}`:`${H.seasons[s0]} → ${H.seasons[s1]}`}
+function seasonsQueryParam(){return isFullRange()?'all':selectedSeasons().join(',')}
 
 function teamsForPeriod(key){
   if(key!=='__range__')return H.teams[key]||[];
@@ -160,26 +253,55 @@ function teamsForPeriod(key){
   return [...acc.values()].map(t=>({...t,gf_m:t.gf/Math.max(t.j,1),ga_m:t.ga/Math.max(t.j,1)}));
 }
 
+function halftimeForPeriod(key){
+  if(!H.halftime)return [];
+  if(key!=='__range__')return H.halftime[key]||[];
+  const acc=new Map();
+  for(const s of selectedSeasons()){
+    for(const r of (H.halftime[s]||[])){
+      const cur=acc.get(r.team)||{team:r.team,j_ht:0,behind_ht:0,cb_w:0,cb_d:0,cb_pts:0,ahead_ht:0,kept:0,blown:0,h2_gf:0,h2_ga:0};
+      for(const k of ['j_ht','behind_ht','cb_w','cb_d','cb_pts','ahead_ht','kept','blown','h2_gf','h2_ga'])cur[k]+=r[k]||0;
+      acc.set(r.team,cur);
+    }
+  }
+  return [...acc.values()].sort((a,b)=>b.cb_pts-a.cb_pts||b.cb_w-a.cb_w);
+}
+
 function playersForPeriod(key){
-  if(key!=='__range__')return H.players[key]||H.players.all;
-  const mergeList=(prop,sortKey,minFaced=0)=>{
+  const empty={mvp:[],scorers:[],keepers:[],seven_m:[],defense:[],discipline:[]};
+  if(!H.players)return empty;
+  if(key!=='__range__')return H.players[key]||H.players.all||empty;
+  const mergeList=(prop,sortKey)=>{
     const acc=new Map();
     for(const s of selectedSeasons()){
       for(const p of (H.players[s]?.[prop]||[])){
         const id=p.name+'||'+p.team;
-        const cur=acc.get(id)||{name:p.name,team:p.team,games:0,goals:0,shots:0,saves:0,faced:0,lnh:0};
-        cur.games+=p.games;cur.goals+=p.goals;
-        cur.shots+=p.pct>0?Math.round(p.goals/(p.pct/100)):p.goals;
-        cur.saves+=p.saves;cur.faced+=p.faced;cur.lnh+=p.lnh;
+        const cur=acc.get(id)||{
+          name:p.name,team:p.team,games:0,minutes:0,goals:0,shots:0,
+          goals_7m:0,shots_7m:0,saves:0,faced:0,saves_7m:0,faced_7m:0,
+          br:0,tc:0,def_act:0,a:0,bp:0,two_min:0,lnh:0,gk:p.gk||0
+        };
+        for(const f of ['games','minutes','goals','shots','goals_7m','shots_7m','saves','faced','saves_7m','faced_7m','br','tc','def_act','a','bp','two_min','lnh']){
+          cur[f]+=(p[f]||0);
+        }
         acc.set(id,cur);
       }
     }
-    return [...acc.values()]
-      .filter(p=>p.faced>=minFaced)
-      .map(p=>({...p,pct:p.shots>0?100*p.goals/p.shots:0,save_pct:p.faced>0?100*p.saves/p.faced:0}))
-      .sort((a,b)=>b[sortKey]-a[sortKey]).slice(0,10);
+    return [...acc.values()].map(p=>({
+      ...p,
+      pct:p.shots>0?100*p.goals/p.shots:0,
+      pct_7m:p.shots_7m>0?100*p.goals_7m/p.shots_7m:0,
+      save_pct:p.faced>0?100*p.saves/p.faced:0,
+    })).sort((a,b)=>b[sortKey]-a[sortKey]);
   };
-  return {mvp:mergeList('mvp','lnh'),scorers:mergeList('scorers','goals'),keepers:mergeList('keepers','save_pct',60)};
+  return {
+    mvp:mergeList('mvp','lnh'),
+    scorers:mergeList('scorers','goals'),
+    keepers:mergeList('keepers','save_pct'),
+    seven_m:mergeList('seven_m','goals_7m'),
+    defense:mergeList('defense','def_act'),
+    discipline:mergeList('discipline','a'),
+  };
 }
 
 function renderKpis(){
@@ -225,7 +347,7 @@ for(let v=Math.ceil(xl);v<=xh;v++)s+=`<text x="${X(v)}" y="${Ht-p.b+18}" font-si
 for(let v=Math.ceil(yl);v<=yh;v++)s+=`<text x="${p.l-8}" y="${Y(v)+4}" font-size="11" fill="#5B6475" text-anchor="end">${v}</text>`;
 s+=`<text x="${(W+p.l)/2}" y="${Ht-8}" text-anchor="middle" font-size="12.5" fill="#0E1626">Buts marqués par match</text><text transform="translate(14,${Ht/2}) rotate(-90)" text-anchor="middle" font-size="12.5">Buts encaissés par match (meilleure défense en haut)</text>`;
 T.forEach((t,i)=>{const r=5+Math.max(0,t.pts/Math.max(t.j,1))*4;s+=`<g data-i="${i}" style="cursor:pointer"><circle cx="${X(t.gf_m)}" cy="${Y(t.ga_m)}" r="${r}" fill="${hue(t.team)}" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><text x="${X(t.gf_m)+r+3}" y="${Y(t.ga_m)+4}" font-size="11">${esc(t.team)}</text></g>`});
-svg.innerHTML=s;svg.querySelectorAll('g[data-i]').forEach(g=>{const t=T[g.dataset.i];g.onmousemove=e=>tipOn(e,`<b>${esc(t.team)}</b><br>${fmt(t.gf_m,2)} marqués · ${fmt(t.ga_m,2)} encaissés<br>${fmt(t.pts/t.j,2)} pts/match · ${t.j} matchs`);g.onmouseleave=tipOff})}
+svg.innerHTML=s;svg.querySelectorAll('g[data-i]').forEach(g=>{const t=T[g.dataset.i];g.onmousemove=e=>tipOn(e,`<b>${esc(t.team)}</b><br>${fmt(t.gf_m,2)} marqués · ${fmt(t.ga_m,2)} encaissés<br>${fmt(t.pts/t.j,2)} pts/match · ${t.j} matchs<br><i>Cliquer pour la fiche club</i>`);g.onmouseleave=tipOff;g.onclick=()=>{tipOff();openClubModal(t.team)}})}
 
 function bump(){const sel=$('#bumpTeam').value,active=new Set(selectedSeasons());
 const baseSeasons=SEL.end>SEL.start?selectedSeasons():H.seasons;
@@ -235,12 +357,218 @@ S.forEach((q,i)=>{const on=active.has(q);if(on&&SEL.start===SEL.end)s+=`<rect x=
 s+=`<text x="${X(i)}" y="16" font-size="11" text-anchor="middle" font-weight="${on?700:400}" fill="${on?'#1747C9':'#5B6475'}">${q.slice(2,4)+'-'+q.slice(-2)}</text>`});
 const draw=(t,on)=>{const pts=S.map((q,i)=>{const r=H.ranks[q].find(x=>x.team===t);return r&&[X(i),Y(r.rank),r]}),segs=[];let cur=[];pts.forEach(p=>{if(p)cur.push(p);else{if(cur.length)segs.push(cur);cur=[]}});if(cur.length)segs.push(cur);
 const c=on?hue(t):'#C9CEDA',w=on?4:1.6;let o='';segs.forEach(sg=>o+=`<polyline fill="none" stroke="${c}" stroke-width="${w}" stroke-linejoin="round" points="${sg.map(p=>p[0]+','+p[1])}"/>`+(on?sg.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="9" fill="${c}"/><text x="${p[0]}" y="${p[1]+4}" font-size="10.5" font-weight="700" fill="#fff" text-anchor="middle">${p[2].rank}</text>`).join(''):''));
-const last=[...pts].reverse().find(Boolean);if(last)o+=`<text x="${last[0]+14}" y="${last[1]+4}" font-size="11" fill="${on?c:'#8A91A1'}" font-weight="${on?700:400}">${esc(t)}</text>`;return o};
-teams.filter(t=>t!==sel).forEach(t=>s+=draw(t,false));s+=draw(sel,true);const sv=$('#bump');sv.setAttribute('viewBox',`0 0 ${W} ${Ht}`);sv.style.minWidth=W+'px';sv.innerHTML=s}
+const last=[...pts].reverse().find(Boolean);if(last)o+=`<text x="${last[0]+14}" y="${last[1]+4}" font-size="11" fill="${on?c:'#8A91A1'}" font-weight="${on?700:400}" style="cursor:pointer" data-club="${esc(t)}">${esc(t)}</text>`;return o};
+teams.filter(t=>t!==sel).forEach(t=>s+=draw(t,false));s+=draw(sel,true);const sv=$('#bump');sv.setAttribute('viewBox',`0 0 ${W} ${Ht}`);sv.style.minWidth=W+'px';sv.innerHTML=s;
+sv.querySelectorAll('text[data-club]').forEach(el=>{el.onclick=()=>{const c=el.dataset.club;$('#bumpTeam').value=c;bump();openClubModal(c)}})}
 
-function players(){const d=playersForPeriod(periodKey());
-const L=(title,arr,main,sub)=>`<div class="card"><h3 style="margin-bottom:6px">${title}</h3>${arr.length?arr.map((p,i)=>`<div class="rank"><b class="num">${i+1}</b><div>${esc(p.name)}<br><small>${esc(p.team)} · ${p.games} matchs</small></div><div style="text-align:right"><b class="num">${main(p)}</b><br><i>${sub(p)}</i></div></div>`).join(''):'<div class="empty">Aucune feuille de match pour cette période.</div>'}</div>`;
-$('#players').innerHTML=L('Évaluation LNH',d.mvp,p=>fmt(p.lnh,1),p=>p.goals+' buts')+L('Meilleurs buteurs',d.scorers,p=>p.goals,p=>fmt(p.pct,0)+' % de réussite')+L('Meilleurs gardiens',d.keepers,p=>fmt(p.save_pct,1)+' %',p=>p.saves+' arrêts / '+p.faced+' tirs')}
+// ---------- Mi-temps vs Score final ----------
+function renderHalftime(){
+  const box=$('#htCards'),rows=halftimeForPeriod(periodKey());
+  if(!rows.length){
+    box.innerHTML='<div class="card empty" style="grid-column:1/-1">Scores à la mi-temps non disponibles pour cette période.</div>';
+    return;
+  }
+  const topCb=[...rows].sort((a,b)=>b.cb_pts-a.cb_pts||b.cb_w-a.cb_w).slice(0,8);
+  const topH2=[...rows].map(r=>({...r,h2_diff:(r.h2_gf-r.h2_ga)/Math.max(r.j_ht,1),kept_pct:r.ahead_ht>0?100*r.kept/r.ahead_ht:0}))
+    .sort((a,b)=>b.h2_diff-a.h2_diff).slice(0,8);
+
+  const c1=`<div class="card"><h3 style="margin-bottom:4px">Rois de la remontada</h3><p style="font-size:12.5px;color:var(--mute);margin:0 0 10px">Points gagnés après avoir été mené à la mi-temps</p>`
+    +topCb.map((r,i)=>`<div class="rank clickable" data-club="${esc(r.team)}"><b class="num">${i+1}</b><div><b>${esc(r.team)}</b><br><small>${r.cb_w}V · ${r.cb_d}N sur ${r.behind_ht} matchs menés à la pause</small></div><div style="text-align:right"><b class="num" style="color:var(--green)">+${r.cb_pts} pts</b><br><i>${r.behind_ht>0?fmt(100*(r.cb_w+r.cb_d)/r.behind_ht,0)+' % sauvés':''}</i></div></div>`).join('')
+    +`</div>`;
+
+  const c2=`<div class="card"><h3 style="margin-bottom:4px">Domination en 2e mi-temps</h3><p style="font-size:12.5px;color:var(--mute);margin:0 0 10px">Différentiel moyen en 2e période &amp; avances tenues</p>`
+    +topH2.map((r,i)=>`<div class="rank clickable" data-club="${esc(r.team)}"><b class="num">${i+1}</b><div><b>${esc(r.team)}</b><br><small>${r.kept}/${r.ahead_ht} avances conservées (${fmt(r.kept_pct,0)} %)</small></div><div style="text-align:right"><b class="num ${r.h2_diff>=0?'badge-pos':'badge-neg'}">${r.h2_diff>=0?'+':''}${fmt(r.h2_diff,2)} buts</b><br><i>par 2e période</i></div></div>`).join('')
+    +`</div>`;
+
+  box.innerHTML=c1+c2;
+  box.querySelectorAll('.rank[data-club]').forEach(el=>el.onclick=()=>openClubModal(el.dataset.club));
+}
+
+// ---------- Joueurs & Spécialistes (Total / Par match / Par 60 min) ----------
+function scalePlayerVal(p,rawVal){
+  if(PL_MODE==='match')return rawVal/Math.max(p.games,1);
+  if(PL_MODE==='p60')return p.minutes>0?rawVal/(p.minutes/60):0;
+  return rawVal;
+}
+
+function sortAndSlicePlayers(arr,metricFn){
+  const minMin=PL_MODE==='p60'?(SEL.start===SEL.end?120:300):0;
+  const filtered=minMin>0?arr.filter(p=>(p.minutes||0)>=minMin):arr;
+  const base=filtered.length>=3?filtered:arr;
+  return [...base].sort((a,b)=>metricFn(b)-metricFn(a)).slice(0,10);
+}
+
+function players(){
+  const d=playersForPeriod(periodKey());
+  const suffix=PL_MODE==='match'?' / m.':PL_MODE==='p60'?' / 60m':'';
+
+  const card=(title,arr,sortFn,mainFn,subFn)=>`<div class="card"><h3 style="margin-bottom:6px">${title}</h3>${arr.length?sortAndSlicePlayers(arr,sortFn).map((p,i)=>`<div class="rank clickable" data-player="${esc(p.name)}"><b class="num">${i+1}</b><div><b>${esc(p.name)}</b><br><small>${esc(p.team)} · ${p.games} m. (${Math.round(p.minutes||0)} min)</small></div><div style="text-align:right"><b class="num">${mainFn(p)}</b><br><i>${subFn(p)}</i></div></div>`).join(''):'<div class="empty">Aucune feuille de match pour cette période.</div>'}</div>`;
+
+  $('#players').innerHTML=
+    card('Évaluation LNH',d.mvp,
+      p=>scalePlayerVal(p,p.lnh),
+      p=>fmt(scalePlayerVal(p,p.lnh),PL_MODE==='total'?1:2)+suffix,
+      p=>`${p.goals} buts · ${fmt(p.lnh,1)} tot.`)+
+    card('Meilleurs buteurs',d.scorers,
+      p=>scalePlayerVal(p,p.goals),
+      p=>PL_MODE==='total'?String(p.goals):fmt(scalePlayerVal(p,p.goals),2)+suffix,
+      p=>`${fmt(p.pct,0)} % réussite (${p.goals}/${p.shots||p.goals})`)+
+    card('Meilleurs gardiens',d.keepers,
+      p=>PL_MODE==='total'?p.save_pct:scalePlayerVal(p,p.saves),
+      p=>PL_MODE==='total'?fmt(p.save_pct,1)+' %':fmt(scalePlayerVal(p,p.saves),2)+' arr.'+suffix,
+      p=>`${p.saves} arrêts / ${p.faced} tirs (${fmt(p.save_pct,1)} %)`);
+
+  $('#specialists').innerHTML=
+    card('Rois du 7 mètres',d.seven_m,
+      p=>PL_MODE==='total'?p.goals_7m:scalePlayerVal(p,p.goals_7m),
+      p=>PL_MODE==='total'?`${p.goals_7m}/${p.shots_7m}`:fmt(scalePlayerVal(p,p.goals_7m),2)+suffix,
+      p=>`${fmt(p.pct_7m,0)} % aux 7m`)+
+    card('Impact défensif (BR + TC)',d.defense,
+      p=>scalePlayerVal(p,p.def_act),
+      p=>PL_MODE==='total'?String(p.def_act):fmt(scalePlayerVal(p,p.def_act),2)+suffix,
+      p=>`${p.br} récup. · ${p.tc} contrés`)+
+    card('Passes décisives & Propreté',d.discipline,
+      p=>scalePlayerVal(p,p.a),
+      p=>PL_MODE==='total'?`${p.a} PD`:fmt(scalePlayerVal(p,p.a),2)+' PD'+suffix,
+      p=>`${p.bp} balles perd. · ${p.two_min}×2 min`);
+
+  for(const box of [$('#players'),$('#specialists')]){
+    box.querySelectorAll('.rank[data-player]').forEach(el=>el.onclick=()=>openPlayerModal(el.dataset.player));
+  }
+}
+
+$('#plModeGroup').querySelectorAll('button').forEach(btn=>{
+  btn.onclick=()=>{
+    PL_MODE=btn.dataset.plmode;
+    $('#plModeGroup').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b===btn));
+    players();
+  };
+});
+
+// ---------- Fiches détaillées Club & Joueur (Modal) ----------
+function closeModal(){$('#detailModal').classList.remove('open')}
+$('#modalClose').onclick=closeModal;
+$('#detailModal').onclick=e=>{if(e.target===$('#detailModal'))closeModal()};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#detailModal').classList.contains('open'))closeModal()});
+
+async function openClubModal(team){
+  const modal=$('#detailModal'),body=$('#modalBody');
+  $('#modalSub').textContent=`Fiche Club · ${periodLabel()}`;
+  $('#modalTitle').textContent=team;
+  body.innerHTML='<div class="empty">Chargement de la fiche du club…</div>';
+  modal.classList.add('open');
+  try{
+    const d=await api(`/api/club?team=${encodeURIComponent(team)}&seasons=${encodeURIComponent(seasonsQueryParam())}`);
+    const o=d.overall,hm=d.home,aw=d.away;
+    const kpis=`<div class="kpi-mini">
+      <div><b class="num">${o.j}</b><span>Matchs joués</span></div>
+      <div><b class="num">${o.w}V · ${o.d}N · ${o.l}D</b><span>Bilan (${fmt(o.win_pct,0)} % victoires)</span></div>
+      <div><b class="num">${fmt(o.pts/Math.max(o.j,1),2)}</b><span>Points / match</span></div>
+      <div><b class="num">${fmt(o.gf_m,1)} – ${fmt(o.ga_m,1)}</b><span>Marqués – Encaissés / m.</span></div>
+    </div>`;
+
+    const haCard=`<div class="card"><h4 style="margin:0 0 8px;font-size:15px">Domicile vs Extérieur</h4>
+      <div style="font-size:13px;margin-bottom:8px"><b>Domicile (${hm.j} m.) :</b> ${hm.w}V ${hm.d}N ${hm.l}D · ${fmt(hm.gf_m,1)} BP / ${fmt(hm.ga_m,1)} BC</div>
+      <div class="split-bar"><span style="width:${hm.win_pct}%;background:var(--blue)"></span></div>
+      <div style="font-size:13px;margin:10px 0 8px"><b>Extérieur (${aw.j} m.) :</b> ${aw.w}V ${aw.d}N ${aw.l}D · ${fmt(aw.gf_m,1)} BP / ${fmt(aw.ga_m,1)} BC</div>
+      <div class="split-bar"><span style="width:${aw.win_pct}%;background:var(--ball)"></span></div>
+    </div>`;
+
+    const recentCard=`<div class="card"><h4 style="margin:0 0 8px;font-size:15px">5 derniers matchs de la période</h4>
+      ${d.recent.length?`<div class="form-dots">${d.recent.map(m=>`<span class="dot-res dot-${m.res}" title="${esc(m.date)} · J${m.round}"><i>${m.res}</i>${m.is_home?'vs':'@'} ${esc(m.opponent)} (${m.score})</span>`).join('')}</div>`:'<div style="color:var(--mute);font-size:13px">Aucun match joué.</div>'}
+      ${d.venues.length?`<h4 style="margin:14px 0 6px;font-size:14px">Salles principales</h4><div style="font-size:12.5px;color:var(--mute)">${d.venues.slice(0,3).map(v=>`${esc(v.venue)} (${v.j} m., ${fmt(v.win_pct,0)} % V)`).join(' · ')}</div>`:''}
+    </div>`;
+
+    // Mini graphique historique des rangs du club
+    let rankSvg='';
+    if(d.history.length){
+      const hs=d.history,W=780,Ht=150,p={l:32,r:16,t:18,b:24};
+      const maxR=Math.max(...hs.map(x=>x.total_teams),16);
+      const X=i=>p.l+(hs.length>1?i*(W-p.l-p.r)/(hs.length-1):(W-p.l-p.r)/2);
+      const Y=r=>p.t+((r-1)/Math.max(maxR-1,1))*(Ht-p.t-p.b);
+      rankSvg=`<div class="card"><h4 style="margin:0 0 6px;font-size:15px">Trajectoire historique en Starligue</h4><div class="scroll"><svg viewBox="0 0 ${W} ${Ht}" style="min-width:560px;width:100%">
+        <polyline fill="none" stroke="${hue(team)}" stroke-width="2.5" points="${hs.map((x,i)=>`${X(i)},${Y(x.rank)}`)}"/>
+        ${hs.map((x,i)=>`<circle cx="${X(i)}" cy="${Y(x.rank)}" r="8" fill="${hue(team)}"/><text x="${X(i)}" y="${Y(x.rank)+3.5}" font-size="9.5" font-weight="700" fill="#fff" text-anchor="middle">${x.rank}</text><text x="${X(i)}" y="${Ht-6}" font-size="9.5" fill="#5B6475" text-anchor="middle">${x.season.slice(2,4)}/${x.season.slice(-2)}</text>`).join('')}
+      </svg></div></div>`;
+    }
+
+    const rosterCard=d.roster.length?`<div class="card"><h4 style="margin:0 0 8px;font-size:15px">Effectif utilisé sur la période (cliquer sur un joueur)</h4>
+      <div class="scroll"><table class="tbl num"><tr><th>Joueur</th><th>Poste</th><th>M.</th><th>Min/m.</th><th>Buts / Arrêts</th><th>Éval. LNH</th></tr>
+      ${d.roster.map(p=>`<tr><td><button type="button" class="link-btn" data-pl="${esc(p.name)}"><b>${esc(p.name)}</b></button></td><td>${p.gk?'Gardien':'Champ'}</td><td>${p.games}</td><td>${fmt(p.min_m,1)}</td><td>${p.gk?`${p.saves}/${p.faced}`:`${p.goals}/${p.shots}`}</td><td><b>${fmt(p.lnh,1)}</b></td></tr>`).join('')}
+      </table></div></div>`:'';
+
+    body.innerHTML=kpis+`<div class="grid2">${haCard}${recentCard}</div>`+rankSvg+rosterCard;
+    body.querySelectorAll('button[data-pl]').forEach(b=>b.onclick=()=>openPlayerModal(b.dataset.pl));
+  }catch(e){
+    body.innerHTML=`<div class="empty err">${esc(e.message)}</div>`;
+  }
+}
+
+function buildRadarSvg(axes){
+  const W=340,Ht=270,cx=170,cy=138,R=88,N=axes.length;
+  const ang=i=>-Math.PI/2+(2*Math.PI*i)/N;
+  const pt=(i,val)=>[cx+R*(val/100)*Math.cos(ang(i)),cy+R*(val/100)*Math.sin(ang(i))];
+  let s=`<svg viewBox="0 0 ${W} ${Ht}" width="100%" style="max-width:360px;display:block;margin:auto">`;
+  [25,50,75,100].forEach(lv=>{
+    const poly=axes.map((_,i)=>pt(i,lv).join(',')).join(' ');
+    s+=`<polygon points="${poly}" fill="none" stroke="${lv===50?'#1747C9':'#D8DCE4'}" stroke-width="${lv===50?1.5:1}" stroke-dasharray="${lv===50?'4 3':'none'}"/>`;
+  });
+  axes.forEach((a,i)=>{
+    const [x2,y2]=pt(i,100),[lx,ly]=pt(i,122);
+    s+=`<line x1="${cx}" y1="${cy}" x2="${x2}" y2="${y2}" stroke="#D8DCE4"/>
+        <text x="${lx}" y="${ly}" font-size="10.5" font-weight="600" fill="#0E1626" text-anchor="middle" dominant-baseline="middle">${esc(a.axis)}</text>`;
+  });
+  const pPoly=axes.map((a,i)=>pt(i,a.score).join(',')).join(' ');
+  s+=`<polygon points="${pPoly}" fill="rgba(242,92,42,.22)" stroke="#F25C2A" stroke-width="2.5"/>`;
+  axes.forEach((a,i)=>{
+    const [px,py]=pt(i,a.score);
+    s+=`<circle cx="${px}" cy="${py}" r="4" fill="#F25C2A"><title>${esc(a.axis)} : ${esc(a.val)} (moy. ligue : ${esc(a.avg)})</title></circle>`;
+  });
+  s+=`</svg><div style="text-align:center;font-size:11.5px;color:var(--mute)"><span style="color:var(--ball);font-weight:700">● Joueur</span> · <span style="color:var(--blue);font-weight:600">--- Moyenne Starligue (50)</span></div>`;
+  return s;
+}
+
+async function openPlayerModal(name){
+  const modal=$('#detailModal'),body=$('#modalBody');
+  $('#modalSub').textContent=`Fiche Joueur · ${periodLabel()}`;
+  $('#modalTitle').textContent=name;
+  body.innerHTML='<div class="empty">Chargement de la fiche du joueur…</div>';
+  modal.classList.add('open');
+  try{
+    const d=await api(`/api/player?name=${encodeURIComponent(name)}&seasons=${encodeURIComponent(seasonsQueryParam())}`);
+    const st=d.stats;
+    $('#modalSub').textContent=`${d.is_gk?'Gardien':'Joueur de champ'} · ${d.teams.join(', ')} · ${periodLabel()}`;
+
+    const kpis=d.is_gk?`<div class="kpi-mini">
+      <div><b class="num">${st.games}</b><span>Matchs (${fmt(st.min_m,1)} min/m.)</span></div>
+      <div><b class="num">${fmt(st.save_pct,1)} %</b><span>${st.saves} arrêts / ${st.faced} tirs</span></div>
+      <div><b class="num">${st.saves_7m}/${st.faced_7m}</b><span>Arrêts sur 7 mètres</span></div>
+      <div><b class="num">${fmt(st.lnh,1)}</b><span>Éval. LNH (${fmt(st.lnh_m,2)}/m.)</span></div>
+    </div>`:`<div class="kpi-mini">
+      <div><b class="num">${st.games}</b><span>Matchs (${fmt(st.min_m,1)} min/m.)</span></div>
+      <div><b class="num">${st.goals} (${fmt(st.pct,0)} %)</b><span>Buts (${st.goals}/${st.shots} tirs)</span></div>
+      <div><b class="num">${st.goals_7m}/${st.shots_7m}</b><span>Jets de 7 mètres</span></div>
+      <div><b class="num">${st.a} PD · ${st.br+st.tc} Déf.</b><span>${st.br} BR · ${st.tc} TC · ${st.bp} BP · ${st.two_min}×2m</span></div>
+      <div><b class="num">${fmt(st.lnh,1)}</b><span>Éval. LNH (${fmt(st.lnh_m,2)}/m.)</span></div>
+    </div>`;
+
+    const radarCard=`<div class="card"><h4 style="margin:0 0 4px;font-size:15px">Profil comparé à la ligue</h4>${buildRadarSvg(d.radar)}</div>`;
+
+    const bestCard=`<div class="card"><h4 style="margin:0 0 8px;font-size:15px">Meilleurs matchs sur la période</h4>
+      ${d.best_games.map(g=>`<div class="rank" style="grid-template-columns:1fr auto"><div><b>${d.is_gk?`${g.saves}/${g.faced} arrêts`:`${g.goals}/${g.shots} buts`}</b> vs ${esc(g.opponent)} ${g.score?`(${g.score})`:''}<br><small>${esc(g.date)} · ${esc(g.season)} · ${esc(g.team)}</small></div><div style="text-align:right"><b class="num">${fmt(g.lnh,1)}</b><br><i>éval. LNH</i></div></div>`).join('')}
+    </div>`;
+
+    const histCard=d.seasons_history.length?`<div class="card"><h4 style="margin:0 0 8px;font-size:15px">Parcours saison par saison</h4>
+      <div class="scroll"><table class="tbl num"><tr><th>Saison</th><th>Club</th><th>Matchs</th><th>Min/m.</th><th>${d.is_gk?'Arrêts':'Buts'}</th><th>Réussite</th><th>Éval. LNH</th></tr>
+      ${d.seasons_history.map(r=>`<tr><td>${esc(r.season)}</td><td><button type="button" class="link-btn" data-cl="${esc(r.team)}">${esc(r.team)}</button></td><td>${r.games}</td><td>${fmt(r.min_m,1)}</td><td>${d.is_gk?r.saves:r.goals}</td><td>${fmt(d.is_gk?r.save_pct:r.pct,1)} %</td><td><b>${fmt(r.lnh,1)}</b></td></tr>`).join('')}
+      </table></div></div>`:'';
+
+    body.innerHTML=kpis+`<div class="grid2">${radarCard}${bestCard}</div>`+histCard;
+    body.querySelectorAll('button[data-cl]').forEach(b=>b.onclick=()=>openClubModal(b.dataset.cl));
+  }catch(e){
+    body.innerHTML=`<div class="empty err">${esc(e.message)}</div>`;
+  }
+}
 
 // ---------- Slider global (saison unique ou plage) ----------
 function applyPeriodSelection(){
@@ -249,7 +577,6 @@ function applyPeriodSelection(){
     ?`Toutes (${H.seasons[0]} → ${H.seasons[N-1]})`
     :s0===s1?`Saison ${H.seasons[s0]}`:`${H.seasons[s0]} → ${H.seasons[s1]} (${s1-s0+1} saisons)`;
 
-  // Mise à jour de la capsule et des segments actifs sur la timeline
   const selBox=$('#tlSel');
   if(selBox){
     selBox.style.left=(s0/N*100)+'%';
@@ -263,7 +590,9 @@ function applyPeriodSelection(){
   renderKpis();
   scatter();
   bump();
+  renderHalftime();
   players();
+  refreshExplorer(true);
 
   const activeSet=new Set(selectedSeasons());
   $('#spark').querySelectorAll('circle[data-season]').forEach(c=>{
@@ -319,7 +648,6 @@ function initPeriodSlider(){
   };
   track.onpointerup=e=>{if(dragMode){dragMode=null;track.releasePointerCapture(e.pointerId)}};
 
-  // Boutons de navigation et présélections rapides
   $('#sPrev').onclick=()=>{if(SEL.start>0){SEL={start:SEL.start-1,end:SEL.end-1};applyPeriodSelection()}};
   $('#sNext').onclick=()=>{if(SEL.end<last){SEL={start:SEL.start+1,end:SEL.end+1};applyPeriodSelection()}};
   $('#sLast').onclick=()=>{SEL={start:last,end:last};applyPeriodSelection()};
@@ -329,12 +657,96 @@ function initPeriodSlider(){
   applyPeriodSelection();
 }
 
-async function initHist(){H=await api('/api/history');const k=H.kpis;
-$('#heroSub').textContent=`${k.matches.toLocaleString('fr-FR')} matchs sur ${k.seasons} saisons, et les prochains simulés des milliers de fois.`;
-$('#kpis').innerHTML=[[k.seasons,'saisons'],[k.matches.toLocaleString('fr-FR'),'matchs analysés'],[fmt(k.goals,1),'buts par match'],[fmt(k.home_win,0)+' %','victoires à domicile'],[k.record.score,`record : ${esc(k.record.match)} (${k.record.season})`]].map(([a,b])=>`<div><b class="num">${a}</b><span>${b}</span></div>`).join('');
-const sp=$('#spark');spark(sp,H.per_season,'goals','Buts par match','buts');spark(sp,H.per_season,'home_win','Victoires à domicile','%',0);spark(sp,H.per_season,'home_adv','Avantage du terrain','buts d’écart',2);
-const tn=[...new Set(Object.values(H.ranks).flat().map(r=>r.team))].sort(),top=H.ranks[H.seasons.at(-1)]?.[0]?.team||tn[0];opts($('#bumpTeam'),tn.map(t=>[t,t]),top);
-$('#bumpTeam').onchange=bump;}
+async function initHist(){
+  H=await api('/api/history');const k=H.kpis;
+  $('#heroSub').textContent=`${k.matches.toLocaleString('fr-FR')} matchs sur ${k.seasons} saisons, et les prochains simulés des milliers de fois.`;
+  $('#kpis').innerHTML=[[k.seasons,'saisons'],[k.matches.toLocaleString('fr-FR'),'matchs analysés'],[fmt(k.goals,1),'buts par match'],[fmt(k.home_win,0)+' %','victoires à domicile'],[k.record.score,`record : ${esc(k.record.match)} (${k.record.season})`]].map(([a,b])=>`<div><b class="num">${a}</b><span>${b}</span></div>`).join('');
+  const sp=$('#spark');spark(sp,H.per_season,'goals','Buts par match','buts');spark(sp,H.per_season,'home_win','Victoires à domicile','%',0);spark(sp,H.per_season,'home_adv','Avantage du terrain','buts d’écart',2);
+  const tn=[...new Set(Object.values(H.ranks).flat().map(r=>r.team))].sort(),top=H.ranks[H.seasons.at(-1)]?.[0]?.team||tn[0];
+  opts($('#bumpTeam'),tn.map(t=>[t,t]),top);
+  $('#bumpTeam').onchange=bump;
+  $('#bumpOpenClub').onclick=()=>openClubModal($('#bumpTeam').value);
+  opts($('#expTeam'),[['','Tous les clubs'],...tn.map(t=>[t,t])],'');
+}
+
+// ---------- Explorateur de données ----------
+const EXP_COLS={
+  matches:[
+    ['date','Date','date'],['home_team','Domicile','home_team'],['score','Score','total_goals'],
+    ['away_team','Extérieur','away_team'],['ht_score','Mi-temps','ht_score'],['round','J.','round'],
+    ['season','Saison','season'],['total_goals','Buts','total_goals'],['venue','Salle','venue']
+  ],
+  players:[
+    ['player','Joueur','player'],['team','Club','team'],['goals_shots','Buts/Tirs','goals'],
+    ['saves_faced','Arrêts','saves'],['lnh_score','Éval. LNH','lnh_score'],['minutes','Temps','seconds_played'],
+    ['a','Passes D.','a'],['br','B. récup.','br'],['bp','B. perd.','bp'],['2min','2 min','2min'],
+    ['opponent','Adversaire','opponent'],['date','Date','date'],['season','Saison','season'],['round','J.','round']
+  ]
+};
+
+function explorerParams(extra={}){
+  const p=new URLSearchParams({
+    dataset:EXP.dataset,
+    seasons:isFullRange()?'all':selectedSeasons().join(','),
+    team:$('#expTeam')?.value||'',
+    q:$('#expSearch')?.value.trim()||'',
+    sort:EXP.sort,
+    dir:EXP.dir,
+    page:String(EXP.page),
+    page_size:'50',
+    ...extra
+  });
+  return p.toString();
+}
+
+async function refreshExplorer(resetPage=false){
+  if(!H)return;
+  if(resetPage)EXP.page=1;
+  const cols=EXP_COLS[EXP.dataset];
+  $('#expTypeM').setAttribute('aria-pressed',EXP.dataset==='matches');
+  $('#expTypeP').setAttribute('aria-pressed',EXP.dataset==='players');
+  try{
+    const d=await api('/api/explorer?'+explorerParams());
+    const thead='<tr>'+cols.map(([k,lbl,sk])=>{
+      const on=EXP.sort===sk,arrow=on?(EXP.dir==='asc'?' ▲':' ▼'):'';
+      return `<th data-sort="${sk}" class="${on?'sorted':''}">${esc(lbl)}${arrow}</th>`;
+    }).join('')+'</tr>';
+    const renderCell=(r,k)=>{
+      if(k==='player')return `<button type="button" class="link-btn" data-pl="${esc(r[k])}"><b>${esc(r[k])}</b></button>`;
+      if(k==='home_team'||k==='away_team'||k==='team'||k==='opponent')return r[k]?`<button type="button" class="link-btn" data-cl="${esc(r[k])}">${esc(r[k])}</button>`:'';
+      if(k==='score'||k==='lnh_score')return `<b>${esc(r[k])}</b>`;
+      return esc(r[k]);
+    };
+    const tbody=d.rows.length
+      ?d.rows.map(r=>'<tr>'+cols.map(([k])=>`<td>${renderCell(r,k)}</td>`).join('')+'</tr>').join('')
+      :`<tr><td colspan="${cols.length}" style="text-align:center;padding:24px;color:var(--mute)">Aucune donnée pour ces critères.</td></tr>`;
+    $('#expTable').innerHTML=thead+tbody;
+    $('#expTable').querySelectorAll('button[data-pl]').forEach(b=>b.onclick=()=>openPlayerModal(b.dataset.pl));
+    $('#expTable').querySelectorAll('button[data-cl]').forEach(b=>b.onclick=()=>openClubModal(b.dataset.cl));
+    $('#expTable').querySelectorAll('th[data-sort]').forEach(th=>{
+      th.onclick=()=>{
+        const sk=th.dataset.sort;
+        if(EXP.sort===sk)EXP.dir=EXP.dir==='desc'?'asc':'desc';
+        else{EXP.sort=sk;EXP.dir='desc'}
+        refreshExplorer(true);
+      };
+    });
+    $('#expPager').innerHTML=`<span>${d.total.toLocaleString('fr-FR')} ligne${d.total>1?'s':''} · Page ${d.page} / ${d.pages}</span>`
+      +`<div class="pager-btns"><button type="button" class="step-btn" id="expPrev"${d.page<=1?' disabled':''}>◀ Précédent</button>`
+      +`<button type="button" class="step-btn" id="expNext"${d.page>=d.pages?' disabled':''}>Suivant ▶</button></div>`;
+    $('#expPrev').onclick=()=>{if(EXP.page>1){EXP.page--;refreshExplorer(false)}};
+    $('#expNext').onclick=()=>{if(EXP.page<d.pages){EXP.page++;refreshExplorer(false)}};
+  }catch(e){
+    $('#expTable').innerHTML=`<tr><td class="err">${esc(e.message)}</td></tr>`;
+  }
+}
+
+$('#expTypeM').onclick=()=>{EXP={...EXP,dataset:'matches',sort:'date',dir:'desc',page:1};refreshExplorer(true)};
+$('#expTypeP').onclick=()=>{EXP={...EXP,dataset:'players',sort:'lnh_score',dir:'desc',page:1};refreshExplorer(true)};
+$('#expTeam').onchange=()=>refreshExplorer(true);
+$('#expSearch').oninput=()=>{clearTimeout(EXP.timer);EXP.timer=setTimeout(()=>refreshExplorer(true),280)};
+$('#expCsvSel').onclick=()=>location.href='/api/export?'+explorerParams({full:'0'});
+$('#expCsvAll').onclick=()=>location.href='/api/export?'+explorerParams({full:'1'});
 
 // ---------- Monte Carlo ----------
 async function initMC(){M=await api('/api/meta');const f=$('#fSeason');opts(f,[...M.seasons].reverse().map(s=>[s,s]),M.default);
