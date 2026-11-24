@@ -267,7 +267,11 @@ function halftimeForPeriod(key){
   return [...acc.values()].sort((a,b)=>b.cb_pts-a.cb_pts||b.cb_w-a.cb_w);
 }
 
-const mergeList=(prop,sortKey)=>{
+function playersForPeriod(key){
+  const empty={mvp:[],scorers:[],keepers:[],seven_m:[],defense:[],discipline:[]};
+  if(!H.players)return empty;
+  if(key!=='__range__')return H.players[key]||H.players.all||empty;
+  const mergeList=(prop,sortKey)=>{
     const acc=new Map();
     for(const s of selectedSeasons()){
       for(const p of (H.players[s]?.[prop]||[])){
@@ -303,6 +307,7 @@ const mergeList=(prop,sortKey)=>{
     defense:mergeList('defense','def_act'),
     discipline:mergeList('discipline','a'),
   };
+}
 
 function renderKpis(){
   const k=H.kpis;
