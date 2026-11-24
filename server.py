@@ -70,7 +70,7 @@ def compute_custom_player_rating(box: pd.DataFrame, matches: pd.DataFrame) -> pd
     is_home = b["team"] == b["home_team"]
     gf_team = np.where(is_home, b["home_ft_goals"], b["away_ft_goals"])
     ga_team = np.where(is_home, b["away_ft_goals"], b["home_ft_goals"])
-    league_avg_ga = float(np.nanmean(ga_team)) if np.notna(ga_team).any() else 29.5
+    league_avg_ga = float(np.nanmean(ga_team)) if np.isfinite(ga_team).any() else 29.5
 
     win_bonus = np.where(
         b["played"].fillna(False),
