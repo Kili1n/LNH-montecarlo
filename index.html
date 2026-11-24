@@ -97,26 +97,19 @@ svg text{font-family:Inter,sans-serif}
 <main id="v-hist">
 <div class="hero">
 <h1>Vingt ans de buts, tous les clubs, un seul tableau.</h1>
-<p id="heroSub">Le championnat de France de handball, lu dans les chiffres.</p>
-<svg class="court" viewBox="0 0 800 400" aria-hidden="true">
-<defs><g id="half"><path d="M0,50A120,120 0 0 1 120,170L120,230A120,120 0 0 1 0,350Z" fill="#E6ECFB" stroke="#1747C9" stroke-width="3"/><path d="M0,-10A180,180 0 0 1 180,170L180,230A180,180 0 0 1 0,410" fill="none" stroke="#1747C9" stroke-width="2" stroke-dasharray="10 8"/><path d="M140,194v12" stroke="#1747C9" stroke-width="3"/><rect x="-14" y="170" width="14" height="60" fill="none" stroke="#0E1626" stroke-width="4"/></g></defs>
-<rect x="2" y="2" width="796" height="396" fill="none" stroke="#D8DCE4" stroke-width="3"/><path d="M400,0V400" stroke="#D8DCE4" stroke-width="3"/>
-<use href="#half"/><use href="#half" transform="translate(800,0) scale(-1,1)"/>
-<path id="arc" d="M300,350Q520,40 806,200" fill="none"/>
-<circle r="11" fill="#F25C2A" cx="300" cy="350" id="ball"><animateMotion dur="1.5s" begin="0.4s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines=".3 .1 .3 1"><mpath href="#arc"/></animateMotion></circle>
-</svg></div>
+<p id="heroSub">Le championnat de France de handball, lu dans les chiffres.</p></div>
 <div class="score" id="kpis"></div>
 
 <section><h2>Le jeu a-t-il changé ?</h2><p class="lede">Buts par match, victoires à domicile et avantage du terrain, saison après saison.</p><div class="grid3" id="spark"></div></section>
 
 <section><h2>La carte tactique : qui marque, qui encaisse</h2><p class="lede">Chaque club selon ses buts marqués et encaissés par match. En haut à droite : les attaques de feu qui verrouillent aussi leur défense. La taille du point suit les points par match.</p>
-<div class="row"><label>Période<select id="mapSeason"></select></label></div><div class="card"><svg id="scatter" viewBox="0 0 900 520" width="100%"></svg></div></section>
+<div class="card"><svg id="scatter" viewBox="0 0 900 520" width="100%"></svg></div></section>
 
 <section><h2>Les classements, saison par saison</h2><p class="lede">Rang final de chaque club. Cliquez sur un club pour suivre sa trajectoire.</p>
 <div class="row"><label>Club<select id="bumpTeam"></select></label></div><div class="card scroll"><svg id="bump" width="100%"></svg></div></section>
 
 <section><h2>Les joueurs qui font la différence</h2><p class="lede">Évaluation LNH cumulée, meilleurs buteurs et gardiens les plus efficaces.</p>
-<div class="row"><label>Saison<select id="plSeason"></select></label></div><div class="grid3" id="players"></div></section>
+<div class="grid3" id="players"></div></section>
 </main>
 
 <main id="v-mc" hidden>
@@ -222,7 +215,7 @@ data.forEach((r,i)=>s+=`<circle cx="${X(i)}" cy="${Y(r[key])}" r="4.5" fill="#ff
 el.insertAdjacentHTML('beforeend',`<div class="card"><svg viewBox="0 0 ${W} ${Ht}" width="100%">${s}</svg></div>`);
 const svg=el.lastElementChild.querySelector('svg');svg.querySelectorAll('circle').forEach(c=>{c.onmousemove=e=>tipOn(e,`<b>${data[c.dataset.i].season}</b><br>${fmt(data[c.dataset.i][key],d)} ${unit}`);c.onmouseleave=tipOff})}
 
-function scatter(){const k=$('#mapSeason').value,T=teamsForPeriod(k),svg=$('#scatter'),W=900,Ht=520,p={l:60,r:30,t:20,b:50};
+function scatter(){const T=teamsForPeriod(periodKey()),svg=$('#scatter'),W=900,Ht=520,p={l:60,r:30,t:20,b:50};
 if(!T.length){svg.innerHTML='';return}
 const gx=T.map(t=>t.gf_m),gy=T.map(t=>t.ga_m),xl=Math.min(...gx)-.8,xh=Math.max(...gx)+.8,yl=Math.min(...gy)-.8,yh=Math.max(...gy)+.8;
 const X=v=>p.l+(v-xl)/(xh-xl)*(W-p.l-p.r),Y=v=>p.t+(v-yl)/(yh-yl)*(Ht-p.t-p.b),mx=gx.reduce((a,b)=>a+b)/gx.length,my=gy.reduce((a,b)=>a+b)/gy.length;
@@ -245,19 +238,11 @@ const c=on?hue(t):'#C9CEDA',w=on?4:1.6;let o='';segs.forEach(sg=>o+=`<polyline f
 const last=[...pts].reverse().find(Boolean);if(last)o+=`<text x="${last[0]+14}" y="${last[1]+4}" font-size="11" fill="${on?c:'#8A91A1'}" font-weight="${on?700:400}">${esc(t)}</text>`;return o};
 teams.filter(t=>t!==sel).forEach(t=>s+=draw(t,false));s+=draw(sel,true);const sv=$('#bump');sv.setAttribute('viewBox',`0 0 ${W} ${Ht}`);sv.style.minWidth=W+'px';sv.innerHTML=s}
 
-function players(){const d=playersForPeriod($('#plSeason').value);
+function players(){const d=playersForPeriod(periodKey());
 const L=(title,arr,main,sub)=>`<div class="card"><h3 style="margin-bottom:6px">${title}</h3>${arr.length?arr.map((p,i)=>`<div class="rank"><b class="num">${i+1}</b><div>${esc(p.name)}<br><small>${esc(p.team)} · ${p.games} matchs</small></div><div style="text-align:right"><b class="num">${main(p)}</b><br><i>${sub(p)}</i></div></div>`).join(''):'<div class="empty">Aucune feuille de match pour cette période.</div>'}</div>`;
 $('#players').innerHTML=L('Évaluation LNH',d.mvp,p=>fmt(p.lnh,1),p=>p.goals+' buts')+L('Meilleurs buteurs',d.scorers,p=>p.goals,p=>fmt(p.pct,0)+' % de réussite')+L('Meilleurs gardiens',d.keepers,p=>fmt(p.save_pct,1)+' %',p=>p.saves+' arrêts / '+p.faced+' tirs')}
 
 // ---------- Slider global (saison unique ou plage) ----------
-function syncSelectRangeOption(el,rangeLabel){
-  let opt=el.querySelector('option[value="__range__"]');
-  if(rangeLabel){
-    if(!opt){opt=document.createElement('option');opt.value='__range__';el.insertBefore(opt,el.children[1]||null)}
-    opt.textContent=rangeLabel;
-  }else if(opt){opt.remove()}
-}
-
 function applyPeriodSelection(){
   const N=H.seasons.length,s0=SEL.start,s1=SEL.end;
   $('#seasonLabel').textContent=isFullRange()
@@ -276,12 +261,6 @@ function applyPeriodSelection(){
   $('#sNext').disabled=s1>=N-1;
 
   renderKpis();
-  const key=periodKey();
-  const rangeOptLabel=key==='__range__'?`${H.seasons[s0]} → ${H.seasons[s1]}`:null;
-  for(const el of [$('#mapSeason'),$('#plSeason')]){
-    syncSelectRangeOption(el,rangeOptLabel);
-    el.value=key;
-  }
   scatter();
   bump();
   players();
@@ -306,7 +285,7 @@ function initPeriodSlider(){
   SEL={start:last,end:last};
   $('#seasonBar').hidden=false;
 
-  track.innerHTML=H.seasons.map((s,i)=>`<span class="tl-seg num" data-i="${i}">${s.slice(2,4)}-${s.slice(-2)}</span>`).join('')
+  track.innerHTML=H.seasons.map((s,i)=>`<span class="tl-seg num" data-i="${i}">${s.slice(2,4)}/${s.slice(-2)}</span>`).join('')
     +`<div class="tl-sel" id="tlSel"><span class="tl-grip" data-edge="start"></span><span class="tl-grip" data-edge="end"></span></div>`;
 
   const idxFromX=clientX=>{
@@ -347,14 +326,6 @@ function initPeriodSlider(){
   $('#s5y').onclick=()=>{SEL={start:Math.max(0,last-4),end:last};applyPeriodSelection()};
   $('#sAll').onclick=()=>{SEL={start:0,end:last};applyPeriodSelection()};
 
-  const onLocalSelect=v=>{
-    if(v==='all')SEL={start:0,end:last};
-    else if(H.seasons.includes(v)){const i=H.seasons.indexOf(v);SEL={start:i,end:i}}
-    applyPeriodSelection();
-  };
-  $('#mapSeason').onchange=e=>onLocalSelect(e.target.value);
-  $('#plSeason').onchange=e=>onLocalSelect(e.target.value);
-
   applyPeriodSelection();
 }
 
@@ -362,9 +333,8 @@ async function initHist(){H=await api('/api/history');const k=H.kpis;
 $('#heroSub').textContent=`${k.matches.toLocaleString('fr-FR')} matchs sur ${k.seasons} saisons, et les prochains simulés des milliers de fois.`;
 $('#kpis').innerHTML=[[k.seasons,'saisons'],[k.matches.toLocaleString('fr-FR'),'matchs analysés'],[fmt(k.goals,1),'buts par match'],[fmt(k.home_win,0)+' %','victoires à domicile'],[k.record.score,`record : ${esc(k.record.match)} (${k.record.season})`]].map(([a,b])=>`<div><b class="num">${a}</b><span>${b}</span></div>`).join('');
 const sp=$('#spark');spark(sp,H.per_season,'goals','Buts par match','buts');spark(sp,H.per_season,'home_win','Victoires à domicile','%',0);spark(sp,H.per_season,'home_adv','Avantage du terrain','buts d’écart',2);
-const ss=[['all','Toutes les saisons'],...[...H.seasons].reverse().map(s=>[s,s])];opts($('#mapSeason'),ss,H.seasons.at(-1));opts($('#plSeason'),ss,'all');
 const tn=[...new Set(Object.values(H.ranks).flat().map(r=>r.team))].sort(),top=H.ranks[H.seasons.at(-1)]?.[0]?.team||tn[0];opts($('#bumpTeam'),tn.map(t=>[t,t]),top);
-$('#mapSeason').onchange=scatter;$('#bumpTeam').onchange=bump;$('#plSeason').onchange=players;scatter();bump();players()}
+$('#bumpTeam').onchange=bump;}
 
 // ---------- Monte Carlo ----------
 async function initMC(){M=await api('/api/meta');const f=$('#fSeason');opts(f,[...M.seasons].reverse().map(s=>[s,s]),M.default);
