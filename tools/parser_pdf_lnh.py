@@ -1,3 +1,4 @@
+import argparse
 import csv
 import html
 import re
@@ -10,16 +11,24 @@ from tqdm import tqdm
 # CONFIG
 ANNEE = "2026-2027"
 RACINE_PROJET = Path(__file__).resolve().parent.parent
-DOSSIER_PDFS = RACINE_PROJET / "data/feuilles_de_match" / ANNEE  # Ou RACINE_PROJET / "data/feuilles_de_match" pour toutes les saisons
-DOSSIER_CSV = RACINE_PROJET / "data/data_csv" / ANNEE
+DOSSIER_PDFS_RACINE = RACINE_PROJET / "data/feuilles_de_match"
+DOSSIER_CSV_RACINE = RACINE_PROJET / "data/data_csv"
 
 BASE_MATCH_COLS = [
     "match_id", "season", "round", "date", "time", "venue",
     "home_team", "away_team", "home_ht_goals", "away_ht_goals",
     "home_ft_goals", "away_ft_goals",
+    "home_goals", "home_shots", "home_goals_7m", "home_shots_7m",
+    "home_saves", "home_shots_faced", "home_saves_7m", "home_shots_faced_7m",
+    "home_br", "home_tc", "home_pp", "home_2p", "home_bp", "home_dp",
+    "home_a", "home_2min", "home_d", "home_lnh_score",
+    "away_goals", "away_shots", "away_goals_7m", "away_shots_7m",
+    "away_saves", "away_shots_faced", "away_saves_7m", "away_shots_faced_7m",
+    "away_br", "away_tc", "away_pp", "away_2p", "away_bp", "away_dp",
+    "away_a", "away_2min", "away_d", "away_lnh_score",
 ]
 
-# Table d'équivalence pour reconnaître qu'un match futur et un PDF concernent le même club
+# Table d'équivalence pour reconnaître qu'un match futur/sans PDF et un PDF concernent le même club
 ALIAS_EQUIPES: dict[str, str] = {
     "psg": "psg", "psg handball": "psg", "paris": "psg", "paris sg": "psg",
     "paris saint germain": "psg", "paris saint germain handball": "psg",
@@ -101,36 +110,49 @@ COLS = {
     "score_lnh": (564, 600),
 }
 
+HAUTEUR_PAGE_VIRTUELLE = 1000.0
 
-def _cle_equipe(nom: str) -> str:
-    """Normalise le nom d'une équipe pour éviter tout doublon entre calendrier_futur.csv et les PDF."""
+
+def _normaliser_texte(nom: str) -> str:
     s = unicodedata.normalize("NFKD", str(nom).strip())
     s = "".join(c for c in s if not unicodedata.combining(c))
     s = s.lower().replace("’", "'")
-    cle = re.sub(r"[^a-z0-9]+", " ", s).strip()
+    return re.sub(r"[^a-z0-9]+", " ", s).strip()
+
+
+def _cle_equipe(nom: str) -> str:
+    """Normalise le nom d'une équipe pour éviter tout doublon entre CSV annexes et PDF."""
+    cle = _normaliser_texte(nom)
     return ALIAS_EQUIPES.get(cle, cle)
 
 
 def extract_rows(pdf_path: Path) -> list[dict]:
-    """Extrait tous les caractères avec leurs coordonnées exactes et les regroupe par ligne."""
+    """
+    Extrait tous les caractères sur TOUTES les pages du PDF (indispensable quand un match
+    déborde sur 2+ pages à cause d'un grand nombre de joueurs ou du bug des 30 coachs).
+    """
     chars = []
 
-    def walk(obj):
+    def walk(obj, page_idx: int):
         if isinstance(obj, LTChar):
-            chars.append((obj.bbox[1], obj.bbox[0], obj.bbox[2], obj.get_text()))
+            y_global = obj.bbox[1] - (page_idx * HAUTEUR_PAGE_VIRTUELLE)
+            chars.append((page_idx, y_global, obj.bbox[0], obj.bbox[2], obj.get_text()))
         elif hasattr(obj, "__iter__"):
             for child in obj:
-                walk(child)
+                walk(child, page_idx)
 
-    for page_layout in extract_pages(str(pdf_path)):
-        walk(page_layout)
-        break  # Chaque feuille de match LNH tient sur 1 page
+    for page_idx, page_layout in enumerate(extract_pages(str(pdf_path))):
+        walk(page_layout, page_idx)
 
-    chars.sort(key=lambda c: (-round(c[0], 1), c[1]))
+    chars.sort(key=lambda c: (c[0], -round(c[1], 1), c[2]))
     rows = []
-    for y0, x0, x1, txt in chars:
-        if not rows or abs(y0 - rows[-1]["y"]) > 2.0:
-            rows.append({"y": y0, "chars": [(x0, x1, txt)]})
+    for page_idx, y_global, x0, x1, txt in chars:
+        if (
+            not rows
+            or rows[-1]["page"] != page_idx
+            or abs(y_global - rows[-1]["y"]) > 2.0
+        ):
+            rows.append({"page": page_idx, "y": y_global, "chars": [(x0, x1, txt)]})
         else:
             rows[-1]["chars"].append((x0, x1, txt))
     return rows
@@ -189,19 +211,45 @@ def date_fr_to_iso(val: str) -> str:
     return f"{m.group(3)}-{m.group(2)}-{m.group(1)}" if m else val.strip()
 
 
-def parse_lnh_pdf(pdf_path: Path) -> tuple[dict, list[dict]]:
+def _est_titre_equipe_attendu(titre: str, header_home: str, header_away: str) -> int | None:
+    """
+    Vérifie si 'titre' correspond à l'équipe domicile (retourne 0) ou extérieur (retourne 1).
+    Utilise une correspondance exacte puis normalisée pour éviter tout faux positif.
+    """
+    t_low = titre.strip().lower()
+    if not t_low:
+        return None
+    if header_home and t_low == header_home.strip().lower():
+        return 0
+    if header_away and t_low == header_away.strip().lower():
+        return 1
+
+    t_norm = _normaliser_texte(titre)
+    if header_home and t_norm == _normaliser_texte(header_home):
+        return 0
+    if header_away and t_norm == _normaliser_texte(header_away):
+        return 1
+    return None
+
+
+def parse_lnh_pdf(pdf_path: Path) -> tuple[dict, list[dict], bool]:
+    """
+    Parse une feuille de match LNH (mono-page ou multi-pages, ou feuille vide avec score global).
+    Retourne (match_row, player_rows, feuille_detaillee).
+    """
     rows = extract_rows(pdf_path)
 
     meta = {}
     home_ht = away_ht = home_ft = away_ft = 0
+    has_ft = False
     header_home_name = ""
     header_away_name = ""
 
-    # 1. En-tête : métadonnées et scores (y > 700)
+    # 1. En-tête : métadonnées et scores (page 0, y > 700)
     for r in rows:
-        y = r["y"]
-        if y < 700:
+        if r["page"] != 0 or r["y"] < 700:
             continue
+        y = r["y"]
 
         left_label = cell_text(r["chars"], 100, 185)
         left_val = cell_text(r["chars"], 185, 345)
@@ -224,8 +272,8 @@ def parse_lnh_pdf(pdf_path: Path) -> tuple[dict, list[dict]]:
             meta["time"] = right_val
 
         if 740 <= y <= 765:
-            h_txt = cell_text(r["chars"], 50, 250)
-            a_txt = cell_text(r["chars"], 350, 560)
+            h_txt = cell_text(r["chars"], 50, 295)
+            a_txt = cell_text(r["chars"], 300, 595)
             if h_txt and a_txt:
                 header_home_name = h_txt
                 header_away_name = a_txt
@@ -235,21 +283,22 @@ def parse_lnh_pdf(pdf_path: Path) -> tuple[dict, list[dict]]:
             home_ht = parse_int(cell_text(r["chars"], 80, 200))
             away_ht = parse_int(cell_text(r["chars"], 400, 520))
         elif center_lbl == "Score final":
-            home_ft = parse_int(cell_text(r["chars"], 80, 200))
-            away_ft = parse_int(cell_text(r["chars"], 400, 520))
+            h_ft_txt = cell_text(r["chars"], 80, 200)
+            a_ft_txt = cell_text(r["chars"], 400, 520)
+            if h_ft_txt or a_ft_txt:
+                has_ft = True
+            home_ft = parse_int(h_ft_txt)
+            away_ft = parse_int(a_ft_txt)
 
-    # 2. Tableaux statistiques domicile puis extérieur (de y <= 700 jusqu'à la légende)
-    teams_data = []
-    current_team = None
-    noms_equipes_attendus = {
-        n.strip().lower() for n in (header_home_name, header_away_name) if n.strip()
-    }
-    equipes_deja_vues = set()
+    # 2. Tableaux statistiques domicile puis extérieur sur TOUTES les pages
+    teams_slots: list[dict | None] = [None, None]
+    current_team: dict | None = None
+    equipes_deja_vues: set[int] = set()
 
     for r in rows:
-        y = r["y"]
-        if y > 700:
+        if r["page"] == 0 and r["y"] > 700:
             continue
+
         full_line = cell_text(r["chars"], 0, 600)
         if full_line.startswith("* B.R."):
             break
@@ -259,24 +308,18 @@ def parse_lnh_pdf(pdf_path: Path) -> tuple[dict, list[dict]]:
         team_title_txt = cell_text(r["chars"], 21, 180)
         stats_area_txt = cell_text(r["chars"], 180, 600)
 
-        titre_low = team_title_txt.strip().lower()
-
-        # Détection uniquement des 2 équipes du match (ignore les officiels comme MADSEN Stefan)
-        if (
-            len(teams_data) < 2
-            and not jersey_txt
-            and not stats_area_txt
-            and titre_low in noms_equipes_attendus
-            and titre_low not in equipes_deja_vues
-        ):
-            current_team = {
-                "name": team_title_txt,
-                "players": [],
-                "totals": {},
-            }
-            teams_data.append(current_team)
-            equipes_deja_vues.add(titre_low)
-            continue
+        # Détection uniquement des 2 équipes du match (ignore les officiels/coachs même s'il y en a 30)
+        if not jersey_txt and not stats_area_txt and team_title_txt:
+            slot_idx = _est_titre_equipe_attendu(team_title_txt, header_home_name, header_away_name)
+            if slot_idx is not None and slot_idx not in equipes_deja_vues:
+                current_team = {
+                    "name": team_title_txt,
+                    "players": [],
+                    "totals": {},
+                }
+                teams_slots[slot_idx] = current_team
+                equipes_deja_vues.add(slot_idx)
+                continue
 
         if current_team is None:
             continue
@@ -308,9 +351,12 @@ def parse_lnh_pdf(pdf_path: Path) -> tuple[dict, list[dict]]:
                 "d": parse_int(cell_text(r["chars"], *COLS["d"])),
                 "lnh_score": parse_float(cell_text(r["chars"], *COLS["score_lnh"])),
             }
+            # On ferme le bloc équipe après sa ligne de totaux afin d'ignorer
+            # les 30+ lignes d'officiels/coachs qui suivent dans le bug LNH 25/26
+            current_team = None
             continue
 
-        # Ligne joueur individuel
+        # Ligne joueur individuel (uniquement numéro numérique, les officiels A/B/C/D sont ignorés)
         if jersey_txt.isdigit():
             goals, shots = parse_ratio(cell_text(r["chars"], *COLS["total_buts"]))
             goals_7m, shots_7m = parse_ratio(cell_text(r["chars"], *COLS["buts_7m"]))
@@ -342,13 +388,32 @@ def parse_lnh_pdf(pdf_path: Path) -> tuple[dict, list[dict]]:
                 "lnh_score": parse_float(cell_text(r["chars"], *COLS["score_lnh"])),
             })
 
-    if len(teams_data) < 2:
+    match_id = meta.get("match_id", pdf_path.stem)
+    home_info = teams_slots[0]
+    away_info = teams_slots[1]
+
+    # Cas "Feuille de match vide (seul score global)" ex: 12/13 j15_cesson-rennes_selestat.pdf
+    if home_info is None or away_info is None:
+        if header_home_name and header_away_name and has_ft:
+            match_row = {
+                "match_id": match_id,
+                "season": meta.get("season", ""),
+                "round": meta.get("round", ""),
+                "date": meta.get("date", ""),
+                "time": meta.get("time", ""),
+                "venue": meta.get("venue", ""),
+                "home_team": header_home_name,
+                "away_team": header_away_name,
+                "home_ht_goals": home_ht,
+                "away_ht_goals": away_ht,
+                "home_ft_goals": home_ft,
+                "away_ft_goals": away_ft,
+            }
+            return match_row, [], False
         raise ValueError(f"Structure incomplète dans {pdf_path.name}")
 
-    home_info, away_info = teams_data[0], teams_data[1]
     home_name = home_info["name"] or header_home_name
     away_name = away_info["name"] or header_away_name
-    match_id = meta.get("match_id", pdf_path.stem)
 
     match_row = {
         "match_id": match_id,
@@ -378,29 +443,32 @@ def parse_lnh_pdf(pdf_path: Path) -> tuple[dict, list[dict]]:
                 "is_home": is_home,
                 **p,
             })
+
     for prefix, is_home_val in [("home", 1), ("away", 0)]:
-        if match_row[f"{prefix}_shots_faced_7m"] == 0:
+        if match_row.get(f"{prefix}_shots_faced_7m", 0) == 0:
             match_row[f"{prefix}_shots_faced_7m"] = sum(
                 p["shots_faced_7m"] for p in player_rows if p["is_home"] == is_home_val
             )
 
-    return match_row, player_rows
+    feuille_detaillee = len(player_rows) > 0
+    return match_row, player_rows, feuille_detaillee
 
 
-def charger_matchs_futurs(dossier_csv: Path, matchs_joues: list[dict]) -> list[dict]:
-    """Charge calendrier_futur.csv et écarte les rencontres déjà extraites des PDF."""
-    chemin_futur = dossier_csv / "calendrier_futur.csv"
-    if not chemin_futur.is_file():
+def _lire_csv_annexe(chemin_csv: Path, matchs_existants: list[dict], est_futur: bool) -> list[dict]:
+    """Charge calendrier_futur.csv ou matchs_sans_pdf.csv en évitant tout doublon."""
+    if not chemin_csv.is_file():
         return []
 
-    saison_ref = matchs_joues[0]["season"] if matchs_joues else ""
-    deja_joues = {
+    saison_ref = matchs_existants[0]["season"] if matchs_existants else ""
+    deja_presents = {
         (str(m.get("round", "")), _cle_equipe(m["home_team"]), _cle_equipe(m["away_team"]))
-        for m in matchs_joues
+        for m in matchs_existants
     }
-    ids_joues = {str(m["match_id"]) for m in matchs_joues}
+    ids_presents = {str(m["match_id"]) for m in matchs_existants}
 
-    raw = chemin_futur.read_bytes()
+    raw = chemin_csv.read_bytes()
+    if not raw.strip():
+        return []
     for enc in ("utf-8-sig", "cp1252"):
         try:
             texte = raw.decode(enc)
@@ -413,29 +481,34 @@ def charger_matchs_futurs(dossier_csv: Path, matchs_joues: list[dict]) -> list[d
     premiere_ligne = texte.splitlines()[0] if texte.splitlines() else ""
     delim = ";" if premiere_ligne.count(";") > premiere_ligne.count(",") else ","
 
-    futurs = []
+    ajouts = []
     for row in csv.DictReader(texte.splitlines(), delimiter=delim):
         if not row.get("home_team") or not row.get("away_team"):
             continue
         cle = (str(row.get("round", "")).strip(), _cle_equipe(row["home_team"]), _cle_equipe(row["away_team"]))
-        if str(row.get("match_id", "")).strip() in ids_joues or cle in deja_joues:
+        if str(row.get("match_id", "")).strip() in ids_presents or cle in deja_presents:
             continue
 
-        if saison_ref:
-            row["season"] = saison_ref
-        elif row.get("season"):
+        if row.get("season"):
             row["season"] = re.sub(r"\s*[-/]\s*", "/", str(row["season"]).strip())
+        elif saison_ref:
+            row["season"] = saison_ref
 
-        if row.get("round", "").isdigit():
-            row["round"] = int(row["round"])
+        if str(row.get("round", "")).strip().isdigit():
+            row["round"] = int(str(row["round"]).strip())
 
-        row["home_ht_goals"] = ""
-        row["away_ht_goals"] = ""
-        row["home_ft_goals"] = ""
-        row["away_ft_goals"] = ""
-        futurs.append(row)
+        if est_futur:
+            row["home_ht_goals"] = ""
+            row["away_ht_goals"] = ""
+            row["home_ft_goals"] = ""
+            row["away_ft_goals"] = ""
 
-    return futurs
+        ajouts.append(row)
+        deja_presents.add(cle)
+        if row.get("match_id"):
+            ids_presents.add(str(row["match_id"]).strip())
+
+    return ajouts
 
 
 def generer_csvs(dossier_pdfs: Path, dossier_csv: Path):
@@ -444,20 +517,29 @@ def generer_csvs(dossier_pdfs: Path, dossier_csv: Path):
     dossier_csv.mkdir(parents=True, exist_ok=True)
     all_matches = []
     all_players = []
+    nb_scores_globaux_seuls = 0
 
-    for pdf_path in tqdm(fichiers_pdf, desc="Extraction PDF", unit="pdf"):
+    for pdf_path in tqdm(fichiers_pdf, desc=f"Extraction {dossier_csv.name}", unit="pdf"):
         try:
-            m_row, p_rows = parse_lnh_pdf(pdf_path)
+            m_row, p_rows, detaillee = parse_lnh_pdf(pdf_path)
             all_matches.append(m_row)
             all_players.extend(p_rows)
+            if not detaillee:
+                nb_scores_globaux_seuls += 1
+                print(f"[INFO] {pdf_path.name} : feuille sans stats joueurs (score global {m_row['home_ft_goals']}-{m_row['away_ft_goals']} conservé).")
         except Exception as e:
             print(f"[ERREUR] {pdf_path.name} : {e}")
 
-    matchs_futurs = charger_matchs_futurs(dossier_csv, all_matches)
+    # Fusion des matchs joués sans PDF disponible (forfaits / liens PDF LNH cassés)
+    matchs_sans_pdf = _lire_csv_annexe(dossier_csv / "matchs_sans_pdf.csv", all_matches, est_futur=False)
+    all_matches.extend(matchs_sans_pdf)
+
+    # Fusion des matchs à venir
+    matchs_futurs = _lire_csv_annexe(dossier_csv / "calendrier_futur.csv", all_matches, est_futur=True)
     tous_les_matchs = all_matches + matchs_futurs
 
     if not tous_les_matchs:
-        print(f"Aucun fichier PDF trouvé dans {dossier_pdfs} et aucun calendrier_futur.csv dans {dossier_csv}")
+        print(f"Aucun fichier PDF trouvé dans {dossier_pdfs} et aucun CSV annexe dans {dossier_csv}")
         return
 
     tous_les_matchs.sort(
@@ -472,7 +554,12 @@ def generer_csvs(dossier_pdfs: Path, dossier_csv: Path):
     match_csv_path = dossier_csv / "match.csv"
     players_csv_path = dossier_csv / "players_boxscore.csv"
 
-    colonnes_match = list(all_matches[0].keys()) if all_matches else BASE_MATCH_COLS
+    colonnes_match = list(BASE_MATCH_COLS)
+    for m in tous_les_matchs:
+        for k in m.keys():
+            if k not in colonnes_match:
+                colonnes_match.append(k)
+
     with match_csv_path.open("w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=colonnes_match, extrasaction="ignore", restval="")
         writer.writeheader()
@@ -485,13 +572,35 @@ def generer_csvs(dossier_pdfs: Path, dossier_csv: Path):
             writer.writerows(all_players)
 
     print(
-        f"Extraction terminée ({len(all_matches)} matchs joués, "
-        f"{len(matchs_futurs)} matchs à venir, {len(all_players)} lignes joueurs) :"
+        f"Extraction terminée ({len(all_matches)} matchs joués [dont {nb_scores_globaux_seuls} sans stats joueurs, "
+        f"{len(matchs_sans_pdf)} via fallback HTML/forfait], {len(matchs_futurs)} à venir, {len(all_players)} lignes joueurs) :"
     )
     print(f"  -> {match_csv_path.resolve()}")
     if all_players:
         print(f"  -> {players_csv_path.resolve()}")
 
 
+def main():
+    parser = argparse.ArgumentParser(description="Extrait les feuilles de match PDF LNH en CSV.")
+    parser.add_argument("--saison", default=ANNEE, help="Saison cible (ex: 2025-2026 ou 2025/2026)")
+    parser.add_argument("--toutes", action="store_true", help="Parser toutes les saisons présentes dans data/feuilles_de_match/")
+    args = parser.parse_args()
+
+    if args.toutes:
+        dossiers = (
+            sorted([
+                d for d in DOSSIER_PDFS_RACINE.iterdir()
+                if d.is_dir() and d.name >= "2015-2016"
+            ])
+            if DOSSIER_PDFS_RACINE.is_dir()
+            else []
+        )
+        for d in dossiers:
+            generer_csvs(d, DOSSIER_CSV_RACINE / d.name)
+    else:
+        saison_slug = args.saison.replace("/", "-")
+        generer_csvs(DOSSIER_PDFS_RACINE / saison_slug, DOSSIER_CSV_RACINE / saison_slug)
+
+
 if __name__ == "__main__":
-    generer_csvs(DOSSIER_PDFS, DOSSIER_CSV)
+    main()

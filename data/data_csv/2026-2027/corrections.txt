@@ -1,6 +1,0 @@
-* 2 personnes avec le meme numéro sur le meme match 
-    -> corrigé : 017DSL27, 006DSL27, 011DSL27, 007DSL27, 014DSL27
-* Temps de jeu joueur > Temps de jeu total : 
-    -> Ramené a Temps de jeu total : 074DSL27
-* Nom trop long rétablis : 
-    -> SIMOES VALENTE.. corrigé en : SIMOES VALENTE ESTEVAO VAN-ZELLER

@@ -1,3 +1,4 @@
+import argparse
 import csv
 import re
 import time
@@ -8,7 +9,7 @@ from bs4 import BeautifulSoup
 from tqdm import tqdm
 
 # CONFIG
-SAISON_PAR_DEFAUT = "2026/2027"
+SAISON_PAR_DEFAUT = "2021/2022"
 COMPETITION_ID = "1"  # "1" = Daikin StarLigue, "2" = ProLigue, "4" = Coupe de France, "all" = Toutes
 RACINE_PROJET = Path(__file__).resolve().parent.parent
 DOSSIER_SORTIE = RACINE_PROJET / "data/feuilles_de_match"
@@ -103,8 +104,8 @@ def _extraire_date_heure(item) -> tuple[str, str]:
     return date_iso, heure
 
 
-def _extraire_match_futur(item, cid: str, match_url: str, saison: str) -> dict | None:
-    """Construit une ligne compatible match.csv pour un match non encore joué."""
+def _extraire_infos_base_match(item, cid: str, match_url: str, saison: str) -> dict | None:
+    """Construit une ligne compatible match.csv depuis un bloc calendrier LNH."""
     segments = [s for s in urlparse(match_url).path.split("/") if s]
 
     journee = None
@@ -137,6 +138,21 @@ def _extraire_match_futur(item, cid: str, match_url: str, saison: str) -> dict |
         return None
 
     date_iso, heure = _extraire_date_heure(item)
+
+    # Tentative de récupération d'un éventuel score affiché dans le calendrier (ex: forfait 10 - 0)
+    home_ft, away_ft = "", ""
+    scores_els = [
+        el.get_text(strip=True)
+        for el in item.select(".score, .calendars-listing-item-score, .result")
+        if re.fullmatch(r"\d{1,2}", el.get_text(strip=True))
+    ]
+    if len(scores_els) >= 2:
+        home_ft, away_ft = int(scores_els[0]), int(scores_els[1])
+    else:
+        m_sc = re.search(r"\b(\d{1,2})\s*[-–]\s*(\d{1,2})\b", " ".join(item.stripped_strings))
+        if m_sc:
+            home_ft, away_ft = int(m_sc.group(1)), int(m_sc.group(2))
+
     return {
         "match_id": f"LNH_{cid}",
         "season": saison,
@@ -148,9 +164,52 @@ def _extraire_match_futur(item, cid: str, match_url: str, saison: str) -> dict |
         "away_team": away_team,
         "home_ht_goals": "",
         "away_ht_goals": "",
-        "home_ft_goals": "",
-        "away_ft_goals": "",
+        "home_ft_goals": home_ft,
+        "away_ft_goals": away_ft,
     }
+
+
+def _scraper_fallback_page_match(session: requests.Session, match_url: str, infos_base: dict) -> dict:
+    """
+    Quand le PDF est inaccessible (match forfait/annulé comme 20/21 ou 15/16,
+    ou lien PDF buggé comme 12/13 et 13/14), récupère le score officiel sur la page HTML du match.
+    """
+    resultat = dict(infos_base)
+    try:
+        resp = session.get(match_url, timeout=15)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        texte = " ".join(soup.stripped_strings)
+
+        # Code match officiel s'il apparaît sur la fiche
+        m_code = re.search(r"Code\s+match\s*:?\s*([A-Z0-9_-]{4,20})", texte)
+        if m_code:
+            resultat["match_id"] = m_code.group(1)
+
+        # Score final sur la fiche match
+        scores = [
+            int(el.get_text(strip=True))
+            for el in soup.select(".match-header-score .score, .score-home, .score-away, .team-score")
+            if re.fullmatch(r"\d{1,2}", el.get_text(strip=True))
+        ]
+        if len(scores) >= 2:
+            resultat["home_ft_goals"] = scores[0]
+            resultat["away_ft_goals"] = scores[1]
+
+        # Score mi-temps éventuel "(14 - 12)"
+        m_mt = re.search(r"(?:Mi-temps|MT)\s*:?\s*\(?(\d{1,2})\s*[-–]\s*(\d{1,2})\)?", texte, re.IGNORECASE)
+        if m_mt:
+            resultat["home_ht_goals"] = int(m_mt.group(1))
+            resultat["away_ht_goals"] = int(m_mt.group(2))
+
+        # Lieu éventuel
+        m_lieu = re.search(r"Lieu\s*:?\s*([A-Za-zÀ-ÿ0-9\s'’.-]{3,50}?)(?:\s+Arbitres|\s+Affluence|\s+Journée|$)", texte)
+        if m_lieu and not resultat["venue"]:
+            resultat["venue"] = m_lieu.group(1).strip()
+    except Exception:
+        pass
+
+    return resultat
 
 
 def trier_pdfs_a_telecharger(
@@ -159,11 +218,11 @@ def trier_pdfs_a_telecharger(
     competition_id: str,
     dossier_saison: Path,
     saison: str,
-) -> tuple[list[tuple[str, str]], list[dict], int, int]:
+) -> tuple[list[tuple[str, str, str, dict]], list[dict], int, int]:
     """
     Récupère le calendrier via AJAX, filtre les matchs terminés ('finish'),
     construit l'URL directe du PDF via l'attribut id, écarte les fichiers déjà présents,
-    et collecte les matchs à venir pour la simulation Monte Carlo.
+    et collecte les matchs à venir.
     """
     resp_init = session.get(CALENDAR_URL, timeout=15)
     resp_init.raise_for_status()
@@ -210,11 +269,16 @@ def trier_pdfs_a_telecharger(
 
         cids_vus.add(cid)
         match_url = urljoin(BASE_URL, lien["href"])
+        infos_base = _extraire_infos_base_match(item, cid, match_url, saison)
 
         # Matchs non terminés (à venir ou reportés) -> exportés pour simulation_montecarlo.py
         if "finish" not in item.get("class", []):
-            futur = _extraire_match_futur(item, cid, match_url, saison)
-            if futur:
+            if infos_base:
+                futur = dict(infos_base)
+                futur["home_ht_goals"] = ""
+                futur["away_ht_goals"] = ""
+                futur["home_ft_goals"] = ""
+                futur["away_ft_goals"] = ""
                 matchs_futurs.append(futur)
             continue
 
@@ -227,7 +291,7 @@ def trier_pdfs_a_telecharger(
             deja_presents += 1
             continue
 
-        a_telecharger.append((nom_pdf, pdf_url))
+        a_telecharger.append((nom_pdf, pdf_url, match_url, infos_base or {}))
 
     return a_telecharger, matchs_futurs, total_joues, deja_presents
 
@@ -267,14 +331,19 @@ def telecharger_feuilles_saison(saison: str):
         return
 
     telecharges = 0
-    for index, (nom_pdf, pdf_url) in tqdm(enumerate(a_telecharger, start=1)):
+    matchs_sans_pdf = []
+
+    for index, (nom_pdf, pdf_url, match_url, infos_base) in tqdm(enumerate(a_telecharger, start=1)):
         chemin_pdf = dossier_saison / nom_pdf
         try:
             resp_pdf = session.get(pdf_url, timeout=20)
             resp_pdf.raise_for_status()
 
             if not resp_pdf.content.startswith(b"%PDF"):
-                print(f"[{index}/{len(a_telecharger)}] Pas de PDF disponible pour {nom_pdf}")
+                print(f"[{index}/{len(a_telecharger)}] Pas de PDF disponible pour {nom_pdf} -> récupération score HTML (forfait/lien cassé)")
+                if infos_base:
+                    infos_page = _scraper_fallback_page_match(session, match_url, infos_base)
+                    matchs_sans_pdf.append(infos_page)
                 time.sleep(DELAI_REQUETE)
                 continue
 
@@ -283,14 +352,38 @@ def telecharger_feuilles_saison(saison: str):
 
         except requests.RequestException as e:
             print(f"[{index}/{len(a_telecharger)}] Erreur réseau sur {nom_pdf} : {e}")
+            if infos_base:
+                matchs_sans_pdf.append(infos_base)
 
         time.sleep(DELAI_REQUETE)
 
+    if matchs_sans_pdf:
+        chemin_sans_pdf = dossier_csv / "matchs_sans_pdf.csv"
+        with chemin_sans_pdf.open("w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.DictWriter(f, fieldnames=CHAMPS_MATCH_CSV)
+            writer.writeheader()
+            writer.writerows(matchs_sans_pdf)
+        print(f"Matchs sans PDF (forfaits / liens LNH cassés) sauvegardés -> {chemin_sans_pdf.resolve()}")
+
     print("\n--- Bilan ---")
-    print(f"Nouveaux PDF téléchargés : {telecharges}")
-    print(f"Déjà présents (ignorés)  : {deja_presents}")
-    print(f"Matchs futurs exportés   : {len(matchs_futurs)} -> {chemin_futur.resolve()}")
+    print(f"Nouveaux PDF téléchargés     : {telecharges}")
+    print(f"Déjà présents (ignorés)      : {deja_presents}")
+    print(f"Sans PDF (forfait/lien cassé): {len(matchs_sans_pdf)}")
+    print(f"Matchs futurs exportés       : {len(matchs_futurs)} -> {chemin_futur.resolve()}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Télécharge les feuilles de match PDF LNH.")
+    parser.add_argument("--saison", default=SAISON_PAR_DEFAUT, help="Saison au format AAAA/AAAA (ex: 2025/2026)")
+    parser.add_argument("--toutes", action="store_true", help="Télécharger toutes les saisons configurées")
+    args = parser.parse_args()
+
+    if args.toutes:
+        for s in SAISONS_ID:
+            telecharger_feuilles_saison(s)
+    else:
+        telecharger_feuilles_saison(args.saison.replace("-", "/"))
 
 
 if __name__ == "__main__":
-    telecharger_feuilles_saison(SAISON_PAR_DEFAUT)
+    main()
