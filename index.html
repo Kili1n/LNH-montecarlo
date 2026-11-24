@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La Starligue en chiffres — historique et matchs à venir simulés</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,700;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F5F6F8;--card:#fff;--ink:#0E1626;--mute:#5B6475;--rule:#D8DCE4;--blue:#1747C9;--tint:#E6ECFB;--ball:#F25C2A;--green:#168A5C;--red:#C8302B}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:Newsreader,Georgia,serif;font-weight:700;letter-spacing:-.01em;margin:0}
+h2{font-size:clamp(26px,3.4vw,38px);line-height:1.12}h3{font-size:22px}
+.num{font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+header.top{position:sticky;top:0;z-index:20;background:rgba(245,246,248,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--rule)}
+.bar{max-width:1100px;margin:auto;padding:10px 20px 0;display:flex;gap:24px;align-items:baseline;flex-wrap:wrap}
+.brand{font:700 18px Newsreader,serif}.status{font-size:12px;color:var(--mute);margin-left:auto}
+.season-bar{max-width:1100px;margin:8px auto 0;padding:8px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid var(--rule);font-size:12.5px}
+.tl-wrap{flex:1;min-width:260px;overflow-x:auto;padding:2px 0}
+.tl-track{position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;min-width:540px;height:30px;background:#E9ECF2;border-radius:7px;user-select:none;touch-action:none;cursor:pointer}
+.tl-seg{display:flex;align-items:center;justify-content:center;font:500 10.5px Inter;color:var(--mute);border-right:1px solid rgba(14,22,38,.07);z-index:1;transition:color .15s}
+.tl-seg:last-of-type{border-right:0}
+.tl-seg.on{color:var(--ink);font-weight:700}
+.tl-sel{position:absolute;top:2px;bottom:2px;background:rgba(242,92,42,.15);border:2px solid var(--ball);border-radius:5px;z-index:2;pointer-events:none;transition:left .08s ease-out,width .08s ease-out}
+.tl-grip{position:absolute;top:50%;transform:translateY(-50%);width:8px;height:18px;background:var(--ball);border:1.5px solid #fff;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.25);pointer-events:auto;cursor:ew-resize}
+.tl-grip[data-edge=start]{left:-5px}.tl-grip[data-edge=end]{right:-5px}
+.tl-actions{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.step-btn{background:#fff;border:1px solid var(--rule);border-radius:5px;padding:4px 8px;cursor:pointer;font:600 11.5px Inter;color:var(--ink)}
+.step-btn:hover:not(:disabled){background:var(--tint);border-color:var(--blue)}.step-btn:disabled{opacity:.35;cursor:default}
+.season-pill{background:var(--tint);color:var(--blue);font-weight:600;padding:4px 11px;border-radius:99px;white-space:nowrap}
+.tabs{max-width:1100px;margin:auto;padding:0 20px;display:flex;gap:26px}
+.tab{background:none;border:0;border-bottom:3px solid transparent;padding:10px 0;font:600 14px Inter;color:var(--mute);cursor:pointer}
+.tab[aria-selected=true]{color:var(--ink);border-color:var(--ball)}
+main{max-width:1100px;margin:auto;padding:0 20px 80px}
+section{padding-top:64px}.lede{max-width:62ch;color:var(--mute);margin:10px 0 24px;font-family:Newsreader,serif;font-size:18px;line-height:1.55}
+.hero{position:relative;margin:0 -20px;padding:40px 20px 0;overflow:hidden}
+.hero h1{font-size:clamp(38px,6.4vw,72px);line-height:1.02;max-width:14ch;position:relative}
+.hero p{max-width:50ch;font-family:Newsreader,serif;font-size:20px;color:var(--mute);position:relative}
+.court{display:block;width:100%;margin-top:-30px;max-height:360px}
+.score{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));background:var(--ink);color:#fff;border-radius:6px;margin-top:-10px;position:relative}
+.score div{padding:18px 20px;border-left:1px solid #2B3550}.score div:first-child{border:0}
+.score b{display:block;font:700 34px/1.1 Newsreader,serif}.score span{font-size:12.5px;color:#AEB7CC}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:6px;padding:18px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
+label{font-size:12.5px;color:var(--mute);display:flex;flex-direction:column;gap:4px;font-weight:500}
+select,input[type=number]{font:500 14px Inter;border:1px solid var(--rule);border-radius:5px;padding:8px 10px;background:#fff;color:var(--ink);min-width:110px}
+button.go{background:var(--ball);color:#fff;border:0;border-radius:5px;padding:10px 18px;font:600 14px Inter;cursor:pointer}
+button.go:disabled{opacity:.5;cursor:wait}button.alt{background:#fff;border:1px solid var(--rule);border-radius:5px;padding:7px 12px;font:500 13px Inter;cursor:pointer}
+svg text{font-family:Inter,sans-serif}
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px}.tbl th{font-weight:600;color:var(--mute);text-align:right;padding:8px 8px;border-bottom:2px solid var(--ink);font-size:12px}
+.tbl td{padding:7px 8px;border-bottom:1px solid var(--rule);text-align:right}.tbl th:nth-child(-n+2),.tbl td:nth-child(-n+2){text-align:left}
+.scroll{overflow-x:auto}.cell{border-radius:3px;padding:2px 6px;display:inline-block;min-width:46px}
+.rank{display:grid;grid-template-columns:24px 1fr auto;gap:8px;padding:7px 0;border-bottom:1px solid var(--rule);font-size:13.5px;align-items:baseline}
+.rank small{color:var(--mute)}.rank i{font-style:normal;color:var(--mute);font-size:12px}
+.tip{position:fixed;pointer-events:none;background:var(--ink);color:#fff;padding:7px 10px;border-radius:5px;font-size:12.5px;z-index:50;display:none;max-width:240px}
+.panel{background:var(--card);border:1px solid var(--rule);border-left:5px solid var(--ball);border-radius:6px;padding:18px;margin-top:24px}
+.prog{height:4px;background:var(--rule);border-radius:2px;overflow:hidden;margin-top:12px;display:none}.prog i{display:block;height:100%;width:30%;background:var(--ball);animation:sl 1.1s infinite ease-in-out}
+@keyframes sl{0%{margin-left:-30%}100%{margin-left:100%}}
+.log{font:12px/1.4 ui-monospace,monospace;color:var(--mute);margin-top:8px;max-height:60px;overflow:hidden}
+.match{display:grid;grid-template-columns:90px 1fr 190px 96px;gap:14px;align-items:center;padding:11px 8px;border-bottom:1px solid var(--rule);cursor:pointer}
+.match:hover{background:var(--tint)}.match small{color:var(--mute)}.mt b{font-weight:600}
+.oc{display:flex;height:22px;border-radius:3px;overflow:hidden;font-size:11px;color:#fff;font-weight:600}.oc span{display:flex;align-items:center;justify-content:center;min-width:0;overflow:hidden}
+.ms{font:700 22px Newsreader,serif;text-align:right}.ms small{display:block;font:500 11px Inter}
+.calc{display:grid;grid-template-columns:minmax(260px,360px) 1fr;gap:24px;align-items:start}
+.digits{display:flex;align-items:center;gap:10px;margin:8px 0 14px}.digits input{width:84px;font:700 38px Newsreader,serif;text-align:center;padding:6px}
+.big{font:700 clamp(54px,8vw,92px)/1 Newsreader,serif;color:var(--ball)}
+.chip{display:inline-block;padding:3px 9px;border-radius:99px;background:var(--tint);color:var(--blue);font-weight:600;font-size:13px}
+.empty{color:var(--mute);padding:28px;text-align:center;border:1px dashed var(--rule);border-radius:6px}
+.err{color:var(--red);font-weight:500}
+@media(max-width:760px){.match{grid-template-columns:1fr 84px}.match .oc,.match>small:first-child{grid-column:1/-1}.calc{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="bar"><span class="brand">La Starligue en chiffres</span><span class="status" id="status">Chargement…</span></div>
+  <div class="season-bar" id="seasonBar" hidden>
+    <div class="tl-wrap" title="Clic : 1 saison · Glisser ou tirer les poignées : plage de saisons">
+      <div class="tl-track" id="tlTrack"></div>
+    </div>
+    <div class="tl-actions">
+      <button type="button" class="step-btn" id="sPrev" aria-label="Reculer d'une saison">◀</button>
+      <button type="button" class="step-btn" id="sNext" aria-label="Avancer d'une saison">▶</button>
+      <button type="button" class="step-btn" id="sLast">Dernière</button>
+      <button type="button" class="step-btn" id="s5y">5 ans</button>
+      <button type="button" class="step-btn" id="sAll">Tout</button>
+      <span class="season-pill num" id="seasonLabel">Toutes les saisons</span>
+    </div>
+  </div>
+  <nav class="tabs" role="tablist"><button class="tab" role="tab" id="t-hist" aria-selected="true">Historique</button><button class="tab" role="tab" id="t-mc" aria-selected="false">Simulation Monte Carlo</button></nav>
+</header>
+<div class="tip" id="tip"></div>
+
+<main id="v-hist">
+<div class="hero">
+<h1>Vingt ans de buts, tous les clubs, un seul tableau.</h1>
+<p id="heroSub">Le championnat de France de handball, lu dans les chiffres.</p>
+<svg class="court" viewBox="0 0 800 400" aria-hidden="true">
+<defs><g id="half"><path d="M0,50A120,120 0 0 1 120,170L120,230A120,120 0 0 1 0,350Z" fill="#E6ECFB" stroke="#1747C9" stroke-width="3"/><path d="M0,-10A180,180 0 0 1 180,170L180,230A180,180 0 0 1 0,410" fill="none" stroke="#1747C9" stroke-width="2" stroke-dasharray="10 8"/><path d="M140,194v12" stroke="#1747C9" stroke-width="3"/><rect x="-14" y="170" width="14" height="60" fill="none" stroke="#0E1626" stroke-width="4"/></g></defs>
+<rect x="2" y="2" width="796" height="396" fill="none" stroke="#D8DCE4" stroke-width="3"/><path d="M400,0V400" stroke="#D8DCE4" stroke-width="3"/>
+<use href="#half"/><use href="#half" transform="translate(800,0) scale(-1,1)"/>
+<path id="arc" d="M300,350Q520,40 806,200" fill="none"/>
+<circle r="11" fill="#F25C2A" cx="300" cy="350" id="ball"><animateMotion dur="1.5s" begin="0.4s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines=".3 .1 .3 1"><mpath href="#arc"/></animateMotion></circle>
+</svg></div>
+<div class="score" id="kpis"></div>
+
+<section><h2>Le jeu a-t-il changé ?</h2><p class="lede">Buts par match, victoires à domicile et avantage du terrain, saison après saison.</p><div class="grid3" id="spark"></div></section>
+
+<section><h2>La carte tactique : qui marque, qui encaisse</h2><p class="lede">Chaque club selon ses buts marqués et encaissés par match. En haut à droite : les attaques de feu qui verrouillent aussi leur défense. La taille du point suit les points par match.</p>
+<div class="row"><label>Période<select id="mapSeason"></select></label></div><div class="card"><svg id="scatter" viewBox="0 0 900 520" width="100%"></svg></div></section>
+
+<section><h2>Les classements, saison par saison</h2><p class="lede">Rang final de chaque club. Cliquez sur un club pour suivre sa trajectoire.</p>
+<div class="row"><label>Club<select id="bumpTeam"></select></label></div><div class="card scroll"><svg id="bump" width="100%"></svg></div></section>
+
+<section><h2>Les joueurs qui font la différence</h2><p class="lede">Évaluation LNH cumulée, meilleurs buteurs et gardiens les plus efficaces.</p>
+<div class="row"><label>Saison<select id="plSeason"></select></label></div><div class="grid3" id="players"></div></section>
+</main>
+
+<main id="v-mc" hidden>
+<section style="padding-top:40px"><h2>Rejouer la saison des milliers de fois</h2>
+<p class="lede">Le modèle Dixon &amp; Coles estime l’attaque et la défense de chaque club en buts par match, puis simule tous les matchs restants. Chaque probabilité ci-dessous est une fréquence observée sur l’ensemble des simulations.</p>
+<form class="panel" id="simForm"><div class="row" style="margin:0">
+<label>Saison<select id="fSeason"></select></label>
+<label>Journée de départ (cutoff)<input type="number" id="fCut" min="0" value="0"></label>
+<label>Simulations<select id="fN"><option>1000</option><option>2000</option><option selected>5000</option><option>10000</option><option>20000</option></select></label>
+<label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="fKeep"> Garder sim_matches.parquet (volumineux)</label>
+<button class="go" id="fGo" type="submit" style="margin-left:auto">Lancer la simulation</button></div>
+<div class="prog" id="prog"><i></i></div><div class="log" id="log"></div>
+<div class="row" style="margin:14px 0 0"><label>Résultats déjà calculés<select id="runSel"></select></label></div></form></section>
+
+<div id="mcBody"><div class="empty" style="margin-top:40px">Lancez une simulation ou choisissez un résultat déjà calculé pour afficher les projections.</div></div>
+</main>
+
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const api=async(u,o)=>{const r=await fetch(u,o),j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j};
+const fmt=(x,d=1)=>Number(x).toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d}),pc=(x,d=0)=>fmt(100*x,d)+' %';
+const hue=n=>{let h=0;for(const c of n)h=(h*31+c.charCodeAt(0))%360;return `hsl(${h} 58% 40%)`};
+const tip=$('#tip');function tipOn(e,h){tip.innerHTML=h;tip.style.display='block';tip.style.left=Math.min(e.clientX+14,innerWidth-250)+'px';tip.style.top=e.clientY+14+'px'}function tipOff(){tip.style.display='none'}
+const opts=(el,arr,sel)=>el.innerHTML=arr.map(([v,t])=>`<option value="${esc(v)}"${v==sel?' selected':''}>${esc(t)}</option>`).join('');
+const heat=(v,col)=>`<span class="cell num" style="background:color-mix(in srgb,${col} ${Math.round(v*100)}%,transparent);color:${v>.55?'#fff':'inherit'}">${pc(v)}</span>`;
+let H=null,M=null,SIM=null,UP=[];
+let SEL={start:0,end:0};
+
+// ---------- Onglets ----------
+function showTab(t){for(const k of['hist','mc']){$('#v-'+k).hidden=k!==t;$('#t-'+k).setAttribute('aria-selected',k===t)}history.replaceState(0,'','#'+t)}
+$('#t-hist').onclick=()=>showTab('hist');$('#t-mc').onclick=()=>showTab('mc');
+
+// ---------- Agrégation sur plage de saisons ----------
+function selectedSeasons(){return H.seasons.slice(SEL.start,SEL.end+1)}
+function isFullRange(){return SEL.start===0&&SEL.end===H.seasons.length-1}
+function periodKey(){if(isFullRange())return 'all';if(SEL.start===SEL.end)return H.seasons[SEL.start];return '__range__'}
+
+function teamsForPeriod(key){
+  if(key!=='__range__')return H.teams[key]||[];
+  const acc=new Map();
+  for(const s of selectedSeasons()){
+    for(const t of (H.teams[s]||[])){
+      const cur=acc.get(t.team)||{team:t.team,j:0,gf:0,ga:0,pts:0};
+      cur.j+=t.j;cur.gf+=t.gf_m*t.j;cur.ga+=t.ga_m*t.j;cur.pts+=t.pts;
+      acc.set(t.team,cur);
+    }
+  }
+  return [...acc.values()].map(t=>({...t,gf_m:t.gf/Math.max(t.j,1),ga_m:t.ga/Math.max(t.j,1)}));
+}
+
+function playersForPeriod(key){
+  if(key!=='__range__')return H.players[key]||H.players.all;
+  const mergeList=(prop,sortKey,minFaced=0)=>{
+    const acc=new Map();
+    for(const s of selectedSeasons()){
+      for(const p of (H.players[s]?.[prop]||[])){
+        const id=p.name+'||'+p.team;
+        const cur=acc.get(id)||{name:p.name,team:p.team,games:0,goals:0,shots:0,saves:0,faced:0,lnh:0};
+        cur.games+=p.games;cur.goals+=p.goals;
+        cur.shots+=p.pct>0?Math.round(p.goals/(p.pct/100)):p.goals;
+        cur.saves+=p.saves;cur.faced+=p.faced;cur.lnh+=p.lnh;
+        acc.set(id,cur);
+      }
+    }
+    return [...acc.values()]
+      .filter(p=>p.faced>=minFaced)
+      .map(p=>({...p,pct:p.shots>0?100*p.goals/p.shots:0,save_pct:p.faced>0?100*p.saves/p.faced:0}))
+      .sort((a,b)=>b[sortKey]-a[sortKey]).slice(0,10);
+  };
+  return {mvp:mergeList('mvp','lnh'),scorers:mergeList('scorers','goals'),keepers:mergeList('keepers','save_pct',60)};
+}
+
+function renderKpis(){
+  const k=H.kpis;
+  if(isFullRange()){
+    $('#heroSub').textContent=`${k.matches.toLocaleString('fr-FR')} matchs sur ${k.seasons} saisons, et les prochains simulés des milliers de fois.`;
+    $('#kpis').innerHTML=[[k.seasons,'saisons'],[k.matches.toLocaleString('fr-FR'),'matchs analysés'],[fmt(k.goals,1),'buts par match'],[fmt(k.home_win,0)+' %','victoires à domicile'],[k.record.score,`record : ${esc(k.record.match)} (${k.record.season})`]].map(([a,b])=>`<div><b class="num">${a}</b><span>${b}</span></div>`).join('');
+    return;
+  }
+  if(SEL.start===SEL.end){
+    const season=H.seasons[SEL.start],s=H.per_season.find(x=>x.season===season),top=H.ranks[season]?.[0];
+    if(!s)return;
+    $('#heroSub').textContent=`Saison ${season} : ${s.matches} matchs analysés et projections Monte Carlo.`;
+    $('#kpis').innerHTML=[[season,'saison sélectionnée'],[s.matches,'matchs joués'],[fmt(s.goals,1),'buts par match'],[fmt(s.home_win,0)+' %','victoires à domicile'],[top?esc(top.team):s.max_total+' buts',top?`1er (${top.pts} pts)`:'record de buts sur un match']].map(([a,b])=>`<div><b class="num">${a}</b><span>${b}</span></div>`).join('');
+    return;
+  }
+  const set=new Set(selectedSeasons()),rows=H.per_season.filter(x=>set.has(x.season));
+  const totM=rows.reduce((a,r)=>a+r.matches,0)||1;
+  const avgG=rows.reduce((a,r)=>a+r.goals*r.matches,0)/totM;
+  const avgHW=rows.reduce((a,r)=>a+r.home_win*r.matches,0)/totM;
+  const maxTot=Math.max(...rows.map(r=>r.max_total));
+  $('#heroSub').textContent=`Période ${H.seasons[SEL.start]} → ${H.seasons[SEL.end]} : ${totM.toLocaleString('fr-FR')} matchs sur ${rows.length} saisons.`;
+  $('#kpis').innerHTML=[[rows.length,'saisons sélectionnées'],[totM.toLocaleString('fr-FR'),'matchs joués'],[fmt(avgG,1),'buts par match'],[fmt(avgHW,0)+' %','victoires à domicile'],[maxTot+' buts','record sur un match']].map(([a,b])=>`<div><b class="num">${a}</b><span>${b}</span></div>`).join('');
+}
+
+// ---------- Historique ----------
+function spark(el,data,key,title,unit,d=1){const W=330,Ht=170,p={l:38,r:14,t:34,b:26},v=data.map(x=>x[key]),lo=Math.min(...v),hi=Math.max(...v),pad=(hi-lo||1)*.25,y0=lo-pad,y1=hi+pad;
+const X=i=>p.l+(data.length>1?i*(W-p.l-p.r)/(data.length-1):(W-p.l-p.r)/2),Y=x=>p.t+(1-(x-y0)/(y1-y0))*(Ht-p.t-p.b);
+let s=`<text x="0" y="16" font-weight="600" font-size="13">${title}</text>`;
+[y0+pad,(lo+hi)/2,y1-pad].forEach(g=>s+=`<line x1="${p.l}" x2="${W-p.r}" y1="${Y(g)}" y2="${Y(g)}" stroke="#D8DCE4"/><text x="${p.l-6}" y="${Y(g)+4}" font-size="10" fill="#5B6475" text-anchor="end">${fmt(g,d)}</text>`);
+s+=`<polyline fill="none" stroke="#1747C9" stroke-width="2.5" points="${v.map((x,i)=>`${X(i)},${Y(x)}`)}"/>`;
+data.forEach((r,i)=>s+=`<circle cx="${X(i)}" cy="${Y(r[key])}" r="4.5" fill="#fff" stroke="#F25C2A" stroke-width="2.5" data-i="${i}" data-season="${esc(r.season)}"/>${i%Math.ceil(data.length/6)==0||i==data.length-1?`<text x="${X(i)}" y="${Ht-8}" font-size="10" fill="#5B6475" text-anchor="middle">${r.season.slice(2,4)+'-'+r.season.slice(-2)}</text>`:''}`);
+el.insertAdjacentHTML('beforeend',`<div class="card"><svg viewBox="0 0 ${W} ${Ht}" width="100%">${s}</svg></div>`);
+const svg=el.lastElementChild.querySelector('svg');svg.querySelectorAll('circle').forEach(c=>{c.onmousemove=e=>tipOn(e,`<b>${data[c.dataset.i].season}</b><br>${fmt(data[c.dataset.i][key],d)} ${unit}`);c.onmouseleave=tipOff})}
+
+function scatter(){const k=$('#mapSeason').value,T=teamsForPeriod(k),svg=$('#scatter'),W=900,Ht=520,p={l:60,r:30,t:20,b:50};
+if(!T.length){svg.innerHTML='';return}
+const gx=T.map(t=>t.gf_m),gy=T.map(t=>t.ga_m),xl=Math.min(...gx)-.8,xh=Math.max(...gx)+.8,yl=Math.min(...gy)-.8,yh=Math.max(...gy)+.8;
+const X=v=>p.l+(v-xl)/(xh-xl)*(W-p.l-p.r),Y=v=>p.t+(v-yl)/(yh-yl)*(Ht-p.t-p.b),mx=gx.reduce((a,b)=>a+b)/gx.length,my=gy.reduce((a,b)=>a+b)/gy.length;
+let s=`<rect x="${X(mx)}" y="${p.t}" width="${W-p.r-X(mx)}" height="${Y(my)-p.t}" fill="#E6ECFB" opacity=".6"/><line x1="${X(mx)}" x2="${X(mx)}" y1="${p.t}" y2="${Ht-p.b}" stroke="#5B6475" stroke-dasharray="4 4"/><line y1="${Y(my)}" y2="${Y(my)}" x1="${p.l}" x2="${W-p.r}" stroke="#5B6475" stroke-dasharray="4 4"/>`;
+s+=`<text x="${W-p.r-8}" y="${p.t+18}" text-anchor="end" font-weight="600" fill="#168A5C">Attaque forte, défense solide</text><text x="${p.l+8}" y="${Ht-p.b-10}" font-weight="600" fill="#C8302B">En difficulté</text>`;
+for(let v=Math.ceil(xl);v<=xh;v++)s+=`<text x="${X(v)}" y="${Ht-p.b+18}" font-size="11" fill="#5B6475" text-anchor="middle">${v}</text>`;
+for(let v=Math.ceil(yl);v<=yh;v++)s+=`<text x="${p.l-8}" y="${Y(v)+4}" font-size="11" fill="#5B6475" text-anchor="end">${v}</text>`;
+s+=`<text x="${(W+p.l)/2}" y="${Ht-8}" text-anchor="middle" font-size="12.5" fill="#0E1626">Buts marqués par match</text><text transform="translate(14,${Ht/2}) rotate(-90)" text-anchor="middle" font-size="12.5">Buts encaissés par match (meilleure défense en haut)</text>`;
+T.forEach((t,i)=>{const r=5+Math.max(0,t.pts/Math.max(t.j,1))*4;s+=`<g data-i="${i}" style="cursor:pointer"><circle cx="${X(t.gf_m)}" cy="${Y(t.ga_m)}" r="${r}" fill="${hue(t.team)}" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><text x="${X(t.gf_m)+r+3}" y="${Y(t.ga_m)+4}" font-size="11">${esc(t.team)}</text></g>`});
+svg.innerHTML=s;svg.querySelectorAll('g[data-i]').forEach(g=>{const t=T[g.dataset.i];g.onmousemove=e=>tipOn(e,`<b>${esc(t.team)}</b><br>${fmt(t.gf_m,2)} marqués · ${fmt(t.ga_m,2)} encaissés<br>${fmt(t.pts/t.j,2)} pts/match · ${t.j} matchs`);g.onmouseleave=tipOff})}
+
+function bump(){const sel=$('#bumpTeam').value,active=new Set(selectedSeasons());
+const baseSeasons=SEL.end>SEL.start?selectedSeasons():H.seasons;
+const S=baseSeasons.filter(s=>H.ranks[s]),teams=[...new Set(S.flatMap(s=>H.ranks[s].map(r=>r.team)))],n=Math.max(...S.flatMap(s=>H.ranks[s].map(r=>r.rank)));
+const W=Math.max(760,S.length*74+230),Ht=n*28+60,X=i=>50+i*(W-230)/Math.max(S.length-1,1),Y=r=>34+(r-1)*28;let s='';
+S.forEach((q,i)=>{const on=active.has(q);if(on&&SEL.start===SEL.end)s+=`<rect x="${X(i)-24}" y="22" width="48" height="${Ht-34}" rx="6" fill="#E6ECFB" opacity=".7"/>`;
+s+=`<text x="${X(i)}" y="16" font-size="11" text-anchor="middle" font-weight="${on?700:400}" fill="${on?'#1747C9':'#5B6475'}">${q.slice(2,4)+'-'+q.slice(-2)}</text>`});
+const draw=(t,on)=>{const pts=S.map((q,i)=>{const r=H.ranks[q].find(x=>x.team===t);return r&&[X(i),Y(r.rank),r]}),segs=[];let cur=[];pts.forEach(p=>{if(p)cur.push(p);else{if(cur.length)segs.push(cur);cur=[]}});if(cur.length)segs.push(cur);
+const c=on?hue(t):'#C9CEDA',w=on?4:1.6;let o='';segs.forEach(sg=>o+=`<polyline fill="none" stroke="${c}" stroke-width="${w}" stroke-linejoin="round" points="${sg.map(p=>p[0]+','+p[1])}"/>`+(on?sg.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="9" fill="${c}"/><text x="${p[0]}" y="${p[1]+4}" font-size="10.5" font-weight="700" fill="#fff" text-anchor="middle">${p[2].rank}</text>`).join(''):''));
+const last=[...pts].reverse().find(Boolean);if(last)o+=`<text x="${last[0]+14}" y="${last[1]+4}" font-size="11" fill="${on?c:'#8A91A1'}" font-weight="${on?700:400}">${esc(t)}</text>`;return o};
+teams.filter(t=>t!==sel).forEach(t=>s+=draw(t,false));s+=draw(sel,true);const sv=$('#bump');sv.setAttribute('viewBox',`0 0 ${W} ${Ht}`);sv.style.minWidth=W+'px';sv.innerHTML=s}
+
+function players(){const d=playersForPeriod($('#plSeason').value);
+const L=(title,arr,main,sub)=>`<div class="card"><h3 style="margin-bottom:6px">${title}</h3>${arr.length?arr.map((p,i)=>`<div class="rank"><b class="num">${i+1}</b><div>${esc(p.name)}<br><small>${esc(p.team)} · ${p.games} matchs</small></div><div style="text-align:right"><b class="num">${main(p)}</b><br><i>${sub(p)}</i></div></div>`).join(''):'<div class="empty">Aucune feuille de match pour cette période.</div>'}</div>`;
+$('#players').innerHTML=L('Évaluation LNH',d.mvp,p=>fmt(p.lnh,1),p=>p.goals+' buts')+L('Meilleurs buteurs',d.scorers,p=>p.goals,p=>fmt(p.pct,0)+' % de réussite')+L('Meilleurs gardiens',d.keepers,p=>fmt(p.save_pct,1)+' %',p=>p.saves+' arrêts / '+p.faced+' tirs')}
+
+// ---------- Slider global (saison unique ou plage) ----------
+function syncSelectRangeOption(el,rangeLabel){
+  let opt=el.querySelector('option[value="__range__"]');
+  if(rangeLabel){
+    if(!opt){opt=document.createElement('option');opt.value='__range__';el.insertBefore(opt,el.children[1]||null)}
+    opt.textContent=rangeLabel;
+  }else if(opt){opt.remove()}
+}
+
+function applyPeriodSelection(){
+  const N=H.seasons.length,s0=SEL.start,s1=SEL.end;
+  $('#seasonLabel').textContent=isFullRange()
+    ?`Toutes (${H.seasons[0]} → ${H.seasons[N-1]})`
+    :s0===s1?`Saison ${H.seasons[s0]}`:`${H.seasons[s0]} → ${H.seasons[s1]} (${s1-s0+1} saisons)`;
+
+  // Mise à jour de la capsule et des segments actifs sur la timeline
+  const selBox=$('#tlSel');
+  if(selBox){
+    selBox.style.left=(s0/N*100)+'%';
+    selBox.style.width=((s1-s0+1)/N*100)+'%';
+  }
+  $('#tlTrack').querySelectorAll('.tl-seg').forEach((el,i)=>el.classList.toggle('on',i>=s0&&i<=s1));
+
+  $('#sPrev').disabled=s0<=0;
+  $('#sNext').disabled=s1>=N-1;
+
+  renderKpis();
+  const key=periodKey();
+  const rangeOptLabel=key==='__range__'?`${H.seasons[s0]} → ${H.seasons[s1]}`:null;
+  for(const el of [$('#mapSeason'),$('#plSeason')]){
+    syncSelectRangeOption(el,rangeOptLabel);
+    el.value=key;
+  }
+  scatter();
+  bump();
+  players();
+
+  const activeSet=new Set(selectedSeasons());
+  $('#spark').querySelectorAll('circle[data-season]').forEach(c=>{
+    const on=activeSet.has(c.dataset.season);
+    c.setAttribute('r',on?(s0===s1?'7':'5.5'):'3.5');
+    c.setAttribute('fill',on?'#F25C2A':'#fff');
+    c.style.opacity=on?'1':'.35';
+  });
+
+  const targetMcSeason=H.seasons[s1];
+  if(M&&M.seasons.includes(targetMcSeason)&&$('#fSeason').value!==targetMcSeason){
+    $('#fSeason').value=targetMcSeason;
+    $('#fSeason').onchange();
+  }
+}
+
+function initPeriodSlider(){
+  const N=H.seasons.length,last=Math.max(N-1,0),track=$('#tlTrack');
+  SEL={start:last,end:last};
+  $('#seasonBar').hidden=false;
+
+  track.innerHTML=H.seasons.map((s,i)=>`<span class="tl-seg num" data-i="${i}">${s.slice(2,4)}-${s.slice(-2)}</span>`).join('')
+    +`<div class="tl-sel" id="tlSel"><span class="tl-grip" data-edge="start"></span><span class="tl-grip" data-edge="end"></span></div>`;
+
+  const idxFromX=clientX=>{
+    const r=track.getBoundingClientRect();
+    return Math.max(0,Math.min(last,Math.floor(((clientX-r.left)/r.width)*N)));
+  };
+
+  let dragMode=null,anchor=0;
+  track.onpointerdown=e=>{
+    const edge=e.target.dataset?.edge;
+    const idx=idxFromX(e.clientX);
+    track.setPointerCapture(e.pointerId);
+    if(edge==='start'||edge==='end'){
+      dragMode=edge;
+    }else if(e.shiftKey){
+      dragMode='sweep';anchor=SEL.start;
+      SEL={start:Math.min(SEL.start,idx),end:Math.max(SEL.end,idx)};
+    }else{
+      dragMode='sweep';anchor=idx;
+      SEL={start:idx,end:idx};
+    }
+    applyPeriodSelection();
+  };
+  track.onpointermove=e=>{
+    if(!dragMode)return;
+    const idx=idxFromX(e.clientX);
+    if(dragMode==='start')SEL.start=Math.min(idx,SEL.end);
+    else if(dragMode==='end')SEL.end=Math.max(idx,SEL.start);
+    else SEL={start:Math.min(anchor,idx),end:Math.max(anchor,idx)};
+    applyPeriodSelection();
+  };
+  track.onpointerup=e=>{if(dragMode){dragMode=null;track.releasePointerCapture(e.pointerId)}};
+
+  // Boutons de navigation et présélections rapides
+  $('#sPrev').onclick=()=>{if(SEL.start>0){SEL={start:SEL.start-1,end:SEL.end-1};applyPeriodSelection()}};
+  $('#sNext').onclick=()=>{if(SEL.end<last){SEL={start:SEL.start+1,end:SEL.end+1};applyPeriodSelection()}};
+  $('#sLast').onclick=()=>{SEL={start:last,end:last};applyPeriodSelection()};
+  $('#s5y').onclick=()=>{SEL={start:Math.max(0,last-4),end:last};applyPeriodSelection()};
+  $('#sAll').onclick=()=>{SEL={start:0,end:last};applyPeriodSelection()};
+
+  const onLocalSelect=v=>{
+    if(v==='all')SEL={start:0,end:last};
+    else if(H.seasons.includes(v)){const i=H.seasons.indexOf(v);SEL={start:i,end:i}}
+    applyPeriodSelection();
+  };
+  $('#mapSeason').onchange=e=>onLocalSelect(e.target.value);
+  $('#plSeason').onchange=e=>onLocalSelect(e.target.value);
+
+  applyPeriodSelection();
+}
+
+async function initHist(){H=await api('/api/history');const k=H.kpis;
+$('#heroSub').textContent=`${k.matches.toLocaleString('fr-FR')} matchs sur ${k.seasons} saisons, et les prochains simulés des milliers de fois.`;
+$('#kpis').innerHTML=[[k.seasons,'saisons'],[k.matches.toLocaleString('fr-FR'),'matchs analysés'],[fmt(k.goals,1),'buts par match'],[fmt(k.home_win,0)+' %','victoires à domicile'],[k.record.score,`record : ${esc(k.record.match)} (${k.record.season})`]].map(([a,b])=>`<div><b class="num">${a}</b><span>${b}</span></div>`).join('');
+const sp=$('#spark');spark(sp,H.per_season,'goals','Buts par match','buts');spark(sp,H.per_season,'home_win','Victoires à domicile','%',0);spark(sp,H.per_season,'home_adv','Avantage du terrain','buts d’écart',2);
+const ss=[['all','Toutes les saisons'],...[...H.seasons].reverse().map(s=>[s,s])];opts($('#mapSeason'),ss,H.seasons.at(-1));opts($('#plSeason'),ss,'all');
+const tn=[...new Set(Object.values(H.ranks).flat().map(r=>r.team))].sort(),top=H.ranks[H.seasons.at(-1)]?.[0]?.team||tn[0];opts($('#bumpTeam'),tn.map(t=>[t,t]),top);
+$('#mapSeason').onchange=scatter;$('#bumpTeam').onchange=bump;$('#plSeason').onchange=players;scatter();bump();players()}
+
+// ---------- Monte Carlo ----------
+async function initMC(){M=await api('/api/meta');const f=$('#fSeason');opts(f,[...M.seasons].reverse().map(s=>[s,s]),M.default);
+const upd=()=>{const i=M.info[f.value];$('#fCut').max=i.max_round;$('#fCut').value=i.played_round};f.onchange=upd;upd();await refreshRuns(true)}
+async function refreshRuns(load){const r=await api('/api/runs');$('#runSel').innerHTML=r.length?r.map(x=>`<option value="${x.id}">${esc(x.season)} · journée ${x.cutoff} · ${x.n.toLocaleString('fr-FR')} sims</option>`).join(''):'<option value="">Aucun résultat</option>';
+$('#runSel').onchange=()=>$('#runSel').value&&loadRun($('#runSel').value);if(load&&r.length)loadRun(r[0].id);return r}
+$('#simForm').onsubmit=async e=>{e.preventDefault();const b=$('#fGo');b.disabled=true;$('#prog').style.display='block';$('#log').textContent='Démarrage…';
+try{const {job}=await api('/api/simulate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({season:$('#fSeason').value,cutoff_round:+$('#fCut').value,n_simulations:+$('#fN').value,keep_matches:$('#fKeep').checked})});
+const t=setInterval(async()=>{const j=await api('/api/jobs/'+job);$('#log').textContent=(j.log||[]).slice(-1)[0]||'Simulation en cours…';
+if(j.status==='done'){clearInterval(t);b.disabled=false;$('#prog').style.display='none';$('#log').textContent='Terminé.';await refreshRuns(false);$('#runSel').value=j.run;loadRun(j.run)}
+if(j.status==='error'){clearInterval(t);b.disabled=false;$('#prog').style.display='none';$('#log').innerHTML='<span class="err">Échec : '+esc((j.log||[]).slice(-3).join(' | '))+'</span>'}},1200)}
+catch(x){b.disabled=false;$('#prog').style.display='none';$('#log').innerHTML='<span class="err">'+esc(x.message)+'</span>'}};
+
+async function loadRun(id){$('#mcBody').innerHTML='<div class="empty" style="margin-top:40px">Chargement des simulations…</div>';
+try{[SIM,UP]=await Promise.all([api('/api/sim/'+id),api('/api/sim/'+id+'/upcoming')]);renderMC()}catch(e){$('#mcBody').innerHTML='<div class="empty err" style="margin-top:40px">'+esc(e.message)+'</div>'}}
+
+function stTable(rows,hl){return `<div class="scroll"><table class="tbl num"><tr><th>#</th><th>Club</th><th>Pts</th><th>V</th><th>N</th><th>D</th><th>BP</th><th>BC</th><th>Diff.</th></tr>${rows.map(r=>`<tr${r.Team===hl?' style="background:#E6ECFB;font-weight:600"':''}><td>${r.Rank}</td><td>${esc(r.Team)}</td><td><b>${r.Pts}</b></td><td>${r.W}</td><td>${r.D}</td><td>${r.L}</td><td>${r.GF}</td><td>${r.GA}</td><td>${r.GD>0?'+':''}${r.GD}</td></tr>`).join('')}</table></div>`}
+
+function renderMC(){const S=SIM,rows=S.summary,k=Object.keys(rows[0]).find(c=>/^P_Top/.test(c)),lo=Math.min(...rows.map(r=>r.Pts_P05))-2,hi=Math.max(...rows.map(r=>r.Pts_P95))+2,m=S.metrics||{};
+const rel=m.accuracy!=null?`<div class="card" style="margin-top:20px"><b>Fiabilité du modèle sur les ${m.n_matches} matchs déjà joués :</b> ${pc(m.accuracy,1)} d’issues 1/N/2 bien prédites avant le coup d’envoi, écart moyen de ${fmt(m.margin_mae,1)} buts sur la différence de score${S.rank_metrics?.CI90_coverage!=null?`, intervalle 90 % couvrant ${pc(S.rank_metrics.CI90_coverage)} des totaux de points réels`:''}.</div>`:'';
+const bar=r=>`<svg width="150" height="16"><rect x="0" y="7" width="150" height="2" fill="#D8DCE4"/><rect x="${(r.Pts_P05-lo)/(hi-lo)*150}" y="3" width="${Math.max(3,(r.Pts_P95-r.Pts_P05)/(hi-lo)*150)}" height="10" rx="2" fill="#1747C9" opacity=".25"/><circle cx="${(r.Expected_Pts-lo)/(hi-lo)*150}" cy="8" r="4.5" fill="#F25C2A"/></svg>`;
+const proj=`<div class="scroll"><table class="tbl num"><tr><th>#</th><th>Club</th><th>Points espérés</th><th>Intervalle P05–P95</th><th>Titre</th><th>Podium</th><th>Top 4</th><th>Relégation</th><th>Marqués / match</th><th>Encaissés / match</th></tr>${rows.map(r=>`<tr><td>${r.Pred_Rank}</td><td><b>${esc(r.Team)}</b></td><td><b>${fmt(r.Expected_Pts,1)}</b></td><td>${bar(r)} <small style="color:#5B6475">${r.Pts_P05}–${r.Pts_P95}</small></td><td>${heat(r.P_1st,'#1747C9')}</td><td>${heat(r.P_Podium,'#1747C9')}</td><td>${heat(r[k],'#168A5C')}</td><td>${heat(r.P_Relegated,'#C8302B')}</td><td>${fmt(r.Final_offRTG,1)}</td><td>${fmt(r.Final_defRTG,1)}</td></tr>`).join('')}</table></div>`;
+const teams=[...S.teams].sort(),sc=[['typical','Simulation typique'],['outlier','Simulation la plus aberrante']];
+$('#mcBody').innerHTML=`
+<section><h2>Le classement final projeté</h2><p class="lede">Saison ${esc(S.season)}, ${S.n.toLocaleString('fr-FR')} simulations à partir de la journée ${S.cutoff}. Le point orange marque les points espérés, la barre bleue l’intervalle où tombent 90 % des scénarios.</p>${proj}${rel}</section>
+<section><h2>Explorer les scénarios</h2><p class="lede">La simulation la plus proche de la moyenne, la plus improbable, ou la meilleure et la pire pour un club.</p>
+<div class="row"><label>Scénario<select id="scSel">${sc.map(([v,t])=>`<option value="${v}">${t}</option>`).join('')}</select></label><label>Zoom sur un club<select id="clubSel">${teams.map(t=>`<option>${esc(t)}</option>`).join('')}</select></label></div>
+<div class="grid3" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr))"><div class="card" id="scTab"></div><div class="card" id="clubDist"></div></div>
+<div class="grid3" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr));margin-top:16px"><div class="card" id="clubBest"></div><div class="card" id="clubWorst"></div></div></section>
+<section><h2>Les matchs à venir</h2><p class="lede">Issue la plus probable (1 domicile, N nul, 2 extérieur) et score exact le plus fréquent dans les simulations. Cliquez sur un match pour calculer un score précis.</p><div id="upBox"></div></section>
+<section><h2>Calculateur de score</h2><p class="lede">Choisissez un match, entrez un score : la probabilité est la part des simulations qui se terminent exactement ainsi.</p><div id="calcBox"></div></section>`;
+const showSc=()=>{const v=$('#scSel').value,id=v==='typical'?S.ids.typical:S.outlier;$('#scTab').innerHTML=`<h3 style="margin-bottom:8px">${v==='typical'?'Simulation typique':'Simulation la plus aberrante'}</h3>`+stTable(S.tables[id])};
+const showClub=()=>{const t=$('#clubSel').value,pr=S.rank_probs[t],n=S.teams.length,mx=Math.max(...Object.values(pr));
+$('#clubDist').innerHTML=`<h3 style="margin-bottom:8px">Où termine ${esc(t)} ?</h3><svg viewBox="0 0 ${n*26+20} 150" width="100%">${Object.values(pr).map((v,i)=>`<rect x="${10+i*26}" y="${120-v/mx*100}" width="20" height="${v/mx*100}" rx="2" fill="${i<1?'#F25C2A':i>=n-2?'#C8302B':'#1747C9'}" opacity=".85"><title>${i+1}e : ${pc(v,1)}</title></rect><text x="${20+i*26}" y="136" font-size="10" text-anchor="middle" fill="#5B6475">${i+1}</text>${v>.04?`<text x="${20+i*26}" y="${114-v/mx*100}" font-size="9.5" text-anchor="middle">${pc(v)}</text>`:''}`).join('')}</svg>`;
+$('#clubBest').innerHTML=`<h3 style="margin-bottom:8px">Meilleur scénario pour ${esc(t)}</h3>`+stTable(S.tables[S.ids['best:'+t]],t);$('#clubWorst').innerHTML=`<h3 style="margin-bottom:8px">Pire scénario pour ${esc(t)}</h3>`+stTable(S.tables[S.ids['worst:'+t]],t)};
+$('#scSel').onchange=showSc;$('#clubSel').onchange=showClub;showSc();showClub();renderUpcoming()}
+
+function renderUpcoming(){const box=$('#upBox');if(!UP.length){box.innerHTML='<div class="empty">Aucun match non joué pour cette saison : tout est déjà dans les résultats réels.</div>';$('#calcBox').innerHTML='<div class="empty">Choisissez une saison avec des matchs restants pour utiliser le calculateur.</div>';return}
+UP.sort((a,b)=>a.round-b.round||a.date.localeCompare(b.date));const rounds=[...new Set(UP.map(m=>m.round))];
+box.innerHTML=`<div class="row"><label>Journée<select id="upRound"><option value="">Toutes (${UP.length} matchs)</option>${rounds.map(r=>`<option value="${r}">Journée ${r}</option>`).join('')}</select></label></div><div class="card" id="upList" style="padding:4px 10px"></div>`;
+const draw=()=>{const r=$('#upRound').value,L=UP.map((m,i)=>[m,i]).filter(([m])=>!r||m.round==r);
+$('#upList').innerHTML=L.map(([m,i])=>{const top=m.p1>=m.pN&&m.p1>=m.p2?['1',m.p1,m.home]:m.p2>=m.pN?['2',m.p2,m.away]:['N',m.pN,'Match nul'];
+return `<div class="match" data-i="${i}" tabindex="0"><small>J${m.round}<br>${esc(m.date)}</small><div class="mt"><b>${esc(m.home)}</b> – <b>${esc(m.away)}</b><br><small>Favori : ${esc(top[2])} (${pc(top[1])})${m.real?` · Réel : <b>${m.real[0]}–${m.real[1]}</b>`:''}</small></div>
+<div class="oc" title="${pc(m.p1,1)} · ${pc(m.pN,1)} · ${pc(m.p2,1)}"><span style="flex:${m.p1};background:#1747C9">${m.p1>.12?'1 : '+pc(m.p1):''}</span><span style="flex:${m.pN};background:#8A91A1">${m.pN>.12?'N : '+pc(m.pN):''}</span><span style="flex:${m.p2};background:#F25C2A">${m.p2>.12?'2 : '+pc(m.p2):''}</span></div>
+<div class="ms num">${m.modal[0]}–${m.modal[1]}<small>${pc(m.modal[2],1)} des simulations</small></div></div>`}).join('');
+$('#upList').querySelectorAll('.match').forEach(e=>{const go=()=>{$('#calcSel').value=e.dataset.i;calc(true);$('#calcBox').scrollIntoView({behavior:'smooth'})};e.onclick=go;e.onkeydown=ev=>ev.key==='Enter'&&go()})};
+$('#upRound').onchange=draw;draw();
+$('#calcBox').innerHTML=`<div class="card calc"><div><label>Match<select id="calcSel">${UP.map((m,i)=>`<option value="${i}">J${m.round} · ${esc(m.home)} – ${esc(m.away)}</option>`).join('')}</select></label>
+<div class="digits"><input type="number" id="cH" min="0" max="60" aria-label="Buts domicile"><b style="font-size:30px">–</b><input type="number" id="cA" min="0" max="60" aria-label="Buts extérieur"></div><div id="cOut"></div></div><div><svg id="heat" viewBox="0 0 560 480" width="100%"></svg></div></div>`;
+$('#calcSel').onchange=()=>calc(true);$('#cH').oninput=$('#cA').oninput=()=>calc(false);calc(true)}
+
+function calc(reset){const m=UP[+$('#calcSel').value],cH=$('#cH'),cA=$('#cA');if(reset||cH.value===''){cH.value=m.modal[0];cA.value=m.modal[1]}
+const h=Math.max(0,Math.round(+cH.value||0)),a=Math.max(0,Math.round(+cA.value||0)),c=m.scores[h+'-'+a]||0,p=c/m.n,out=h>a?['1',m.p1,m.home+' gagne']:h<a?['2',m.p2,m.away+' gagne']:['N',m.pN,'Match nul'];
+const sorted=Object.values(m.scores).sort((x,y)=>y-x),rk=c?sorted.indexOf(c)+1:null;
+$('#cOut').innerHTML=`<div class="big num">${p>0?pc(p,p<.01?2:1):'< '+fmt(100/m.n,2)+' %'}</div><p style="margin:6px 0 14px">${p>0?`${c} simulations sur ${m.n.toLocaleString('fr-FR')} se terminent <b>${h}–${a}</b>${rk?` : ${rk}${rk==1?'er':'e'} score le plus fréquent sur ${sorted.length}`:''}.`:`Aucune simulation sur ${m.n.toLocaleString('fr-FR')} ne donne ${h}–${a} : score très improbable.`}</p>
+<span class="chip">${esc(out[2])} : ${pc(out[1],1)} (issue ${out[0]})</span><p style="color:#5B6475;font-size:13px;margin-top:12px">Score moyen simulé : ${fmt(m.exp_h,1)} – ${fmt(m.exp_a,1)}.</p>`;
+const r0=Math.round(m.exp_h),r1=Math.round(m.exp_a),N=15,hs=[...Array(N)].map((_,i)=>r0-7+i),as=[...Array(N)].map((_,i)=>r1-7+i),mx=Math.max(...Object.values(m.scores)),cw=30;let s=`<text x="${50+N*cw/2}" y="14" text-anchor="middle" font-size="12" font-weight="600">${esc(m.away)} (buts)</text><text transform="translate(12,${34+N*cw/2}) rotate(-90)" text-anchor="middle" font-size="12" font-weight="600">${esc(m.home)}</text>`;
+as.forEach((v,j)=>s+=`<text x="${50+j*cw+cw/2}" y="30" font-size="10" text-anchor="middle" fill="#5B6475">${v}</text>`);
+hs.forEach((x,i)=>{s+=`<text x="44" y="${52+i*cw+4}" font-size="10" text-anchor="end" fill="#5B6475">${x}</text>`;as.forEach((y,j)=>{const n=m.scores[x+'-'+y]||0,sel=x===h&&y===a;s+=`<rect x="${50+j*cw}" y="${38+i*cw}" width="${cw-2}" height="${cw-2}" rx="3" fill="#1747C9" fill-opacity="${n?.08+.92*n/mx:.03}" stroke="${sel?'#F25C2A':'none'}" stroke-width="3" data-h="${x}" data-a="${y}" style="cursor:pointer"/>${n/m.n>=.01?`<text x="${50+j*cw+cw/2-1}" y="${38+i*cw+cw/2+3}" font-size="9" text-anchor="middle" fill="${n/mx>.5?'#fff':'#0E1626'}" pointer-events="none">${Math.round(100*n/m.n)}</text>`:''}`})});
+$('#heat').innerHTML=s;$('#heat').querySelectorAll('rect[data-h]').forEach(r=>{r.onclick=()=>{cH.value=r.dataset.h;cA.value=r.dataset.a;calc(false)};r.onmousemove=e=>{const n=m.scores[r.dataset.h+'-'+r.dataset.a]||0;tipOn(e,`<b>${r.dataset.h}–${r.dataset.a}</b><br>${pc(n/m.n,2)} (${n} sim.)`)};r.onmouseleave=tipOff})}
+
+// ---------- Démarrage ----------
+(async()=>{try{await initHist();await initMC();initPeriodSlider();$('#status').textContent=`${H.seasons.length} saisons chargées depuis le serveur`;if(location.hash==='#mc')showTab('mc')}catch(e){$('#status').innerHTML='<span class="err">'+esc(e.message)+'</span>'}})();
+</script>
+</body>
+</html>

@@ -1,0 +1,371 @@
+﻿player_id,team,jersey_num,last_name,first_name,full_name,position,nationality,birth_date,height_cm,weight_kg,current_club,url
+,Aix,82,DESBLANCS,Eliott,Eliott Desblancs,Demi Centre,France,2004-08-18,184,72,Aix,https://www.lnh.fr/lnh/joueurs/Eliott-DESBLANCS
+,Aix,3,KRISTJANSSON,Kristjan,Kristjan Kristjansson,Arrière Droit,Islande,1997-12-25,192,92,SAH Aarhus,https://www.lnh.fr/lnh/joueurs/Kristjan-KRISTJANSSON
+,Aix,4,ONG,Matthieu,Matthieu Ong,Ailier Gauche,France,1992-07-12,180,70,Istres,https://www.lnh.fr/lnh/joueurs/Matthieu-ONG
+2229,Aix,5,LAGARDE,Romain,Romain Lagarde,Arrière Gauche,France,1997-03-05,194,85,Nantes,https://www.lnh.fr/lnh/joueurs/Romain-LAGARDE
+2231,Aix,7,VERGELY,Adrien,Adrien Vergely,Pivot,France,1996-09-14,191,104,Chambéry,https://www.lnh.fr/lnh/joueurs/Adrien-VERGELY
+,Aix,8,LOESCH,Gabriel,Gabriel Loesch,Ailier Droit,France,1995-07-12,182,73,Aix,https://www.lnh.fr/lnh/joueurs/Gabriel-LOESCH
+3,Aix,12,PARDIN,Wesley,Wesley Pardin,Gardien,France,1990-01-01,195,105,Tremblay,https://www.lnh.fr/lnh/joueurs/Wesley-PARDIN
+,Aix,13,HORIHA,Dmytro,Dmytro Horiha,Arrière Gauche,Ukraine,1997-10-08,196,98,,https://www.lnh.fr/lnh/joueurs/Dmytro-HORIHA
+,Aix,14,BABARSKAS,Gerdas,Gerdas Babarskas,Arrière Gauche,Lituanie,1994-02-14,197,94,,https://www.lnh.fr/lnh/joueurs/Gerdas-BABARSKAS
+710,Aix,16,SERDAREVIC,Denis,Denis Serdarevic,Gardien,France,1992-07-06,199,103,Sélestat,https://www.lnh.fr/lnh/joueurs/Denis-SERDAREVIC
+,Aix,18,LABIGANG,Xavier,Xavier Labigang,Ailier Gauche,France,1996-10-04,189,83,Cesson-Rennes,https://www.lnh.fr/lnh/joueurs/Xavier-LABIGANG
+,Aix,19,IVIC,Sime,Sime Ivic,Arrière Droit,Croatie,1993-01-21,196,97,,https://www.lnh.fr/lnh/joueurs/Sime-IVIC
+,Aix,24,BORGES DA SILVA,Diogo,Diogo Borges Da Silva,Arrière Droit,Portugal,1998-10-02,198,102,,https://www.lnh.fr/lnh/joueurs/Diogo-BORGES-DA-SILVA
+,Aix,32,PARISINI,Andrea,Andrea Parisini,Pivot,Italie,1994-11-18,193,110,Limoges,https://www.lnh.fr/lnh/joueurs/Andrea-PARISINI
+,Aix,90,BRITO DUARTE,Gilberto,Gilberto Brito Duarte,Arrière Gauche,Portugal,1990-07-06,197,104,,https://www.lnh.fr/lnh/joueurs/Gilberto-BRITO-DUARTE
+,Créteil,1,SOYEZ,Dylan,Dylan Soyez,Gardien,France,1996-03-15,189,95,,https://www.lnh.fr/lnh/joueurs/Dylan-SOYEZ
+,Créteil,2,ANZUINI,Aymeric,Aymeric Anzuini,Ailier Droit,France,2000-09-06,183,75,Créteil,https://www.lnh.fr/lnh/joueurs/Aymeric-ANZUINI
+,Créteil,3,LOPEZ ALVAREZ,Mario,Mario Lopez Alvarez,Ailier Droit,Espagne,1994-09-19,178,81,,https://www.lnh.fr/lnh/joueurs/Mario-LOPEZ-ALVAREZ
+,Créteil,5,SARRE,Sabi,Sabi Sarre,Ailier Droit,France,2004-02-01,188,73,,https://www.lnh.fr/lnh/joueurs/Sabi-SARRE
+,Créteil,6,AMAN,Valentin,Valentin Aman,Pivot,France,1991-07-26,186,90,Limoges,https://www.lnh.fr/lnh/joueurs/Valentin-AMAN
+,Créteil,8,DEKIC,Dorde,Dorde Dekic,Demi Centre,Serbie,1993-08-28,189,90,Créteil,https://www.lnh.fr/lnh/joueurs/Dorde-DEKIC
+3862,Créteil,11,RIGAULT,Kylian,Kylian Rigault,Arrière Gauche,France,2000-11-12,190,90,Tremblay,https://www.lnh.fr/lnh/joueurs/Kylian-RIGAULT
+,Créteil,14,LEVENTOUX,Rémi,Rémi Leventoux,Pivot,France,1992-02-12,202,110,,https://www.lnh.fr/lnh/joueurs/R%C3%A9mi-LEVENTOUX
+,Créteil,15,BARBEITO,Alejandro,Alejandro Barbeito,Demi Centre,Espagne,2001-08-08,182,85,,https://www.lnh.fr/lnh/joueurs/Alejandro-BARBEITO
+,Créteil,16,JANDRIC,Todor,Todor Jandric,Gardien,Croatie,1998-06-02,200,108,Créteil,https://www.lnh.fr/lnh/joueurs/Todor-JANDRIC
+,Créteil,24,TRAORé,Keyliane,Keyliane Traoré,Arrière Gauche,France,2004-07-05,195,90,Cournon,https://www.lnh.fr/lnh/joueurs/Keyliane-TRAOR%C3%A9
+,Créteil,28,EL BISHRY,Adam,Adam El Bishry,Demi Centre,Égypte,2003-07-28,185,78,,https://www.lnh.fr/lnh/joueurs/Adam-EL-BISHRY
+,Créteil,29,AYEVA,Belco,Belco Ayeva,Arrière Gauche,France,2005-03-08,195,85,Créteil,https://www.lnh.fr/lnh/joueurs/Belco-AYEVA
+,Créteil,34,DEEN,Samuel,Samuel Deen,Ailier Gauche,France,1999-09-16,188,79,Créteil,https://www.lnh.fr/lnh/joueurs/Samuel-DEEN
+,Créteil,35,FERRANDIER,Lucas,Lucas Ferrandier,Ailier Gauche,France,1996-04-12,189,82,Créteil,https://www.lnh.fr/lnh/joueurs/Lucas-FERRANDIER
+,Cesson-Rennes,1,TABARAND,Arnaud,Arnaud Tabarand,Gardien,France,1986-02-25,194,100,Istres,https://www.lnh.fr/lnh/joueurs/Arnaud-TABARAND
+,Cesson-Rennes,6,SALOU,Mathieu,Mathieu Salou,Arrière Droit,France,2000-05-26,202,95,Cesson-Rennes,https://www.lnh.fr/lnh/joueurs/Mathieu-SALOU
+,Cesson-Rennes,9,CAUSSE,Théophile,Théophile Causse,Ailier Droit,France,1992-10-12,179,72,,https://www.lnh.fr/lnh/joueurs/Th%C3%A9ophile-CAUSSE
+,Cesson-Rennes,11,HOCHET,Sylvain,Sylvain Hochet,Ailier Gauche,France,1987-11-24,186,89,,https://www.lnh.fr/lnh/joueurs/Sylvain-HOCHET
+,Cesson-Rennes,12,MOCEVIC,Milos,Milos Mocevic,Gardien,Bosnie,1995-08-16,195,99,Caen,https://www.lnh.fr/lnh/joueurs/Milos-MOCEVIC
+4743,Cesson-Rennes,14,BRIFFE,Mathéo,Mathéo Briffe,Arrière Gauche,France,2001-01-05,190,85,Toulouse,https://www.lnh.fr/lnh/joueurs/Math%C3%A9o-BRIFFE
+,Cesson-Rennes,15,MOLINIE,Robin,Robin Molinie,Arrière Gauche,France,1990-09-15,191,85,Aix,https://www.lnh.fr/lnh/joueurs/Robin-MOLINIE
+,Cesson-Rennes,16,PICHON,Yann,Yann Pichon,Gardien,France,2005-08-25,195,85,Istres,https://www.lnh.fr/lnh/joueurs/Yann-PICHON
+,Cesson-Rennes,17,ORSTED,Kristian,Kristian Orsted,Pivot,Danemark,1995-05-22,210,132,,https://www.lnh.fr/lnh/joueurs/Kristian-ORSTED
+,Cesson-Rennes,18,BARAN,Michal,Michal - Père Baran,Demi Centre,Slovaquie,1974-07-08,194,98,,https://www.lnh.fr/lnh/joueurs/Michal-BARAN
+,Cesson-Rennes,19,EKREN,Hakon,Hakon Ekren,Demi Centre,Norvège,1994-07-10,186,103,,https://www.lnh.fr/lnh/joueurs/Hakon-EKREN
+,Cesson-Rennes,22,OPPEDISANO,Axel,Axel Oppedisano,Pivot,France,1996-12-22,180,102,Cherbourg,https://www.lnh.fr/lnh/joueurs/Axel-OPPEDISANO
+,Cesson-Rennes,23,TUZOLANA,Junior,Junior Tuzolana,Ailier Gauche,France,1997-05-27,189,85,Vardar,https://www.lnh.fr/lnh/joueurs/Junior-TUZOLANA
+,Cesson-Rennes,29,CARDINAL,Youenn,Youenn Cardinal,Ailier Droit,France,1994-02-16,189,81,,https://www.lnh.fr/lnh/joueurs/Youenn-CARDINAL
+1169,Cesson-Rennes,54,APPOLINAIRE,Ludwig,Ludwig Appolinaire,Demi Centre,France,1994-05-27,191,100,Dunkerque,https://www.lnh.fr/lnh/joueurs/Ludwig-APPOLINAIRE
+,Cesson-Rennes,56,GUILLO,Romaric,Romaric Guillo,Pivot,France,1991-10-01,207,111,,https://www.lnh.fr/lnh/joueurs/Romaric-GUILLO
+,Saran,3,DELECROIX,Florian,Florian Delecroix,Arrière Droit,France,1994-03-17,197,103,Besançon,https://www.lnh.fr/lnh/joueurs/Florian-DELECROIX
+,Saran,6,DEUMAL,Jordi,Jordi Deumal,Ailier Gauche,Espagne,1994-01-14,194,83,,https://www.lnh.fr/lnh/joueurs/Jordi-DEUMAL
+,Saran,8,CLARAC,Théo,Théo Clarac,Pivot,France,1998-12-16,195,104,Limoges,https://www.lnh.fr/lnh/joueurs/Th%C3%A9o-CLARAC
+,Saran,9,OLIVERAS,Pau,Pau Oliveras,Arrière Gauche,Espagne,1998-12-11,185,86,Istres,https://www.lnh.fr/lnh/joueurs/Pau-OLIVERAS
+,Saran,11,ROBYNS,Tom,Tom Robyns,Demi Centre,Belgique,1991-05-14,192,80,,https://www.lnh.fr/lnh/joueurs/Tom-ROBYNS
+,Saran,12,GENTY,Yann,Yann Genty,Gardien,France,1981-12-26,185,89,,https://www.lnh.fr/lnh/joueurs/Yann-GENTY
+,Saran,13,LAFOUGERE,Noé,Noé Lafougere,Ailier Gauche,France,2002-07-13,183,73,,https://www.lnh.fr/lnh/joueurs/No%C3%A9-LAFOUGERE
+,Saran,16,PANJAN,Ivan,Ivan Panjan,Gardien,Croatie,1998-12-22,192,88,,https://www.lnh.fr/lnh/joueurs/Ivan-PANJAN
+,Saran,18,ACCAMBRAY,William,William Accambray,Arrière Gauche,France,1988-04-08,194,108,,https://www.lnh.fr/lnh/joueurs/William-ACCAMBRAY
+,Saran,28,LINERE,Edynio,Edynio Linere,Demi Centre,France,2003-08-27,191,84,Massy,https://www.lnh.fr/lnh/joueurs/Edynio-LINERE
+6010,Saran,29,DIARRA,Yoro,Yoro Diarra,Pivot,France,2003-12-29,197,111,Saran,https://www.lnh.fr/lnh/joueurs/Yoro-DIARRA
+,Saran,34,KOLLE,Romuald Japhet,Romuald Japhet Kolle,Arrière Gauche,France,1992-12-16,190,90,,https://www.lnh.fr/lnh/joueurs/Romuald-Japhet-KOLLE
+,Saran,45,FOUCAULT,Maxence,Maxence Foucault,Ailier Droit,France,2001-06-11,185,80,,https://www.lnh.fr/lnh/joueurs/Maxence-FOUCAULT
+,Saran,64,RAMOND,Hadrien,Hadrien Ramond,Pivot,France,1988-07-04,193,111,,https://www.lnh.fr/lnh/joueurs/Hadrien-RAMOND
+,Saran,77,RADOVIC,Luka,Luka Radovic,Ailier Droit,Monténégro,1997-12-29,180,80,,https://www.lnh.fr/lnh/joueurs/Luka-RADOVIC
+,Chartres,3,ILIC,Vanja,Vanja Ilic,Ailier Gauche,Serbie,1993-02-25,186,81,Aix,https://www.lnh.fr/lnh/joueurs/Vanja-ILIC
+,Chartres,7,FIGUERAS,Adrian,Adrian Figueras,Pivot,Espagne,1988-08-31,193,95,,https://www.lnh.fr/lnh/joueurs/Adrian-FIGUERAS
+,Chartres,8,KOLAKOVI?,Aleksa,Aleksa Kolaković,Demi Centre,Monténégro,1997-08-10,189,100,,https://www.lnh.fr/lnh/joueurs/Aleksa-KOLAKOVI
+,Chartres,9,BUSSELIER,Yanis,Yanis Busselier,Arrière Droit,France,2002-08-01,191,90,Dunkerque,https://www.lnh.fr/lnh/joueurs/Yanis-BUSSELIER
+5679,Chartres,14,GROSELJ,Matic,Matic Groselj,Arrière Droit,Slovénie,1997-09-22,195,100,Chambéry,https://www.lnh.fr/lnh/joueurs/Matic-GROSELJ
+,Chartres,18,KUDINOV,Sergey,Sergey Kudinov,Demi Centre,Russie,1991-06-29,196,97,,https://www.lnh.fr/lnh/joueurs/Sergey-KUDINOV
+,Chartres,19,DIMITROV,Svetlin,Svetlin Dimitrov,Ailier Droit,Bulgarie,1990-11-05,183,83,,https://www.lnh.fr/lnh/joueurs/Svetlin-DIMITROV
+,Chartres,20,ABUTOVIC,Ilija,Ilija Abutovic,Arrière Gauche,Serbie,1988-08-02,202,105,,https://www.lnh.fr/lnh/joueurs/Ilija-ABUTOVIC
+,Chartres,24,BZDYNGA,Valentin,Valentin Bzdynga,Ailier Droit,France,2002-07-19,184,71,Ivry,https://www.lnh.fr/lnh/joueurs/Valentin-BZDYNGA
+,Chartres,33,ONUFRIYENKO,Sergiy,Sergiy Onufriyenko,Arrière Droit,Ukraine,1985-01-31,190,90,,https://www.lnh.fr/lnh/joueurs/Sergiy-ONUFRIYENKO
+5282,Chartres,44,RADIC,Zoran,Zoran Radic,Gardien,Bosnie,2002-04-04,195,95,Saran,https://www.lnh.fr/lnh/joueurs/Zoran-RADIC
+,Chartres,53,SEMBA,Tom,Tom Semba,Pivot,France,2004-10-15,189,81,Sarrebourg,https://www.lnh.fr/lnh/joueurs/Tom-SEMBA
+4790,Chartres,69,JUND,Hugo,Hugo Jund,Pivot,France,2001-07-07,193,100,Toulouse,https://www.lnh.fr/lnh/joueurs/Hugo-JUND
+,Chartres,92,TIGHIOUART,Naël,Naël Tighiouart,Ailier Gauche,France,2004-03-13,186,90,Chartres,https://www.lnh.fr/lnh/joueurs/Na%C3%ABl-TIGHIOUART
+,Chartres,97,VERIN,Yvan,Yvan Verin,Arrière Gauche,France,2000-09-09,188,94,Chartres,https://www.lnh.fr/lnh/joueurs/Yvan-VERIN
+,Chartres,99,BOMASTAR,Milan,Milan Bomastar,Gardien,Serbie,1999-07-10,201,105,,https://www.lnh.fr/lnh/joueurs/Milan-BOMASTAR
+,Montpellier,2,KARLSSON,Sebastian,Sebastian Karlsson,Ailier Droit,Suède,1995-01-21,178,80,Paris,https://www.lnh.fr/lnh/joueurs/Sebastian-KARLSSON
+,Montpellier,5,VILLEMINOT,Kyllian,Kyllian Villeminot,Demi Centre,France,1998-05-20,189,86,Montpellier,https://www.lnh.fr/lnh/joueurs/Kyllian-VILLEMINOT
+,Montpellier,10,PELLAS,Lucas,Lucas Pellas,Ailier Gauche,Suède,1995-08-28,184,79,,https://www.lnh.fr/lnh/joueurs/Lucas-PELLAS
+,Montpellier,12,BOLZINGER,Charles,Charles Bolzinger,Gardien,France,2000-12-14,198,100,Montpellier,https://www.lnh.fr/lnh/joueurs/Charles-BOLZINGER
+,Montpellier,15,HESHAM,Ahmed,Ahmed Hesham,Demi Centre,Égypte,2000-05-15,194,92,,https://www.lnh.fr/lnh/joueurs/Ahmed-HESHAM
+,Montpellier,17,FERNANDEZ,Jaime,Jaime Fernandez,Ailier Gauche,Espagne,1997-01-27,176,72,,https://www.lnh.fr/lnh/joueurs/Jaime-FERNANDEZ
+,Montpellier,18,PANIC,Marko,Marko Panic,Arrière Droit,Croatie,1991-03-10,197,106,,https://www.lnh.fr/lnh/joueurs/Marko-PANIC
+,Montpellier,19,LENNE,Arthur,Arthur Lenne,Pivot,France,2001-05-02,194,95,Montpellier,https://www.lnh.fr/lnh/joueurs/Arthur-LENNE
+,Montpellier,20,SKUBE,Stas,Stas Skube,Demi Centre,Slovénie,1989-11-15,179,83,,https://www.lnh.fr/lnh/joueurs/Stas-SKUBE
+,Montpellier,22,KONAN,Karl,Karl Konan,Arrière Gauche,France,1995-06-03,196,95,Paris,https://www.lnh.fr/lnh/joueurs/Karl-KONAN
+,Montpellier,26,MONTE DOS SANTOS,Hugo Bryan,Hugo Bryan Monte Dos Santos,Arrière Gauche,Brésil,2003-04-06,193,92,Montpellier,https://www.lnh.fr/lnh/joueurs/Hugo-Bryan-MONTE-DOS-SANTOS
+,Montpellier,28,PORTE,Valentin,Valentin Porte,Arrière Droit,France,1990-09-07,190,94,Montpellier,https://www.lnh.fr/lnh/joueurs/Valentin-PORTE
+,Montpellier,29,MARTIN-CUSSAT-BLANC,Niels,Niels Martin-cussat-blanc,Gardien,France,2004-09-20,196,103,Cournon,https://www.lnh.fr/lnh/joueurs/Niels-MARTIN-CUSSAT-BLANC
+,Montpellier,71,BERTHIER,Alexis,Alexis Berthier,Arrière Droit,France,2002-03-12,193,85,Dijon,https://www.lnh.fr/lnh/joueurs/Alexis-BERTHIER
+,Montpellier,92,DESBONNET,Rémi,Rémi Desbonnet,Gardien,France,1992-02-28,182,85,Montpellier,https://www.lnh.fr/lnh/joueurs/R%C3%A9mi-DESBONNET
+,Montpellier,93,NACINOVIC,Veron,Veron Nacinovic,Pivot,Croatie,2000-03-07,204,109,,https://www.lnh.fr/lnh/joueurs/Veron-NACINOVIC
+,Dijon,1,CHENEVEZ,Killiane,Killiane Chenevez,Gardien,France,2004-08-21,183,75,Dijon,https://www.lnh.fr/lnh/joueurs/Killiane-CHENEVEZ
+,Dijon,1,HELAL,Wassim,Wassim Helal,Gardien,France,1982-07-16,193,87,Dijon,https://www.lnh.fr/lnh/joueurs/Wassim-HELAL
+,Dijon,3,NAUDIN,Pierrick,Pierrick Naudin,Arrière Gauche,France,1989-12-20,191,84,,https://www.lnh.fr/lnh/joueurs/Pierrick-NAUDIN
+,Dijon,5,MEDINA,Nevo,Nevo Medina,Arrière Droit,Israël,2003-10-20,192,86,,https://www.lnh.fr/lnh/joueurs/Nevo-MEDINA
+,Dijon,6,PARIS,Robin,Robin Paris,Arrière Gauche,France,1999-02-11,195,98,Draguignan,https://www.lnh.fr/lnh/joueurs/Robin-PARIS
+,Dijon,8,POLETTI,Marc,Marc Poletti,Pivot,France,1985-06-06,192,102,,https://www.lnh.fr/lnh/joueurs/Marc-POLETTI
+,Dijon,10,MANCELLE,Yannis,Yannis Mancelle,Ailier Droit,France,1990-11-13,182,77,,https://www.lnh.fr/lnh/joueurs/Yannis-MANCELLE
+,Dijon,13,JAFFIOL,Mathis,Mathis Jaffiol,Arrière Droit,France,2002-11-16,183,81,Dijon,https://www.lnh.fr/lnh/joueurs/Mathis-JAFFIOL
+,Dijon,14,BERKOUS,Messaoud,Messaoud Berkous,Arrière Gauche,Algérie,1989-07-20,194,97,,https://www.lnh.fr/lnh/joueurs/Messaoud-BERKOUS
+1323,Dijon,17,BOIS,Steeven,Steeven Bois,Demi Centre,France,1994-10-29,185,85,Saran,https://www.lnh.fr/lnh/joueurs/Steeven-BOIS
+,Dijon,24,GASPAR,Manuel,Manuel Gaspar,Gardien,Portugal,1998-12-09,192,98,Dijon,https://www.lnh.fr/lnh/joueurs/Manuel-GASPAR
+4890,Dijon,41,PECAUD,Arthur,Arthur Pecaud,Ailier Gauche,France,1999-08-13,185,85,Saran,https://www.lnh.fr/lnh/joueurs/Arthur-PECAUD
+,Dijon,62,LAGUILLAUMIE,Théo,Théo Laguillaumie,Ailier Droit,France,1993-11-04,184,81,,https://www.lnh.fr/lnh/joueurs/Th%C3%A9o-LAGUILLAUMIE
+,Dijon,94,KHERMOUCHE,Bastien,Bastien Khermouche,Pivot,France,1993-11-10,192,100,Dijon,https://www.lnh.fr/lnh/joueurs/Bastien-KHERMOUCHE
+,Dijon,95,PASQUET,Loïs,Loïs Pasquet,Ailier Gauche,France,1999-09-08,185,86,Dijon,https://www.lnh.fr/lnh/joueurs/Lo%C3%AFs-PASQUET
+,Dijon,98,LIGNIèRES,Jules,Jules Lignières,Demi Centre,France,1998-08-15,179,80,Limoges,https://www.lnh.fr/lnh/joueurs/Jules-LIGNI%C3%A8RES
+,Ivry,2,BOZOVIC,Milos,Milos Bozovic,Arrière Gauche,Monténégro,1994-12-10,200,103,,https://www.lnh.fr/lnh/joueurs/Milos-BOZOVIC
+,Ivry,5,LONGERINAS,Auguste,Auguste Longerinas,Ailier Gauche,France,2003-04-03,188,72,Ivry,https://www.lnh.fr/lnh/joueurs/Auguste-LONGERINAS
+,Ivry,7,MARTINEZ,Léo,Léo Martinez,Demi Centre,France,1993-12-26,188,82,Istres,https://www.lnh.fr/lnh/joueurs/L%C3%A9o-MARTINEZ
+,Ivry,9,PETIT,Lucas,Lucas Petit,Ailier Droit,France,1999-09-04,180,75,Limoges,https://www.lnh.fr/lnh/joueurs/Lucas-PETIT
+3534,Ivry,10,MOHAMED,Antonin,Antonin Mohamed,Ailier Gauche,France,1999-02-16,182,74,Saint-Raphaël,https://www.lnh.fr/lnh/joueurs/Antonin-MOHAMED
+3834,Ivry,12,BERNARD,David,David Bernard,Gardien,France,2000-03-29,196,86,Chambéry,https://www.lnh.fr/lnh/joueurs/David-BERNARD
+,Ivry,14,ZAEPFEL,Aymeric,Aymeric Zaepfel,Arrière Gauche,France,2001-10-03,188,90,Aix,https://www.lnh.fr/lnh/joueurs/Aymeric-ZAEPFEL
+,Ivry,16,SUNJIC,Mate,Mate Sunjic,Gardien,Croatie,1987-03-18,195,92,Cesson-Rennes,https://www.lnh.fr/lnh/joueurs/Mate-SUNJIC
+,Ivry,20,JORGENSEN,Jesper,Jesper Jorgensen,Arrière Droit,Danemark,1994-03-23,191,90,,https://www.lnh.fr/lnh/joueurs/Jesper-JORGENSEN
+7701,Ivry,22,DE ALMEIDA TAVARES,Francisco,Francisco De Almeida Tavares,Ailier Droit,Portugal,1996-11-14,180,83,Saran,https://www.lnh.fr/lnh/joueurs/Francisco-DE-ALMEIDA-TAVARES
+,Ivry,24,OOMS,Simon,Simon Ooms,Pivot,Belgique,1994-04-18,200,95,Cesson-Rennes,https://www.lnh.fr/lnh/joueurs/Simon-OOMS
+,Ivry,25,GARAIN,Dylan,Dylan Garain,Arrière Gauche,France,1996-08-22,195,100,,https://www.lnh.fr/lnh/joueurs/Dylan-GARAIN
+,Ivry,26,GARCIA,Arnau,Arnau Garcia,Arrière Gauche,Espagne,1994-06-12,195,92,Limoges,https://www.lnh.fr/lnh/joueurs/Arnau-GARCIA
+,Ivry,28,ALMEIDA DUQUEZNE,Ronaldo,Ronaldo Almeida Duquezne,Arrière Droit,Cuba,2002-08-20,197,113,Cherbourg,https://www.lnh.fr/lnh/joueurs/Ronaldo-ALMEIDA-DUQUEZNE
+,Ivry,48,BALADI,Antoine,Antoine Baladi,Pivot,France,2004-01-18,187,96,Ivry,https://www.lnh.fr/lnh/joueurs/Antoine-BALADI
+4821,Ivry,97,LOREDON,Gautier,Gautier Loredon,Pivot,France,2002-10-15,200,103,Chambéry,https://www.lnh.fr/lnh/joueurs/Gautier-LOREDON
+,Nîmes,71,BONIDAN,Thibaut,Thibaut Bonidan,Pivot,France,2004-03-23,192,95,,https://www.lnh.fr/lnh/joueurs/Thibaut-BONIDAN
+,Nîmes,1,BAZNIK,Joze,Joze Baznik,Gardien,Slovénie,1993-05-24,186,95,Aix,https://www.lnh.fr/lnh/joueurs/Joze-BAZNIK
+,Nîmes,2,POYET,Tom,Tom Poyet,Pivot,France,1999-11-29,187,84,,https://www.lnh.fr/lnh/joueurs/Tom-POYET
+4962,Nîmes,3,VINCENT,Gueric,Gueric Vincent,Ailier Gauche,France,2002-08-18,180,85,Nîmes,https://www.lnh.fr/lnh/joueurs/Gueric-VINCENT
+,Nîmes,6,REBICHON,Julien,Julien Rebichon,Ailier Gauche,France,1988-10-18,179,79,,https://www.lnh.fr/lnh/joueurs/Julien-REBICHON
+6970,Nîmes,9,ZUZO,Reyhan,Reyhan Zuzo,Demi Centre,France,2005-06-26,190,90,Tremblay,https://www.lnh.fr/lnh/joueurs/Reyhan-ZUZO
+,Nîmes,10,KONRADSSON,Jesper,Jesper Konradsson,Demi Centre,Suède,1994-06-04,184,90,,https://www.lnh.fr/lnh/joueurs/Jesper-KONRADSSON
+1037,Nîmes,12,DEMAILLE,Alexandre,Alexandre Demaille,Gardien,France,1993-04-22,196,98,Saint-Raphaël,https://www.lnh.fr/lnh/joueurs/Alexandre-DEMAILLE
+2242,Nîmes,17,KAMTCHOP BARIL,Hugo,Hugo Kamtchop Baril,Pivot,France,1996-11-12,183,93,Nîmes,https://www.lnh.fr/lnh/joueurs/Hugo-KAMTCHOP-BARIL
+5274,Nîmes,18,DERISBOURG,Lou,Lou Derisbourg,Demi Centre,France,2002-02-18,184,86,Nîmes,https://www.lnh.fr/lnh/joueurs/Lou-DERISBOURG
+,Nîmes,18,SISSOKO,Boïba,Boïba Sissoko,Demi Centre,France,1994-03-01,178,83,Créteil,https://www.lnh.fr/lnh/joueurs/Bo%C3%AFba-SISSOKO
+3853,Nîmes,20,GIBERNON,Damien,Damien Gibernon,Ailier Droit,France,2000-05-17,188,89,Nîmes,https://www.lnh.fr/lnh/joueurs/Damien-GIBERNON
+2867,Nîmes,27,ACQUEVILLO,Jean-jacques,Jean-jacques Acquevillo,Arrière Gauche,France,1989-01-17,195,100,Nîmes,https://www.lnh.fr/lnh/joueurs/Jean-jacques-ACQUEVILLO
+,Nîmes,31,ANTIC,Aleksandar,Aleksandar Antic,Ailier Droit,France,2004-08-31,183,78,,https://www.lnh.fr/lnh/joueurs/Aleksandar-ANTIC
+,Nîmes,48,ABDELHAK,Mohab,Mohab Abdelhak,Arrière Droit,Égypte,2003-01-20,191,88,,https://www.lnh.fr/lnh/joueurs/Mohab-ABDELHAK
+3354,Nîmes,91,SANAD,Mohammad,Mohammad Sanad,Ailier Droit,France,1991-01-16,185,88,Nîmes,https://www.lnh.fr/lnh/joueurs/Mohammad-SANAD
+,Chambéry,30,JONSSON,Per Maximilliam,Per Maximilliam Jonsson,Arrière Droit,Suède,1989-10-12,195,103,,https://www.lnh.fr/lnh/joueurs/Per-Maximilliam-JONSSON
+,Chambéry,1,IVIC,Filip,Filip Ivic,Gardien,Croatie,1992-08-30,195,95,,https://www.lnh.fr/lnh/joueurs/Filip-IVIC
+1178,Chambéry,3,TRAORE,Queido,Queido Traore,Ailier Gauche,France,1994-10-15,185,90,Chambéry,https://www.lnh.fr/lnh/joueurs/Queido-TRAORE
+,Chambéry,6,PERRIN,Amaury,Amaury Perrin,Ailier Gauche,France,2002-10-21,183,68,,https://www.lnh.fr/lnh/joueurs/Amaury-PERRIN
+,Chambéry,7,PECIñA,Iñaki,Iñaki Peciña,Pivot,Espagne,1988-05-31,200,104,Irun,https://www.lnh.fr/lnh/joueurs/I%C3%B1aki-PECI%C3%B1A
+,Chambéry,8,RICHERT,Benjamin,Benjamin Richert,Ailier Droit,France,1998-04-18,187,76,Montpellier,https://www.lnh.fr/lnh/joueurs/Benjamin-RICHERT
+,Chambéry,10,TREMEY,Noa,Noa Tremey,Demi Centre,France,2003-04-07,190,91,,https://www.lnh.fr/lnh/joueurs/Noa-TREMEY
+,Chambéry,11,SKUBE,Sebastian,Sebastian Skube,Demi Centre,Slovénie,1987-04-03,189,87,,https://www.lnh.fr/lnh/joueurs/Sebastian-SKUBE
+,Chambéry,17,TISSOT,Antoine,Antoine Tissot,Ailier Droit,France,2001-07-30,177,80,Aix,https://www.lnh.fr/lnh/joueurs/Antoine-TISSOT
+,Chambéry,19,BROUZET,Hugo,Hugo Brouzet,Pivot,France,1999-04-22,206,110,Aix,https://www.lnh.fr/lnh/joueurs/Hugo-BROUZET
+,Chambéry,23,PATUREL,Pierre,Pierre Paturel,Pivot,France,1989-01-26,198,102,,https://www.lnh.fr/lnh/joueurs/Pierre-PATUREL
+,Chambéry,27,KALANDADZE,Nikoloz,Nikoloz Kalandadze,Arrière Gauche,Géorgie,2002-07-27,198,96,Aix,https://www.lnh.fr/lnh/joueurs/Nikoloz-KALANDADZE
+,Chambéry,37,COSTOYA,Alejandro,Alejandro Costoya,Arrière Gauche,Espagne,1993-05-06,193,99,Chambéry,https://www.lnh.fr/lnh/joueurs/Alejandro-COSTOYA
+4964,Chambéry,40,HODZIC,Harun,Harun Hodzic,Gardien,Bosnie,2000-06-07,197,111,Nîmes,https://www.lnh.fr/lnh/joueurs/Harun-HODZIC
+,Chambéry,55,GONI LEOZ,Iosu,Iosu Goni Leoz,Arrière Gauche,Espagne,1990-01-04,193,103,Pau Billère,https://www.lnh.fr/lnh/joueurs/Iosu-GONI-LEOZ
+,Paris,47,PELEKA,Wallem-konrad,Wallem-konrad Peleka,Arrière Gauche,France,2002-01-18,196,93,Paris,https://www.lnh.fr/lnh/joueurs/Wallem-konrad-PELEKA
+,Paris,2,MARCHAN CRIADO,Ruben,Ruben Marchan Criado,Pivot,Espagne,1994-09-20,204,120,Melsungen,https://www.lnh.fr/lnh/joueurs/Ruben-MARCHAN-CRIADO
+,Paris,6,STEINS,Luc,Luc Steins,Demi Centre,Pays-Bas,1995-03-22,173,73,Paris,https://www.lnh.fr/lnh/joueurs/Luc-STEINS
+,Paris,7,NTANZI,Sadou,Sadou Ntanzi,Demi Centre,France,2000-01-07,183,80,,https://www.lnh.fr/lnh/joueurs/Sadou-NTANZI
+,Paris,9,KEITA,Adama,Adama Keita,Ailier Gauche,France,1997-06-05,186,84,,https://www.lnh.fr/lnh/joueurs/Adama-KEITA
+,Paris,12,PALICKA,Andreas,Andreas Palicka,Gardien,Suède,1986-07-10,189,88,,https://www.lnh.fr/lnh/joueurs/Andreas-PALICKA
+,Paris,14,SOLE SALA,Ferran,Ferran Sole Sala,Ailier Droit,Espagne,1992-08-25,193,84,Paris,https://www.lnh.fr/lnh/joueurs/Ferran-SOLE-SALA
+,Paris,15,TONNESEN,Kent Robin,Kent Robin Tonnesen,Arrière Droit,Norvège,1991-06-05,195,102,,https://www.lnh.fr/lnh/joueurs/Kent-Robin-TONNESEN
+,Paris,16,GREEN,Jannick,Jannick Green,Gardien,Danemark,1988-09-29,195,94,,https://www.lnh.fr/lnh/joueurs/Jannick-GREEN
+,Paris,19,BALAGUER ROMEU,David,David Balaguer Romeu,Ailier Droit,Espagne,1991-08-17,185,93,Montpellier,https://www.lnh.fr/lnh/joueurs/David-BALAGUER-ROMEU
+,Paris,20,GREBILLE,Mathieu,Mathieu Grebille,Ailier Gauche,France,1991-10-06,198,97,Paris,https://www.lnh.fr/lnh/joueurs/Mathieu-GREBILLE
+,Paris,21,SYPRZAK,Kamil,Kamil Syprzak,Pivot,Pologne,1991-07-23,207,117,Paris,https://www.lnh.fr/lnh/joueurs/Kamil-SYPRZAK
+,Paris,22,KARABATIC,Luka,Luka Karabatic,Pivot,France,1988-04-19,202,110,Paris,https://www.lnh.fr/lnh/joueurs/Luka-KARABATIC
+,Paris,23,MATHE,Dominik,Dominik Mathe,Arrière Droit,Hongrie,1999-04-01,201,108,,https://www.lnh.fr/lnh/joueurs/Dominik-MATHE
+,Paris,44,KARABATIC,Nikola,Nikola Karabatic,Demi Centre,France,1984-04-11,196,103,,https://www.lnh.fr/lnh/joueurs/Nikola-KARABATIC
+,Paris,71,PRANDI,Elohim,Elohim Prandi,Arrière Gauche,France,1998-08-24,193,101,Paris,https://www.lnh.fr/lnh/joueurs/Elohim-PRANDI
+3124,Limoges,3,GUILLAUME,Andrea,Andrea Guillaume,Ailier Droit,France,1998-05-03,186,90,Toulouse,https://www.lnh.fr/lnh/joueurs/Andrea-GUILLAUME
+,Limoges,5,KERVADEC,Ewan,Ewan Kervadec,Arrière Droit,France,1998-07-15,192,88,Limoges,https://www.lnh.fr/lnh/joueurs/Ewan-KERVADEC
+,Limoges,8,OGANDO,Maxime,Maxime Ogando,Ailier Gauche,France,1999-04-02,183,75,Limoges,https://www.lnh.fr/lnh/joueurs/Maxime-OGANDO
+,Limoges,9,KUSAN,Tomislav,Tomislav Kusan,Pivot,Croatie,1994-12-16,201,110,,https://www.lnh.fr/lnh/joueurs/Tomislav-KUSAN
+,Limoges,11,DOLENEC,Jure,Jure Dolenec,Arrière Droit,Slovénie,1988-12-06,190,94,,https://www.lnh.fr/lnh/joueurs/Jure-DOLENEC
+,Limoges,12,SLAVIC,Dino,Dino Slavic,Gardien,Croatie,1992-12-04,185,113,,https://www.lnh.fr/lnh/joueurs/Dino-SLAVIC
+,Limoges,15,IGLESIAS,David,David Iglesias,Arrière Gauche,Espagne,1998-12-25,192,94,Créteil,https://www.lnh.fr/lnh/joueurs/David-IGLESIAS
+5563,Limoges,17,TURCHENKO,Ihor,Ihor Turchenko,Arrière Gauche,Ukraine,2000-12-04,193,90,Nantes,https://www.lnh.fr/lnh/joueurs/Ihor-TURCHENKO
+,Limoges,21,GAJIC,Dragan,Dragan Gajic,Ailier Droit,Slovénie,1984-07-21,188,85,,https://www.lnh.fr/lnh/joueurs/Dragan-GAJIC
+,Limoges,25,AZKUE,Jon,Jon Azkue,Demi Centre,Espagne,1994-07-03,184,87,Limoges,https://www.lnh.fr/lnh/joueurs/Jon-AZKUE
+,Limoges,26,IVAH,Gauthier,Gauthier Ivah,Gardien,France,1999-01-06,191,95,Limoges,https://www.lnh.fr/lnh/joueurs/Gauthier-IVAH
+1389,Limoges,28,NIETO,Nicolas,Nicolas Nieto,Pivot,France,1994-04-06,195,111,Tremblay,https://www.lnh.fr/lnh/joueurs/Nicolas-NIETO
+,Limoges,32,FERNANDEZ PEREZ,Angel,Angel Fernandez Perez,Ailier Gauche,Espagne,1988-09-16,192,86,,https://www.lnh.fr/lnh/joueurs/Angel-FERNANDEZ-PEREZ
+,Limoges,44,HRSTIC,Matej,Matej Hrstic,Arrière Gauche,Croatie,1996-08-11,195,85,Limoges,https://www.lnh.fr/lnh/joueurs/Matej-HRSTIC
+,Limoges,45,ELDERAA,Seif,Seif Elderaa,Demi Centre,Égypte,1998-09-19,187,82,,https://www.lnh.fr/lnh/joueurs/Seif-ELDERAA
+3676,Limoges,98,PETIT,Timmy,Timmy Petit,Pivot,France,2000-10-16,198,110,Tremblay,https://www.lnh.fr/lnh/joueurs/Timmy-PETIT
+,Saint-Raphaël,1,DA ROSA,Rangel,Rangel Da Rosa,Gardien,Brésil,1996-05-11,190,95,,https://www.lnh.fr/lnh/joueurs/Rangel-DA-ROSA
+,Saint-Raphaël,4,DESSITES,Thibault,Thibault Dessites,Ailier Droit,France,2005-05-17,187,77,,https://www.lnh.fr/lnh/joueurs/Thibault-DESSITES
+2901,Saint-Raphaël,8,MAPU,Jonathan,Jonathan Mapu,Pivot,France,1998-03-10,181,103,Saint-Raphaël,https://www.lnh.fr/lnh/joueurs/Jonathan-MAPU
+,Saint-Raphaël,9,MARQUEZ,Chema,Chema Marquez,Demi Centre,Espagne,1996-12-20,187,94,,https://www.lnh.fr/lnh/joueurs/Chema-MARQUEZ
+,Saint-Raphaël,15,HENIGMAN,Nik,Nik Henigman,Arrière Gauche,Slovénie,1995-12-04,201,107,,https://www.lnh.fr/lnh/joueurs/Nik-HENIGMAN
+,Saint-Raphaël,16,ROBIN,Mickael,Mickael Robin,Gardien,France,1985-05-28,195,84,,https://www.lnh.fr/lnh/joueurs/Mickael-ROBIN
+686,Saint-Raphaël,17,BATAILLE,Benjamin,Benjamin Bataille,Arrière Gauche,France,1992-07-25,196,100,Saint-Raphaël,https://www.lnh.fr/lnh/joueurs/Benjamin-BATAILLE
+158,Saint-Raphaël,20,CAUCHETEUX,Raphaël,Raphaël Caucheteux,Ailier Gauche,France,1985-05-09,198,94,,https://www.lnh.fr/lnh/joueurs/Rapha%C3%ABl-CAUCHETEUX
+7131,Saint-Raphaël,22,KOUADIO,Noah,Noah Kouadio,Arrière Gauche,France,2005-12-22,193,95,Saint-Raphaël,https://www.lnh.fr/lnh/joueurs/Noah-KOUADIO
+1187,Saint-Raphaël,24,VIGNERON,Arthur,Arthur Vigneron,Ailier Droit,France,1995-01-30,182,76,Saint-Raphaël,https://www.lnh.fr/lnh/joueurs/Arthur-VIGNERON
+6840,Saint-Raphaël,28,PEREZ MANZANARES,Sergio,Sergio Perez Manzanares,Demi Centre,Espagne,2000-08-31,180,84,Saint-Raphaël,https://www.lnh.fr/lnh/joueurs/Sergio-PEREZ-MANZANARES
+,Saint-Raphaël,35,SUTTER,Guillaume,Guillaume Sutter,Ailier Gauche,France,2005-01-16,188,75,,https://www.lnh.fr/lnh/joueurs/Guillaume-SUTTER
+1176,Saint-Raphaël,36,MARESCOT,Johannes,Johannes Marescot,Pivot,France,1994-04-04,194,106,Saint-Raphaël,https://www.lnh.fr/lnh/joueurs/Johannes-MARESCOT
+,Saint-Raphaël,66,ARMANI,Antoine-xavier,Antoine-xavier Armani,Pivot,France,2003-08-16,196,107,Draguignan,https://www.lnh.fr/lnh/joueurs/Antoine-xavier-ARMANI
+1063,Saint-Raphaël,93,BRASSELEUR,Micke,Micke Brasseleur,Arrière Droit,France,1993-04-16,197,115,Saint-Raphaël,https://www.lnh.fr/lnh/joueurs/Micke-BRASSELEUR
+4450,Nantes,1,PESIC,Ivan,Ivan Pesic,Gardien,Croatie,1989-03-17,194,110,Nantes,https://www.lnh.fr/lnh/joueurs/Ivan-PESIC
+,Nantes,4,MINNE,Aymeric,Aymeric Minne,Demi Centre,France,1997-04-20,187,85,,https://www.lnh.fr/lnh/joueurs/Aymeric-MINNE
+,Nantes,5,DE LA BRETECHE,Lucas,Lucas De La Breteche,Demi Centre,France,2001-11-19,190,85,Aix,https://www.lnh.fr/lnh/joueurs/Lucas-DE-BRETECHE
+,Nantes,5,MAQUEDA PENO,Jorge,Jorge Maqueda Peno,Arrière Droit,Espagne,1988-02-06,197,102,,https://www.lnh.fr/lnh/joueurs/Jorge-MAQUEDA-PENO
+,Nantes,7,RIVERA,Valero,Valero Rivera,Ailier Gauche,Espagne,1985-02-22,186,83,,https://www.lnh.fr/lnh/joueurs/Valero-RIVERA
+,Nantes,8,CAVALCANTI,Alexandre,Alexandre Cavalcanti,Arrière Gauche,Portugal,1996-12-27,203,102,,https://www.lnh.fr/lnh/joueurs/Alexandre-CAVALCANTI
+2978,Nantes,9,AVELANGE-DEMOUGE,Théo,Théo Avelange-demouge,Ailier Droit,France,1996-03-11,183,78,Tremblay,https://www.lnh.fr/lnh/joueurs/Th%C3%A9o-AVELANGE-DEMOUGE
+4534,Nantes,10,OVNICEK,Rok,Rok Ovnicek,Demi Centre,Slovénie,1995-01-29,183,88,Nantes,https://www.lnh.fr/lnh/joueurs/Rok-OVNICEK
+,Nantes,11,DAMATRIN,Baptiste,Baptiste Damatrin,Ailier Gauche,France,2000-04-29,177,81,,https://www.lnh.fr/lnh/joueurs/Baptiste-DAMATRIN
+,Nantes,13,BOS,Julien,Julien Bos,Arrière Droit,France,1998-08-18,188,85,,https://www.lnh.fr/lnh/joueurs/Julien-BOS
+,Nantes,15,HOGHIELM,William,William Hoghielm,Pivot,Suède,1999-11-30,186,110,,https://www.lnh.fr/lnh/joueurs/William-HOGHIELM
+,Nantes,16,HALLGRIMSSON,Viktor,Viktor Hallgrimsson,Gardien,Islande,2000-07-24,203,115,,https://www.lnh.fr/lnh/joueurs/Viktor-HALLGRIMSSON
+,Nantes,17,TOTO,Jérémy,Jérémy Toto,Pivot,France,1992-05-15,197,106,,https://www.lnh.fr/lnh/joueurs/J%C3%A9r%C3%A9my-TOTO
+,Nantes,18,MONAR,Théo,Théo Monar,Pivot,France,2001-06-06,198,95,,https://www.lnh.fr/lnh/joueurs/Th%C3%A9o-MONAR
+6842,Nantes,19,ODRIOZOLA YEREGUI,Kauldi,Kauldi Odriozola Yeregui,Ailier Droit,Espagne,1997-01-07,182,85,Nantes,https://www.lnh.fr/lnh/joueurs/Kauldi-ODRIOZOLA-YEREGUI
+5298,Nantes,24,PINEAU,Ernest,Ernest Pineau,Arrière Droit,France,2003-01-30,199,90,Toulouse,https://www.lnh.fr/lnh/joueurs/Ernest-PINEAU
+,Toulouse,22,BRIET,Baptiste,Baptiste Briet,Arrière Gauche,France,2002-06-23,185,82,Pontault,https://www.lnh.fr/lnh/joueurs/Baptiste-BRIET
+,Toulouse,15,MITROVIC,Uros,Uros Mitrovic,Arrière Droit,Serbie,2004-09-13,189,92,Vardar,https://www.lnh.fr/lnh/joueurs/Uros-MITROVIC
+6963,Toulouse,0,ROBERT,Jérémy,Jérémy Robert,Pivot,France,2004-03-08,193,98,Toulouse,https://www.lnh.fr/lnh/joueurs/J%C3%A9r%C3%A9my-ROBERT
+2849,Toulouse,1,LETTENS,Jef,Jef Lettens,Gardien,Belgique,1990-08-12,194,94,Toulouse,https://www.lnh.fr/lnh/joueurs/Jef-LETTENS
+,Toulouse,2,GIRAUDEAU,Romain,Romain Giraudeau,Ailier Droit,France,2000-03-02,170,66,,https://www.lnh.fr/lnh/joueurs/Romain-GIRAUDEAU
+,Toulouse,4,FEUCHTMANN,Erwin,Erwin Feuchtmann,Arrière Gauche,Chili,1990-05-02,195,102,,https://www.lnh.fr/lnh/joueurs/Erwin-FEUCHTMANN
+2905,Toulouse,5,NYEMBO,Gabriel,Gabriel Nyembo,Pivot,France,1997-06-16,190,106,Toulouse,https://www.lnh.fr/lnh/joueurs/Gabriel-NYEMBO
+4295,Toulouse,7,JARRY,Téo,Téo Jarry,Ailier Gauche,France,2000-03-03,183,77,Toulouse,https://www.lnh.fr/lnh/joueurs/T%C3%A9o-JARRY
+,Toulouse,10,GILBERT,Maxime,Maxime Gilbert,Demi Centre,France,1991-05-22,187,90,,https://www.lnh.fr/lnh/joueurs/Maxime-GILBERT
+,Toulouse,11,KEMPF,Edouard,Edouard Kempf,Ailier Droit,France,1998-03-20,178,81,Chartres,https://www.lnh.fr/lnh/joueurs/Edouard-KEMPF
+,Toulouse,14,KALL,Casper,Casper Kall,Demi Centre,Suède,2000-11-26,186,72,,https://www.lnh.fr/lnh/joueurs/Casper-KALL
+,Toulouse,18,PETTERSSON,Fredric,Fredric Pettersson,Pivot,Suède,1989-02-11,202,115,,https://www.lnh.fr/lnh/joueurs/Fredric-PETTERSSON
+1292,Toulouse,19,ILIC,Nemanja,Nemanja Ilic,Ailier Gauche,France,1990-05-11,177,76,Toulouse,https://www.lnh.fr/lnh/joueurs/Nemanja-ILIC
+5267,Toulouse,23,MARTINS VIEIRA,Gonçalo,Gonçalo Martins Vieira,Arrière Gauche,Portugal,1999-04-27,194,95,Toulouse,https://www.lnh.fr/lnh/joueurs/Gon%C3%A7alo-MARTINS-VIEIRA
+,Toulouse,55,PAUL,Téodor,Téodor Paul,Gardien,Slovaquie,1987-04-22,194,94,,https://www.lnh.fr/lnh/joueurs/T%C3%A9odor-PAUL
+,Toulouse,67,ABDI,Ayyoub,Ayyoub Abdi,Arrière Droit,Algérie,1997-02-16,197,98,Nantes,https://www.lnh.fr/lnh/joueurs/Ayyoub-ABDI
+,Dunkerque,3,AFGOUR,Benjamin,Benjamin Afgour,Pivot,France,1991-04-01,195,105,,https://www.lnh.fr/lnh/joueurs/Benjamin-AFGOUR
+2251,Dunkerque,5,BILLANT,Florian,Florian Billant,Ailier Droit,France,1996-07-07,186,88,Dunkerque,https://www.lnh.fr/lnh/joueurs/Florian-BILLANT
+,Dunkerque,6,NAGY,Kornél,Kornél Nagy,Arrière Gauche,Hongrie,1986-11-21,195,98,,https://www.lnh.fr/lnh/joueurs/Korn%C3%A9l-NAGY
+4944,Dunkerque,10,TOSSIN,Dylan,Dylan Tossin,Ailier Gauche,France,2001-03-10,183,80,Dunkerque,https://www.lnh.fr/lnh/joueurs/Dylan-TOSSIN
+,Dunkerque,11,KRAGH,Cornelius,Cornelius Kragh,Arrière Gauche,Danemark,1995-05-05,194,98,,https://www.lnh.fr/lnh/joueurs/Cornelius-KRAGH
+,Dunkerque,13,YOSHIDA,Shuichi,Shuichi Yoshida,Pivot,Japon,2001-03-26,193,110,,https://www.lnh.fr/lnh/joueurs/Shuichi-YOSHIDA
+,Dunkerque,17,MARTINEZ,Gabin,Gabin Martinez,Arrière Droit,France,2000-07-13,196,86,Chartres,https://www.lnh.fr/lnh/joueurs/Gabin-MARTINEZ
+,Dunkerque,23,BRONZO,Umberto,Umberto Bronzo,Ailier Droit,Italie,2000-12-29,183,84,,https://www.lnh.fr/lnh/joueurs/Umberto-BRONZO
+1354,Dunkerque,28,FAUSTIN,Jean-loup,Jean-loup Faustin,Demi Centre,France,1995-03-23,185,88,Nîmes,https://www.lnh.fr/lnh/joueurs/Jean-loup-FAUSTIN
+1171,Dunkerque,55,MARIE-JOSEPH,Steve,Steve Marie-joseph,Ailier Gauche,France,1994-01-03,185,91,Dunkerque,https://www.lnh.fr/lnh/joueurs/Steve-MARIE-JOSEPH
+,Dunkerque,59,PELAYO,Tom,Tom Pelayo,Arrière Droit,France,1997-02-23,189,95,Limoges,https://www.lnh.fr/lnh/joueurs/Tom-PELAYO
+,Dunkerque,77,KIEFFER,Valentin,Valentin Kieffer,Gardien,France,1999-07-02,190,83,Limoges,https://www.lnh.fr/lnh/joueurs/Valentin-KIEFFER
+,Dunkerque,80,INDJAI,Nelio,Nelio Indjai,Ailier Gauche,Portugal,2002-06-03,186,73,Sarrebourg,https://www.lnh.fr/lnh/joueurs/Nelio-INDJAI
+,Dunkerque,83,DERUDDER,Pierre,Pierre Derudder,Gardien,France,2003-05-24,192,82,,https://www.lnh.fr/lnh/joueurs/Pierre-DERUDDER
+,Créteil,27,BOURILLON,Edgar,Edgar Bourillon,Pivot,France,2004-04-01,200,105,Créteil,https://www.lnh.fr/lnh/joueurs/Edgar-BOURILLON
+,Dijon,77,LANFRANCHI,Axel,Axel Lanfranchi,Pivot,France,2004-05-15,192,101,,https://www.lnh.fr/lnh/joueurs/Axel-LANFRANCHI
+1104,Nîmes,11,DUPUY,Quentin,Quentin Dupuy,Arrière Gauche,France,1994-07-01,194,97,Dunkerque,https://www.lnh.fr/lnh/joueurs/Quentin-DUPUY
+,Nîmes,13,GUIGUES,Yohan,Yohan Guigues,Ailier Droit,France,2004-04-13,187,80,Nîmes,https://www.lnh.fr/lnh/joueurs/Yohan-GUIGUES
+7700,Dunkerque,85,MALIKI,Amil,Amil Maliki,Arrière Gauche,France,2005-05-05,194,92,Dunkerque,https://www.lnh.fr/lnh/joueurs/Amil-MALIKI
+,Aix,84,SIDIBE,Mouhamadou,Mouhamadou Sidibe,Pivot,France,2004-10-09,200,90,Aix,https://www.lnh.fr/lnh/joueurs/Mouhamadou-SIDIBE
+,Ivry,6,PETIT,Maxime,Maxime Petit,Ailier Gauche,France,2002-03-28,181,73,Ivry,https://www.lnh.fr/lnh/joueurs/Maxime-PETIT
+,Paris,32,HOLM,Jacob Tandrup,Jacob Tandrup Holm,Arrière Gauche,Danemark,1995-09-05,194,95,,https://www.lnh.fr/lnh/joueurs/Jacob-Tandrup-HOLM
+,Chartres,96,TRIBILLON,Gaël,Gaël Tribillon,Ailier Gauche,France,1998-03-02,175,78,Chartres,https://www.lnh.fr/lnh/joueurs/Ga%C3%ABl-TRIBILLON
+,Montpellier,24,DUBOIS,Adrien,Adrien Dubois,Ailier Gauche,France,2001-03-21,182,72,Dijon,https://www.lnh.fr/lnh/joueurs/Adrien-DUBOIS
+,Montpellier,25,GUIGON,Lucas,Lucas Guigon,Arrière Droit,France,2003-07-18,197,88,Montpellier,https://www.lnh.fr/lnh/joueurs/Lucas-GUIGON
+,Chambéry,5,GNAGO,Adam,Adam Gnago,Arrière Gauche,France,2003-03-01,190,95,Caen,https://www.lnh.fr/lnh/joueurs/Adam-GNAGO
+,Nantes,3,BRIET,Thibaud,Thibaud Briet,Arrière Gauche,France,1999-12-14,205,95,Nantes,https://www.lnh.fr/lnh/joueurs/Thibaud-BRIET
+,Cesson-Rennes,20,BENJAMIN,Mike,Mike Benjamin,Arrière Gauche,France,2003-12-05,198,98,,https://www.lnh.fr/lnh/joueurs/Mike-BENJAMIN
+,Cesson-Rennes,81,MICHEL,Tristan,Tristan Michel,Arrière Droit,France,2004-06-16,194,89,Cherbourg,https://www.lnh.fr/lnh/joueurs/Tristan-MICHEL
+,Saint-Raphaël,32,DIPANDA,Adrien,Adrien Dipanda,Arrière Droit,France,1988-05-03,202,107,,https://www.lnh.fr/lnh/joueurs/Adrien-DIPANDA
+,Aix,83,GOURDEL,Paul,Paul Gourdel,Ailier Droit,France,2004-04-14,187,65,Chartres,https://www.lnh.fr/lnh/joueurs/Paul-GOURDEL
+3147,Saran,5,DAMIANI,Clément,Clément Damiani,Arrière Droit,France,1998-09-29,194,97,Saran,https://www.lnh.fr/lnh/joueurs/Cl%C3%A9ment-DAMIANI
+,Chartres,11,BEN SALEM,Yassine,Yassine Ben Salem,Arrière Droit,Tunisie,2003-01-11,190,85,Caen,https://www.lnh.fr/lnh/joueurs/Yassine-BEN-SALEM
+,Montpellier,23,CORNETTE,Mathieu,Mathieu Cornette,Demi Centre,France,2003-06-30,188,80,Caen,https://www.lnh.fr/lnh/joueurs/Mathieu-CORNETTE
+,Nîmes,4,GALLEGO,Benjamin,Benjamin Gallego,Pivot,France,1988-11-24,184,86,,https://www.lnh.fr/lnh/joueurs/Benjamin-GALLEGO
+,Nîmes,24,TOBIE,Luc,Luc Tobie,Arrière Droit,France,1988-06-24,190,84,,https://www.lnh.fr/lnh/joueurs/Luc-TOBIE
+,Dunkerque,1,SEJR JENSEN,Simon,Simon Sejr Jensen,Gardien,Danemark,1996-06-29,202,95,,https://www.lnh.fr/lnh/joueurs/Simon-SEJR-JENSEN
+,Dunkerque,7,KLIMKOW,Janek,Janek Klimkow,Pivot,Pologne,1998-12-21,203,130,,https://www.lnh.fr/lnh/joueurs/Janek-KLIMKOW
+1609,Toulouse,13,DIALLO,Bakary,Bakary Diallo,Arrière Gauche,France,1994-12-03,195,92,Toulouse,https://www.lnh.fr/lnh/joueurs/Bakary-DIALLO
+,Cesson-Rennes,13,BRIFFE,Romain,Romain Briffe,Demi Centre,France,1989-01-22,189,90,,https://www.lnh.fr/lnh/joueurs/Romain-BRIFFE
+,Montpellier,4,SIMONET,Diego,Diego Simonet,Demi Centre,Argentine,1989-12-26,189,88,,https://www.lnh.fr/lnh/joueurs/Diego-SIMONET
+,Créteil,22,MUEL,Jason,Jason Muel,Pivot,France,2000-03-07,197,108,Cournon,https://www.lnh.fr/lnh/joueurs/Jason-MUEL
+,Saint-Raphaël,12,RATABOUL,Noé,Noé Rataboul,Gardien,France,2005-07-17,192,94,Sarrebourg,https://www.lnh.fr/lnh/joueurs/No%C3%A9-RATABOUL
+,Chambéry,20,BONNISSOL,Gauthier,Gauthier Bonnissol,Demi Centre,France,2003-08-27,191,93,Draguignan,https://www.lnh.fr/lnh/joueurs/Gauthier-BONNISSOL
+,Chambéry,21,BENTERKI,Théo,Théo Benterki,Ailier Droit,France,2003-06-20,185,80,Cournon,https://www.lnh.fr/lnh/joueurs/Th%C3%A9o-BENTERKI
+6925,Chambéry,92,PEYRONNET,Emilien,Emilien Peyronnet,Ailier Droit,France,2004-03-22,180,70,Chambéry,https://www.lnh.fr/lnh/joueurs/Emilien-PEYRONNET
+,Toulouse,9,DISCAMPS,Maxime,Maxime Discamps,Arrière Gauche,France,2003-07-03,203,100,Caen,https://www.lnh.fr/lnh/joueurs/Maxime-DISCAMPS
+,Saran,35,GESLAND,Enzo,Enzo Gesland,Ailier Droit,France,2004-03-07,183,75,Pontault,https://www.lnh.fr/lnh/joueurs/Enzo-GESLAND
+,Nantes,20,NASSEQUELA,Salomon,Salomon Nassequela,Arrière Droit,Congo,2004-01-15,183,71,,https://www.lnh.fr/lnh/joueurs/Salomon-NASSEQUELA
+1352,Chambéry,76,ANQUETIL,Arthur,Arthur Anquetil,Ailier Gauche,France,1995-07-23,182,80,Nîmes,https://www.lnh.fr/lnh/joueurs/Arthur-ANQUETIL
+5361,Aix,28,TARRAFETA SERRANO,Ian,Ian Tarrafeta Serrano,Demi Centre,Espagne,1999-01-04,188,88,Nantes,https://www.lnh.fr/lnh/joueurs/Ian-TARRAFETA-SERRANO
+5325,Nantes,22,SIMONNET,Alban,Alban Simonnet,Demi Centre,France,2004-01-04,191,89,Saran,https://www.lnh.fr/lnh/joueurs/Alban-SIMONNET
+5965,Montpellier,21,PRAT,Kylian,Kylian Prat,Arrière Gauche,France,2004-02-20,191,81,Tremblay,https://www.lnh.fr/lnh/joueurs/Kylian-PRAT
+,Nîmes,38,MINEL,Quentin,Quentin Minel,Arrière Gauche,France,1992-09-03,189,98,Chartres,https://www.lnh.fr/lnh/joueurs/Quentin-MINEL
+,Saint-Raphaël,77,EVEILLARD,Maixent,Maixent Eveillard,Demi Centre,France,2005-02-01,173,69,,https://www.lnh.fr/lnh/joueurs/Maixent-EVEILLARD
+,Chambéry,2,ABDEBREIMAN,Yanis,Yanis Abdebreiman,Arrière Gauche,France,2005-08-02,192,92,Frontignan,https://www.lnh.fr/lnh/joueurs/Yanis-ABDEBREIMAN
+7737,Chambéry,82,CLAUDE,Dimitri,Dimitri Claude,Arrière Gauche,France,2005-08-29,192,91,Chambéry,https://www.lnh.fr/lnh/joueurs/Dimitri-CLAUDE
+,Chambéry,95,RODRIGUES,Gustavo,Gustavo Rodrigues,Arrière Droit,Brésil,1995-04-09,190,115,Cesson-Rennes,https://www.lnh.fr/lnh/joueurs/Gustavo-RODRIGUES
+,Chartres,95,GAYDUCHENKO,Vadim,Vadim Gayduchenko,Arrière Gauche,Biélorussie,1995-04-24,193,95,Pau Billère,https://www.lnh.fr/lnh/joueurs/Vadim-GAYDUCHENKO
+,Dijon,10,FAIVRE,Luca,Luca Faivre,Ailier Gauche,France,2004-08-23,175,69,,https://www.lnh.fr/lnh/joueurs/Luca-FAIVRE
+,Créteil,4,DEVOLDERE,Loghan,Loghan Devoldere,Ailier Gauche,France,2004-05-04,176,77,,https://www.lnh.fr/lnh/joueurs/Loghan-DEVOLDERE
+,Dunkerque,94,GROCAUT,Gabin,Gabin Grocaut,Demi Centre,France,2005-04-18,180,76,,https://www.lnh.fr/lnh/joueurs/Gabin-GROCAUT
+,Créteil,32,SEBIN,Mathis,Mathis Sebin,Arrière Gauche,France,2004-10-23,190,81,,https://www.lnh.fr/lnh/joueurs/Mathis-SEBIN
+,Créteil,37,BUTORAC,Bruno,Bruno Butorac,Arrière Droit,Croatie,1994-10-01,189,90,,https://www.lnh.fr/lnh/joueurs/Bruno-BUTORAC
+,Ivry,66,DELRIVE,Tom,Tom Delrive,Ailier Droit,France,2002-07-22,189,78,Frontignan,https://www.lnh.fr/lnh/joueurs/Tom-DELRIVE
+7086,Chambéry,14,FRATTARUOLO,Sacha,Sacha Frattaruolo,Pivot,France,2005-05-19,188,93,Chambéry,https://www.lnh.fr/lnh/joueurs/Sacha-FRATTARUOLO
+,Saint-Raphaël,10,CAïS,Martial,Martial Caïs,Ailier Droit,France,2002-03-07,193,84,Cesson-Rennes,https://www.lnh.fr/lnh/joueurs/Martial-CA%C3%AFS
+,Saint-Raphaël,97,PASCHAL,Drevy,Drevy Paschal,Ailier Gauche,France,2001-07-16,194,82,Montpellier,https://www.lnh.fr/lnh/joueurs/Drevy-PASCHAL
+,Aix,64,CAMARERO,Jordan,Jordan Camarero,Ailier Droit,France,1992-03-10,184,87,,https://www.lnh.fr/lnh/joueurs/Jordan-CAMARERO
+,Cesson-Rennes,8,MOSINDI,Daniel,Daniel Mosindi,Arrière Droit,Israël,2001-10-01,189,85,,https://www.lnh.fr/lnh/joueurs/Daniel-MOSINDI
+,Nîmes,77,GUIRONNET,Kenzo,Kenzo Guironnet,Pivot,France,2005-06-17,195,103,Valence,https://www.lnh.fr/lnh/joueurs/Kenzo-GUIRONNET
+,Nantes,12,RAMBAUD,Sirius,Sirius Rambaud,Gardien,France,2006-01-18,196,80,Nantes,https://www.lnh.fr/lnh/joueurs/Sirius-RAMBAUD
+4977,Chambéry,25,VANEGUE,Lucas,Lucas Vanegue,Demi Centre,France,1996-10-03,187,77,Chambéry,https://www.lnh.fr/lnh/joueurs/Lucas-VANEGUE
+,Ivry,44,NOL,Nahel,Nahel Nol,Arrière Gauche,France,2003-06-22,194,92,Saintes,https://www.lnh.fr/lnh/joueurs/Nahel-NOL
+,Montpellier,32,LENNE,Yanis,Yanis Lenne,Ailier Droit,France,1996-06-29,187,87,,https://www.lnh.fr/lnh/joueurs/Yanis-LENNE
+,Ivry,39,PELLEN,Clément,Clément Pellen,Arrière Gauche,France,2002-04-21,202,89,,https://www.lnh.fr/lnh/joueurs/Cl%C3%A9ment-PELLEN
+,Chartres,10,BEN SALEM,Amine,Amine Ben Salem,Demi Centre,Tunisie,2003-03-11,190,85,,https://www.lnh.fr/lnh/joueurs/Amine-BEN-SALEM
+,Chartres,13,GRILLèRE,Victor,Victor Grillère,Pivot,France,2003-03-05,195,85,,https://www.lnh.fr/lnh/joueurs/Victor-GRILL%C3%A8RE
+,Créteil,9,IMARE,Edson,Edson Imare,Arrière Gauche,France,1998-09-09,187,84,,https://www.lnh.fr/lnh/joueurs/Edson-IMARE
+,Nantes,26,FAVRIL,Pierre-alexis,Pierre-alexis Favril,Ailier Gauche,France,2004-10-15,186,84,,https://www.lnh.fr/lnh/joueurs/Pierre-alexis-FAVRIL
+,Nîmes,24,LEBOURHIS,Thibault,Thibault Lebourhis,Gardien,France,2004-07-22,,,,https://www.lnh.fr/lnh/joueurs/Thibault-LEBOURHIS
+4777,Paris,45,VILLAIN,Léo,Léo Villain,Gardien,France,2002-11-06,205,95,Dunkerque,https://www.lnh.fr/lnh/joueurs/L%C3%A9o-VILLAIN
+,Chartres,4,DAVYES,Wilson,Wilson Davyes,Demi Centre,Portugal,1988-09-07,192,95,,https://www.lnh.fr/lnh/joueurs/Wilson-DAVYES
+,Chartres,45,DUCOAT,Quentin,Quentin Ducoat,Arrière Droit,France,2004-04-09,186,100,,https://www.lnh.fr/lnh/joueurs/Quentin-DUCOAT
+,Saint-Raphaël,88,AILLAUD,Marc-anto,Marc-anto Aillaud,Arrière Droit,France,2003-06-23,193,92,Draguignan,https://www.lnh.fr/lnh/joueurs/Marc-anto-AILLAUD
+,Toulouse,12,MARCHIS,Rares-gabriel,Rares-gabriel Marchis,Gardien,Roumanie,2005-05-28,196,100,,https://www.lnh.fr/lnh/joueurs/Rares-gabriel-MARCHIS
+,Limoges,91,ROULLET,Lucien,Lucien Roullet,Demi Centre,France,2004-05-14,193,84,,https://www.lnh.fr/lnh/joueurs/Lucien-ROULLET
+6893,Nantes,28,WENKEGHEU TCHAMBOU,André,André Wenkegheu Tchambou,Pivot,France,2004-05-10,198,100,Nantes,https://www.lnh.fr/lnh/joueurs/Andr%C3%A9-WENKEGHEU-TCHAMBOU
+,Nîmes,0,VINCENT,Ganael,Ganael Vincent,Pivot,France,2005-09-17,180,70,,https://www.lnh.fr/lnh/joueurs/Ganael-VINCENT
+,Nîmes,78,VARLET,Gallian,Gallian Varlet,Arrière Gauche,France,2004-06-16,193,82,,https://www.lnh.fr/lnh/joueurs/Gallian-VARLET
+,Dijon,68,DENTZ,Edgar,Edgar Dentz,Pivot,France,1998-03-19,195,107,,https://www.lnh.fr/lnh/joueurs/Edgar-DENTZ
+,Cesson-Rennes,80,NEEL HEUDE,Raphaël,Raphaël Neel Heude,Ailier Gauche,France,2003-08-23,186,90,Massy,https://www.lnh.fr/lnh/joueurs/Rapha%C3%ABl-NEEL-HEUDE
+8321,Cesson-Rennes,88,ROMERO CARRERAS,Alejandro,Alejandro Romero Carreras,Gardien,Cuba,1994-09-17,195,100,Dunkerque,https://www.lnh.fr/lnh/joueurs/Alejandro-ROMERO-CARRERAS
+,Dunkerque,25,NIELSEN,Rasmus,Rasmus Nielsen,Ailier Droit,Danemark,1989-02-07,189,83,,https://www.lnh.fr/lnh/joueurs/Rasmus-NIELSEN
+,Nantes,2,MILOSAVLJEVIC,Marko,Marko Milosavljevic,Arrière Gauche,Serbie,1998-09-13,201,96,,https://www.lnh.fr/lnh/joueurs/Marko-MILOSAVLJEVIC
+,Montpellier,27,FOURNIE,Léo,Léo Fournie,Pivot,France,2004-04-10,188,90,,https://www.lnh.fr/lnh/joueurs/L%C3%A9o-FOURNIE
+,Paris,90,PLANTIN,Léo,Léo Plantin,Ailier Gauche,France,2003-05-01,186,84,Montpellier,https://www.lnh.fr/lnh/joueurs/L%C3%A9o-PLANTIN
+,Saint-Raphaël,11,KISUM,Kasper Jesper,Kasper Jesper Kisum,Arrière Gauche,Danemark,1992-08-20,190,92,,https://www.lnh.fr/lnh/joueurs/Kasper-Jesper-KISUM
+,Saint-Raphaël,34,GOUPILLON,Mathis,Mathis Goupillon,Demi Centre,France,2003-11-20,179,75,Cournon,https://www.lnh.fr/lnh/joueurs/Mathis-GOUPILLON
+,Saran,7,PIETRE,Basile,Basile Pietre,Demi Centre,France,2003-12-09,180,77,Cournon,https://www.lnh.fr/lnh/joueurs/Basile-PIETRE
+,Chambéry,4,TRITTA,Alexandre,Alexandre Tritta,Arrière Droit,France,1994-12-09,18,85,Aix,https://www.lnh.fr/lnh/joueurs/Alexandre-TRITTA
+,Dunkerque,24,ENGUELEGUELE,Doran,Doran Engueleguele,Arrière Gauche,France,2003-05-10,193,97,Ivry,https://www.lnh.fr/lnh/joueurs/Doran-ENGUELEGUELE
+,Limoges,24,SERRE,Leni,Leni Serre,Arrière Droit,France,2005-09-08,185,80,Sarrebourg,https://www.lnh.fr/lnh/joueurs/Leni-SERRE
+,Saran,93,MAMDOUH,Mohamed,Mohamed Mamdouh,Pivot,Égypte,1989-04-01,193,100,,https://www.lnh.fr/lnh/joueurs/Mohamed-MAMDOUH
+,Aix,85,BERCHOUX,Lucas,Lucas Berchoux,Demi Centre,France,2003-02-20,187,87,Pau Billère,https://www.lnh.fr/lnh/joueurs/Lucas-BERCHOUX
+,Montpellier,82,CAILLE,Matéo,Matéo Caille,Pivot,France,2004-06-27,198,100,Montpellier,https://www.lnh.fr/lnh/joueurs/Mat%C3%A9o-CAILLE
+,Limoges,2,HASSLER,Ronan,Ronan Hassler,Ailier Droit,France,2004-05-14,185,71,,https://www.lnh.fr/lnh/joueurs/Ronan-HASSLER
+7888,Saint-Raphaël,18,AUGUSTINE,Ylan,Ylan Augustine,Pivot,France,2004-08-18,198,98,Saint-Raphaël,https://www.lnh.fr/lnh/joueurs/Ylan-AUGUSTINE
+,Nantes,23,GOHIER,Edgar,Edgar Gohier,Ailier Droit,France,2005-06-29,183,77,,https://www.lnh.fr/lnh/joueurs/Edgar-GOHIER
+,Dunkerque,81,RIEHL,Augustin,Augustin Riehl,Arrière Droit,France,2004-07-03,192,89,,https://www.lnh.fr/lnh/joueurs/Augustin-RIEHL
+,Nantes,30,BIOSCA GARCIA,Ignacio,Ignacio Biosca Garcia,Gardien,Espagne,1995-07-17,200,95,,https://www.lnh.fr/lnh/joueurs/Ignacio-BIOSCA-GARCIA
+,Chartres,39,BEN FRAJ,Koussay,Koussay Ben Fraj,Arrière Gauche,Tunisie,2004-09-02,194,90,Chartres,https://www.lnh.fr/lnh/joueurs/Koussay-BEN-FRAJ
+,Aix,81,FORETS,Simon,Simon Forets,Gardien,France,2002-03-04,187,65,,https://www.lnh.fr/lnh/joueurs/Simon-FORETS
+,Dunkerque,85,SIX,Yann,Yann Six,Pivot,France,2005-02-10,185,83,Dunkerque,https://www.lnh.fr/lnh/joueurs/Yann-SIX
+,Limoges,19,BIRKNER,Alexandre,Alexandre Birkner,Ailier Gauche,France,2004-02-19,174,79,,https://www.lnh.fr/lnh/joueurs/Alexandre-BIRKNER
+3455,Paris,28,GIBELIN,Yoann,Yoann Gibelin,Arrière Gauche,France,1999-11-26,198,99,Nîmes,https://www.lnh.fr/lnh/joueurs/Yoann-GIBELIN
+,Toulouse,20,FIRMESSE,Idris,Idris Firmesse,Pivot,France,2002-09-15,190,90,,https://www.lnh.fr/lnh/joueurs/Idris-FIRMESSE
+,Dijon,11,AUFFRET,Lucien,Lucien Auffret,Ailier Droit,France,1997-01-25,182,75,,https://www.lnh.fr/lnh/joueurs/Lucien-AUFFRET
+,Ivry,7,KIRTZ,Henri,Henri Kirtz,Arrière Droit,France,2004-05-27,198,94,Ivry,https://www.lnh.fr/lnh/joueurs/Henri-KIRTZ
+,Saran,39,TEXIER,Théo,Théo Texier,Demi Centre,France,2003-11-22,181,75,,https://www.lnh.fr/lnh/joueurs/Th%C3%A9o-TEXIER
+,Limoges,1,REY,Mattis,Mattis Rey,Gardien,France,2003-02-23,198,88,,https://www.lnh.fr/lnh/joueurs/Mattis-REY
+,Créteil,20,STRANIGG,Janos Tamas,Janos Tamas Stranigg,Arrière Gauche,Hongrie,1995-02-02,190,95,,https://www.lnh.fr/lnh/joueurs/Janos-Tamas-STRANIGG
+,Nîmes,16,DEL BLANCO,Marius,Marius Del Blanco,Gardien,France,2005-07-01,194,85,,https://www.lnh.fr/lnh/joueurs/Marius-DEL-BLANCO
+7830,Saint-Raphaël,0,GORGIBUS,Enzo,Enzo Gorgibus,Ailier Gauche,France,2006-06-26,192,78,Saint-Raphaël,https://www.lnh.fr/lnh/joueurs/Enzo-GORGIBUS
+,Saran,10,SOKENG,Emmanuel,Emmanuel Sokeng,Gardien,France,2005-03-25,181,84,,https://www.lnh.fr/lnh/joueurs/Emmanuel-SOKENG
+,Saran,76,DELEAU,Raphaël,Raphaël Deleau,Arrière Gauche,France,2005-09-06,185,80,Saran,https://www.lnh.fr/lnh/joueurs/Rapha%C3%ABl-DELEAU
+,Aix,0,LEVAVASSEUR,Goran,Goran Levavasseur,Ailier Gauche,France,2003-12-03,184,72,Valence,https://www.lnh.fr/lnh/joueurs/Goran-LEVAVASSEUR
+,Nantes,6,BONNEFOND,Baptiste,Baptiste Bonnefond,Arrière Gauche,France,1993-01-22,193,97,,https://www.lnh.fr/lnh/joueurs/Baptiste-BONNEFOND
+,Toulouse,0,GUIBERT,Martin,Martin Guibert,Arrière Droit,France,2005-01-09,190,88,Sarrebourg,https://www.lnh.fr/lnh/joueurs/Martin-GUIBERT
+,Chartres,6,TRAORE,Moussa,Moussa Traore,Ailier Droit,France,2005-04-15,182,78,Sarrebourg,https://www.lnh.fr/lnh/joueurs/Moussa-TRAORE
+6960,Nîmes,0,PEYRE,Remi,Remi Peyre,Ailier Droit,France,2004-01-30,175,78,Nîmes,https://www.lnh.fr/lnh/joueurs/Remi-PEYRE
+,Limoges,30,COMTE,Mathias,Mathias Comte,Arrière Gauche,France,2005-06-19,197,100,Limoges,https://www.lnh.fr/lnh/joueurs/Mathias-COMTE
+,Saint-Raphaël,14,MAKSOVIC,Lazar,Lazar Maksovic,Arrière Gauche,France,2004-11-24,195,89,Draguignan,https://www.lnh.fr/lnh/joueurs/Lazar-MAKSOVIC
+,Chambéry,16,SEGUIN,Adrien,Adrien Seguin,Gardien,France,2005-11-23,192,82,Chambéry,https://www.lnh.fr/lnh/joueurs/Adrien-SEGUIN
+,Toulouse,31,ALBOUY,Timeo,Timeo Albouy,Ailier Gauche,France,2003-11-01,184,85,Pau Billère,https://www.lnh.fr/lnh/joueurs/Timeo-ALBOUY
