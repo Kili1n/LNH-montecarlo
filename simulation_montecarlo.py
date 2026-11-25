@@ -1086,7 +1086,7 @@ def compute_availability(
         )
 
         work = past_b.assign(
-            played_flag=(past_b["seconds_played"] > 0).astype(int),
+            played_flag=(past_b["played_match"] if "played_match" in past_b.columns else (past_b["seconds_played"] > 0)).astype(int),
             _off=raw_off_pts,
             _def=raw_def_pts,
         )
@@ -1105,11 +1105,13 @@ def compute_availability(
         if tot_off <= 0 and tot_def <= 0:
             continue
 
+        rec_flag = rec_b["played_match"] if "played_match" in rec_b.columns else (rec_b["seconds_played"] > 0)
         rec_sec = (
-            rec_b.groupby(["last_name", "first_name"])["seconds_played"]
+            rec_b.assign(_pl=rec_flag.astype(int))
+            .groupby(["last_name", "first_name"])["_pl"]
             .sum()
             .reset_index()
-            .rename(columns={"seconds_played": "rec_sec"})
+            .rename(columns={"_pl": "rec_sec"})
         )
         g = g.merge(rec_sec, on=["last_name", "first_name"], how="left")
         g["rec_sec"] = g["rec_sec"].fillna(0.0)
@@ -1121,16 +1123,34 @@ def compute_availability(
             pen_def[t_idx] = p.absence_def_per_share * float(absent["def_val"].sum()) / tot_def
 
         if details is not None:
-            details[team] = [
-                {
+            pcol = tb["played_match"] if "played_match" in tb.columns else (tb["seconds_played"] > 0)
+            played_ids = tb[pcol.astype(bool)].groupby(["last_name", "first_name"])["match_id"].apply(set)
+            round_of = dict(zip(known["match_id"], known["round"]))
+
+            def _since(r) -> tuple[int, Optional[int]]:
+                """(matchs consécutifs manqués jusqu'au cutoff, dernière journée jouée)."""
+                seen = played_ids.get((r.last_name, r.first_name), set())
+                missed = 0
+                for mid in reversed(ids):
+                    if mid in seen:
+                        break
+                    missed += 1
+                last = max((int(round_of[x]) for x in seen if x in round_of), default=None)
+                return missed, last
+
+            rows = []
+            for r in absent.sort_values(["def_val", "off_val"], ascending=False).itertuples():
+                missed, last_round = _since(r)
+                rows.append({
                     "name": f"{r.first_name} {r.last_name}".strip(),
                     "gk": bool(r.gk),
                     "presence": float(r.presence),
                     "off_share": float(r.off_val / tot_off) if tot_off > 0 else 0.0,
                     "def_share": float(r.def_val / tot_def) if tot_def > 0 else 0.0,
-                }
-                for r in absent.sort_values(["def_val", "off_val"], ascending=False).itertuples()
-            ]
+                    "missed": int(missed),
+                    "last_round": last_round,
+                })
+            details[team] = rows
 
     return pen_off, pen_def
 
@@ -1819,9 +1839,13 @@ class SimulationStore:
                     "def_pct": float(100.0 * (math.exp(r.def_log_pen) - 1.0)),
                     "analysed": str(t) in det,
                     "absent": det.get(str(t), []),
+                    # constat réel à la dernière journée jouée (None si la simulation part déjà de cette journée)
+                    "absent_now": (pipeline_out["availability_now"].get(str(t), []) if pipeline_out.get("availability_now") is not None else None),
+                    "analysed_now": (str(t) in pipeline_out["availability_now"]) if pipeline_out.get("availability_now") is not None else None,
                 }
                 for t, r in av.iterrows()
             ]
+            story_payload["absence_view"] = {"cutoff": int(self.cutoff_round), "now_round": pipeline_out.get("now_round")}
             story_payload["zones"] = {
                 "podium": 3,
                 "top_k": int(pipeline_out.get("top_k", 4)),
@@ -2181,6 +2205,14 @@ def run_pipeline(
     pen_off, pen_def = compute_availability(box, known, teams, p, details=avail_details)
     apply_availability(fx, pen_off, pen_def, cutoff_round, p)
 
+    # Constat réel à la dernière journée jouée (information seulement : la simulation, elle, part du cutoff)
+    avail_now, now_round = None, None
+    played_fx = fx[fx["played"]]
+    if not played_fx.empty and int(played_fx["round"].max()) > cutoff_round:
+        now_round = int(played_fx["round"].max())
+        avail_now = {}
+        compute_availability(box, played_fx, teams, p, details=avail_now)
+
     _, _, preds = run_history(fx, dc, p, cutoff_round)
     real = compute_standings(fx, teams, p.reapply_h2h)
 
@@ -2200,6 +2232,8 @@ def run_pipeline(
         "store": store,
         "availability": pd.DataFrame({"off_log_pen": pen_off, "def_log_pen": pen_def}, index=teams),
         "availability_details": avail_details,
+        "availability_now": avail_now,
+        "now_round": now_round,
         "n_relegated": min(n_relegated, len(teams) - 1),
         "top_k": top_k,
         "backtest_predictions": preds,

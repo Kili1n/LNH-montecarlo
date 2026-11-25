@@ -350,26 +350,6 @@ def api_club_detail(qs: dict) -> dict:
             "res": res,
         })
 
-    # Salles les plus fréquentées sur la période
-    venues = []
-    if "venue" in m_per.columns and not m_per.empty:
-        v_df = m_per[m_per["venue"].notna() & (m_per["venue"].astype(str).str.strip() != "")].copy()
-        if not v_df.empty:
-            is_h = v_df["home_team"] == team
-            v_df["gf"] = np.where(is_h, v_df["home_ft_goals"], v_df["away_ft_goals"])
-            v_df["ga"] = np.where(is_h, v_df["away_ft_goals"], v_df["home_ft_goals"])
-            v_df["w"] = (v_df["gf"] > v_df["ga"]).astype(int)
-            vg = v_df.groupby("venue").agg(j=("gf", "size"), w=("w", "sum"), gf=("gf", "mean"), ga=("ga", "mean")).reset_index()
-            vg = vg.sort_values(["j", "w"], ascending=False).head(6)
-            venues = [{
-                "venue": str(r.venue),
-                "j": int(r.j),
-                "w": int(r.w),
-                "win_pct": round(100.0 * r.w / r.j, 1),
-                "gf_m": round(float(r.gf), 1),
-                "ga_m": round(float(r.ga), 1),
-            } for r in vg.itertuples()]
-
     # Effectif sur la période (note LNH /10 et note défensive)
     roster = []
     if box is not None and not box.empty:
@@ -421,7 +401,6 @@ def api_club_detail(qs: dict) -> dict:
         "home": home_st,
         "away": away_st,
         "recent": recent,
-        "venues": venues,
         "roster": roster,
         "history": hist_ranks,
     }
@@ -1195,6 +1174,7 @@ def api_sim(rid: str) -> dict:
         # forces Dixon & Coles au cutoff + malus d'absence appliqués aux matchs restants
         "dc_meta": j.get("dc_meta", {}),
         "availability": j.get("availability", []),
+        "absence_view": j.get("absence_view", {"cutoff": j.get("cutoff_round"), "now_round": None}),
         "model": {k: j.get("params", {}).get(k) for k in
                   ("absence_off_per_share", "absence_def_per_share", "absence_decay", "absence_lookback",
                    "absence_min_games", "absence_core_presence", "gk_weight")},
@@ -1297,6 +1277,522 @@ def api_conditional(rid: str, body: dict) -> dict:
     return _jsonable(out)
 
 
+# ---- Recherche globale (clubs, joueurs) --------------------------------------
+def _search_index() -> dict:
+    with _lock:
+        if "search_idx" in _cache:
+            return _cache["search_idx"]
+    m, box, seasons = load_data()
+    cur = seasons[-1] if seasons else ""
+    long = pd.concat([m[["home_team", "season"]].rename(columns={"home_team": "t"}),
+                      m[["away_team", "season"]].rename(columns={"away_team": "t"})]).drop_duplicates()
+    clubs = []
+    for t, g in long.groupby("t"):
+        ss = sorted(g["season"], key=lambda s: seasons.index(s) if s in seasons else -1)
+        clubs.append({"team": str(t), "f": _fold(t), "seasons": len(ss), "last_season": ss[-1], "current": cur in ss})
+    players = []
+    pf = player_frame()
+    if pf is not None:
+        pp = pf[pf["played_match"]].sort_values(["season_idx", "round"], kind="mergesort")
+        g = pp.groupby("full_name").agg(team=("team", "last"), season=("season", "last"), games=("match_id", "nunique"),
+                                        minutes=("est_seconds", "sum"), note=("match_note", "mean"), gk=("is_gk", "max")).reset_index()
+        for r in g.itertuples():
+            players.append({"name": str(r.full_name), "f": _fold(r.full_name), "team": str(r.team), "last_season": str(r.season),
+                            "games": int(r.games), "minutes": float(r.minutes), "gk": bool(r.gk),
+                            "note": round(float(r.note), 2) if pd.notna(r.note) else None})
+    idx = {"clubs": clubs, "players": players}
+    with _lock:
+        _cache["search_idx"] = idx
+    return idx
+
+
+def api_search(qs: dict) -> dict:
+    """Recherche insensible aux accents : tous les mots saisis doivent apparaître dans le nom."""
+    q = _fold(qs.get("q", [""])[0])
+    toks = [t for t in re.split(r"\s+", q) if t]
+    if not toks:
+        return {"q": q, "clubs": [], "players": []}
+    idx = _search_index()
+
+    def rank(f: str) -> int | None:
+        if not all(t in f for t in toks):
+            return None
+        words = f.split()
+        if f.startswith(toks[0]):
+            return 0
+        return 1 if any(w.startswith(toks[0]) for w in words) else 2
+
+    clubs = sorted(((rank(c["f"]), -c["seasons"], c) for c in idx["clubs"] if rank(c["f"]) is not None), key=lambda x: x[:2])
+    players = sorted(((rank(p["f"]), -p["minutes"], p) for p in idx["players"] if rank(p["f"]) is not None), key=lambda x: x[:2])
+    strip = lambda d: {k: v for k, v in d.items() if k != "f"}
+    return {"q": q, "clubs": [strip(c) for _, _, c in clubs[:6]], "players": [strip(p) for _, _, p in players[:8]]}
+
+
+# ---- Fiche journaliste : J-précédente et J+suivante --------------------------
+MILESTONES = {
+    "goals": [50, 100, 150, 200, 250, 300, 400, 500, 600, 700, 800, 900, 1000, 1250, 1500],
+    "a": [50, 100, 150, 200, 250, 300, 400, 500],
+    "saves": [250, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000],
+    "games": [50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
+}
+MILESTONE_WINDOW = {"goals": 10, "a": 8, "saves": 40, "games": 5}   # « en approche » = à moins de N unités du cap
+STAT_LABEL = {"goals": "buts", "a": "passes décisives", "saves": "arrêts", "games": "matchs"}
+ZONE_KEYS = {"p1": "title", "podium": "podium", "top": "top", "rel": "rel"}
+PROFILE = [("pts_m", "Points par match", True), ("gf_m", "Buts marqués par match", True), ("ga_m", "Buts encaissés par match", False),
+           ("win_pct", "% de victoires", True), ("shoot_pct", "% de réussite aux tirs", True), ("save_pct", "% d’arrêts des gardiens", True),
+           ("note", "Note LNH moyenne", True), ("def_note", "Note défensive LNH moyenne", True), ("two_min_m", "Exclusions de 2 min par match", False)]
+
+
+def _pl(n, one: str, many: str | None = None) -> str:
+    n = int(n)
+    return f"{n} {one if abs(n) <= 1 else (many or one + 's')}"
+
+
+def _ord(n: int) -> str:
+    return "1re" if n == 1 else f"{n}e"
+
+
+def _ensure_run(season: str, cutoff: int, n: int, force: bool = False) -> str:
+    rid = _run_id(season, cutoff, n)
+    js = OUT / rid / "summary_storytelling.json"
+    if force or not js.exists() or js.stat().st_mtime < _stamp():
+        print(f"[cache] simulation {season} · journée {cutoff} · {n:,} simulations…".replace(",", " "), flush=True)
+        t0 = time.time()
+        _simulate(season, cutoff, n)
+        print(f"[cache]   terminée en {time.time() - t0:.0f} s", flush=True)
+    return rid
+
+
+def _table(mp: pd.DataFrame, teams: list[str]) -> pd.DataFrame:
+    """Classement complet (tous les clubs, même sans match joué)."""
+    st = standings(mp).set_index("t") if len(mp) else pd.DataFrame(columns=["j", "gf", "ga", "pts", "gd"])
+    st = st.reindex(teams).fillna(0)[["j", "gf", "ga", "pts", "gd"]].astype(int).rename_axis("t")
+    st = st.sort_values(["pts", "gd", "gf"], ascending=False, kind="mergesort").reset_index()
+    st["rank"] = np.arange(1, len(st) + 1)
+    return st
+
+
+def _trail(flags) -> int:
+    n = 0
+    for f in reversed(list(flags)):
+        if not f:
+            break
+        n += 1
+    return n
+
+
+def _streaks_now(tm: pd.DataFrame, team: str) -> dict:
+    t = tm[tm["team"] == team]
+    if t.empty:
+        return {"win": 0, "unbeaten": 0, "losing": 0, "home_unbeaten": 0}
+    h = t[t["home"]]
+    return {"win": _trail(t["res"] == "W"), "unbeaten": _trail(t["res"] != "L"), "losing": _trail(t["res"] == "L"),
+            "home_unbeaten": _trail(h["res"] != "L") if len(h) else 0}
+
+
+def _plural_pts(n: int) -> str:
+    return _pl(abs(n), "point")
+
+
+def _stake_lines(rank: int, pts: int, by_rank: list[int], z: dict) -> list[str]:
+    """Phrases chiffrées : où se situe le club par rapport aux seuils du classement."""
+    T = len(by_rank)
+    if max(by_rank, default=0) == 0:
+        return ["Début de saison : classement vierge, tous les clubs sont à égalité"]
+    lines = []
+    if rank == 1:
+        lines.append(f"Leader, {_plural_pts(pts - by_rank[1])} d’avance sur le 2e" if T > 1 else "Leader")
+    else:
+        lines.append(f"À {_plural_pts(by_rank[0] - pts)} du leader")
+    for cut, name in ((z["podium"], "du podium"), (z["top_k"], f"du top {z['top_k']}")):
+        if cut <= 1 or cut >= T or (name == f"du top {z['top_k']}" and z["top_k"] == z["podium"]):
+            continue
+        if rank > cut:
+            lines.append(f"À {_plural_pts(by_rank[cut - 1] - pts)} {name}")
+        else:
+            lines.append(f"{_plural_pts(pts - by_rank[cut])} d’avance sur le {_ord(cut + 1)} ({name.replace('du ', 'hors du ')})")
+    safe = T - z["n_relegated"]
+    if safe >= 1 and safe < T:
+        if rank > safe:
+            lines.append(f"Zone de relégation : à {_plural_pts(by_rank[safe - 1] - pts)} du maintien")
+        else:
+            lines.append(f"{_plural_pts(pts - by_rank[safe])} d’avance sur la zone de relégation")
+    return lines
+
+
+def _rank_after(table: pd.DataFrame, home: str, away: str, outcome: str) -> dict:
+    t = table.set_index("t")[["pts", "gd", "gf"]].copy()
+    if outcome == "1":
+        t.loc[home, ["pts", "gd"]] += [2, 1]; t.loc[away, "gd"] -= 1
+    elif outcome == "2":
+        t.loc[away, ["pts", "gd"]] += [2, 1]; t.loc[home, "gd"] -= 1
+    else:
+        t.loc[[home, away], "pts"] += 1
+    t = t.sort_values(["pts", "gd", "gf"], ascending=False, kind="mergesort")
+    pos = {name: i + 1 for i, name in enumerate(t.index)}
+    return {home: pos[home], away: pos[away]}
+
+
+def _form(tm: pd.DataFrame, team: str, n: int = 5) -> list[dict]:
+    t = tm[tm["team"] == team].tail(n)
+    return [{"res": r.res, "opp": r.opp, "home": bool(r.home), "score": f"{int(r.gf)}–{int(r.ga)}", "round": int(r.round)} for r in t.itertuples()]
+
+
+def _h2h(m_played: pd.DataFrame, a: str, b: str, exclude_mid: str | None = None) -> dict:
+    d = m_played[((m_played["home_team"] == a) & (m_played["away_team"] == b)) | ((m_played["home_team"] == b) & (m_played["away_team"] == a))]
+    if exclude_mid:
+        d = d[d["match_id"] != exclude_mid]
+    d = d.sort_values(["season_idx", "round"], kind="mergesort")
+    if d.empty:
+        return {"n": 0}
+    rows = []
+    for r in d.itertuples():
+        ga, gb = (r.home_ft_goals, r.away_ft_goals) if r.home_team == a else (r.away_ft_goals, r.home_ft_goals)
+        rows.append({"date": str(r.date), "season": str(r.season), "round": int(r.round), "home": r.home_team, "away": r.away_team,
+                     "score": f"{int(r.home_ft_goals)}–{int(r.away_ft_goals)}", "a_goals": int(ga), "b_goals": int(gb),
+                     "winner": a if ga > gb else b if gb > ga else None, "a_home": r.home_team == a})
+    wa = sum(1 for x in rows if x["winner"] == a); wb = sum(1 for x in rows if x["winner"] == b); dr = len(rows) - wa - wb
+    big = max(rows, key=lambda x: abs(x["a_goals"] - x["b_goals"]))
+    streak, who = 0, None
+    for x in reversed(rows):
+        if x["winner"] is None:
+            break
+        if who is None:
+            who = x["winner"]
+        if x["winner"] != who:
+            break
+        streak += 1
+    at_home = [x for x in rows if x["a_home"]]
+    return {"n": len(rows), "a": a, "b": b, "w_a": wa, "d": dr, "w_b": wb,
+            "gf_a": sum(x["a_goals"] for x in rows), "gf_b": sum(x["b_goals"] for x in rows),
+            "avg_total": round(sum(x["a_goals"] + x["b_goals"] for x in rows) / len(rows), 1),
+            "last": list(reversed(rows[-5:])),
+            "biggest": {"winner": (a if big["a_goals"] > big["b_goals"] else b if big["b_goals"] > big["a_goals"] else None),
+                        "score": f"{max(big['a_goals'], big['b_goals'])}–{min(big['a_goals'], big['b_goals'])}", "date": big["date"], "season": big["season"]},
+            "streak": {"team": who, "n": streak} if who and streak >= 2 else None,
+            "a_home": {"n": len(at_home), "w": sum(1 for x in at_home if x["winner"] == a), "d": sum(1 for x in at_home if x["winner"] is None)}}
+
+
+def _build_swings(rid: str, mids: list[str], teams_by_mid: dict) -> dict:
+    """Pour chaque match : probabilités de zone (titre, podium, top N, relégation) de ses deux clubs, avant et
+    selon chacune des 3 issues, à partir des simulations de la run `rid`."""
+    d = OUT / rid
+    run = _load_run(d)
+    ts = read_table(d, "team_summary").to_dict("records")
+    z = _zones(run["json"], ts)
+    base = _zone_stats(run["rk"], run["pts"], z)
+    oc = _load_outcomes(d, mids)
+    sims = oc.index.to_numpy()
+    pos_all = np.searchsorted(run["sims"], sims)
+    out = {}
+    for mid in mids:
+        if mid not in oc.columns:
+            continue
+        codes = oc[mid].to_numpy()
+        ts2 = teams_by_mid[mid]
+        idx = {t: run["teams"].index(t) for t in ts2}
+        get = lambda st, t: {k: float(v[idx[t]]) for k, v in st.items()}
+        res = {"share": {}, "base": {t: get(base, t) for t in ts2}, "cond": {}}
+        for code in ("1", "N", "2"):
+            pos = pos_all[codes == code]
+            res["share"][code] = float(len(pos) / max(len(sims), 1))
+            if len(pos) >= 30:
+                cs = _zone_stats(run["rk"][pos], run["pts"][pos], z)
+                res["cond"][code] = {t: get(cs, t) for t in ts2}
+            else:
+                res["cond"][code] = None
+        out[mid] = res
+    return {"zones": z, "n_sims": int(len(run["sims"])), "swings": out}
+
+
+def _swing_stake(sw: dict, home: str, away: str) -> dict:
+    """Plus grand écart de probabilité (en points) entre une victoire et une défaite d'un des deux clubs."""
+    best = {"score": 0.0, "zone": None, "team": None}
+    for team, win, loss in ((home, "1", "2"), (away, "2", "1")):
+        cw, cl = sw["cond"].get(win), sw["cond"].get(loss)
+        if not cw or not cl:
+            continue
+        for k, zone in ZONE_KEYS.items():
+            diff = abs(cw[team][k] - cl[team][k]) * 100
+            if diff > best["score"]:
+                best = {"score": round(diff, 1), "zone": zone, "team": team}
+    return best
+
+
+def build_press(n: int = CACHE_SIMS) -> dict | None:
+    """Fiches journaliste de la dernière journée jouée (J-précédente) et de la suivante (J+suivante)."""
+    m, box, seasons = load_data()
+    if not seasons:
+        return None
+    S = seasons[-1]
+    mS = m[m["season"] == S].copy()
+    played = mS[mS["played"]]
+    K = int(played["round"].max()) if len(played) else 0
+    next_round = K + 1 if ((mS["round"] == K + 1) & ~mS["played"]).any() else None
+    prev_round = K if K >= 1 else None
+    if next_round is None and prev_round is None:
+        return None
+    teams = sorted(set(mS["home_team"]) | set(mS["away_team"]))
+    rid_next = _ensure_run(S, K, n) if next_round else None
+    rid_prev = _ensure_run(S, K - 1, n) if prev_round else None
+
+    pf = player_frame()
+    pfp = pf[pf["played_match"]].copy() if pf is not None else pd.DataFrame()
+    s_idx = int(mS["season_idx"].iloc[0])
+    if len(pfp):
+        pfp["key"] = pfp["season_idx"] * 1000 + pfp["round"]
+    gk_of = pfp.groupby("full_name")["is_gk"].max().to_dict() if len(pfp) else {}
+    rec = {r["id"]: r for g in compute_records("all")["groups"] for r in g["records"]}
+    tmetrics = {t["team"]: t for t in api_teams({"seasons": [S]})["teams"]}
+    mall = m[m["played"]].copy()
+
+    def tot(upto_key: int | None, below: bool = False) -> pd.DataFrame:
+        d = pfp if upto_key is None else pfp[pfp["key"] < upto_key] if below else pfp[pfp["key"] <= upto_key]
+        if d.empty:
+            return pd.DataFrame(columns=["goals", "a", "saves", "games"])
+        g = d.groupby("full_name").agg(goals=("goals", "sum"), a=("a", "sum"), saves=("saves", "sum"), games=("match_id", "size"))
+        return g
+
+    # joueurs de la saison (duels)
+    ps = (pfp[pfp["season"] == S].groupby(["full_name", "team"]).agg(games=("match_id", "nunique"), minutes=("est_seconds", "sum"), goals=("goals", "sum"),
+          shots=("shots", "sum"), a=("a", "sum"), saves=("saves", "sum"), faced=("shots_faced", "sum"), note=("match_note", "mean"), gk=("is_gk", "max")).reset_index()
+          if len(pfp) else pd.DataFrame())
+
+    def duels(team: str, team_games: int) -> dict:
+        d = ps[ps["team"] == team] if len(ps) else ps
+        if d is None or d.empty:
+            return {}
+        out = {}
+        f = d[~d["gk"].astype(bool)]
+        if len(f) and f["goals"].max() > 0:
+            r = f.sort_values(["goals", "games"], ascending=[False, True]).iloc[0]
+            out["scorer"] = {"name": r.full_name, "goals": int(r.goals), "shots": int(r.shots), "games": int(r.games)}
+        if len(f) and f["a"].max() > 0:
+            r = f.sort_values(["a", "games"], ascending=[False, True]).iloc[0]
+            out["playmaker"] = {"name": r.full_name, "a": int(r.a), "games": int(r.games)}
+        g = d[d["gk"].astype(bool)]
+        if len(g):
+            r = g.sort_values("minutes", ascending=False).iloc[0]
+            out["keeper"] = {"name": r.full_name, "saves": int(r.saves), "faced": int(r.faced), "pct": round(100 * r.saves / max(r.faced, 1), 1),
+                             "note": round(float(r.note), 2) if pd.notna(r.note) else None}
+        st_ = d[d["games"] >= max(3, int(0.4 * team_games))]
+        if len(st_) and st_["note"].notna().any():
+            r = st_.sort_values("note", ascending=False).iloc[0]
+            out["star"] = {"name": r.full_name, "note": round(float(r.note), 2), "games": int(r.games)}
+        return out
+
+    def profile(home: str, away: str) -> list[dict]:
+        rows = []
+        for key, label, hi in PROFILE:
+            vals = {t: v[key] for t, v in tmetrics.items() if v.get(key) is not None and pd.notna(v.get(key))}
+            if home not in vals or away not in vals:
+                continue
+            order = sorted(vals, key=lambda t: -vals[t] if hi else vals[t])
+            rows.append({"key": key, "label": label, "higher_better": hi, "home": round(float(vals[home]), 2), "away": round(float(vals[away]), 2),
+                         "rank_home": order.index(home) + 1, "rank_away": order.index(away) + 1, "avg": round(float(np.mean(list(vals.values()))), 2), "of": len(vals)})
+        return rows
+
+    def milestones_next(team: str, ids: list[str], totals: pd.DataFrame) -> list[dict]:
+        names = set(pfp[(pfp["match_id"].isin(ids)) & (pfp["team"] == team)]["full_name"]) if len(pfp) else set()
+        items = []
+        for nm in names:
+            if nm not in totals.index:
+                continue
+            r = totals.loc[nm]
+            stats = ("saves", "games") if gk_of.get(nm) else ("goals", "a", "games")
+            for stat in stats:
+                val = int(r[stat]); nxt = next((t for t in MILESTONES[stat] if t > val), None)
+                if nxt and nxt - val <= MILESTONE_WINDOW[stat]:
+                    items.append({"name": nm, "team": team, "stat": stat, "total": val, "target": nxt, "remaining": nxt - val,
+                                  "text": f"{nm} ({team}) : {val} {STAT_LABEL[stat]} dans la base, plus que {nxt - val} pour atteindre {nxt}"})
+        items.sort(key=lambda x: (x["remaining"] / MILESTONE_WINDOW[x["stat"]], -x["total"]))
+        return items[:5]
+
+    def milestones_crossed(names_by_team: dict, before: pd.DataFrame, after: pd.DataFrame) -> list[dict]:
+        items = []
+        for team, names in names_by_team.items():
+            for nm in names:
+                if nm not in after.index:
+                    continue
+                for stat in (("saves", "games") if gk_of.get(nm) else ("goals", "a", "games")):
+                    a_ = int(after.loc[nm, stat]); b_ = int(before.loc[nm, stat]) if nm in before.index else 0
+                    for thr in MILESTONES[stat]:
+                        if b_ < thr <= a_:
+                            items.append({"name": nm, "team": team, "stat": stat, "target": thr, "total": a_,
+                                          "text": f"{nm} ({team}) passe la barre des {thr} {STAT_LABEL[stat]} dans la base ({a_} au total)"})
+        return items[:8]
+
+    def records_next(team: str, tm_state: pd.DataFrame, ids: list[str], team_played: int, team_total: int, table_row) -> list[dict]:
+        items = []
+        cs = _streaks_now(tm_state, team)
+        for key, rid_, noun, nxt_txt in (("win", "win_streak", "victoires de suite", "Une victoire en ferait {n}"),
+                                         ("unbeaten", "unbeaten", "matchs sans défaite", "Un match sans défaite en ferait {n}"),
+                                         ("home_unbeaten", "home_unbeaten", "matchs invaincu à domicile", None),
+                                         ("losing", "loss_streak", "défaites de suite", None)):
+            cur = cs[key]
+            r0 = rec.get(rid_, {}).get("top", [None])[0] if rec.get(rid_, {}).get("top") else None
+            if cur >= (3 if key != "unbeaten" else 5) and r0:
+                txt = f"{team} reste sur {cur} {noun} (record de la base : {int(r0['value'])}, {r0['holder']}, {r0['season']})"
+                if nxt_txt and key != "home_unbeaten":
+                    txt += f". {nxt_txt.format(n=cur + 1)}"
+                items.append({"kind": "streak", "team": team, "text": txt})
+        # séries de buts individuelles
+        if len(pfp):
+            r0 = rec.get("scoring_streak", {}).get("top", [None])
+            r0 = r0[0] if r0 else None
+            sq = pfp[(pfp["match_id"].isin(ids)) & (pfp["team"] == team) & (~pfp["is_gk"].astype(bool))]["full_name"].unique()
+            runs_ = []
+            for nm in sq:
+                g = pfp[(pfp["full_name"] == nm) & (pfp["key"] <= s_idx * 1000 + K)].sort_values("key")
+                run_ = _trail(g["goals"] > 0)
+                if run_ >= 4 and r0:
+                    runs_.append((run_, nm))
+            for run_, nm in sorted(runs_, reverse=True)[:2]:   # les 2 plus longues séries du club
+                items.append({"kind": "player_streak", "team": team, "text": f"{nm} ({team}) a marqué lors de ses {run_} derniers matchs (record de la base : {int(r0['value'])}, {r0['holder']})"})
+            # rythme de saison vs record
+            for col, rid_, noun in (("goals", "ps_goals", "buts"), ("a", "ps_a", "passes décisives"), ("saves", "ps_saves", "arrêts")):
+                recs = rec.get(rid_, {}).get("top")
+                if not recs or not team_played:
+                    continue
+                d = ps[(ps["team"] == team)] if len(ps) else ps
+                if d.empty:
+                    continue
+                d = d[d["gk"].astype(bool)] if col == "saves" else d[~d["gk"].astype(bool)]
+                if d.empty or d[col].max() <= 0:
+                    continue
+                r = d.sort_values(col, ascending=False).iloc[0]
+                proj = float(r[col]) / team_played * team_total
+                top = recs[0]
+                if proj >= 0.9 * top["value"] and int(r[col]) >= 0.4 * top["value"]:
+                    if top["holder"] == r.full_name and top["season"] == S:
+                        txt = f"{r.full_name} ({team}) détient actuellement le record de la base de {noun} sur une saison ({int(r[col])})"
+                    else:
+                        txt = f"{r.full_name} ({team}) : {int(r[col])} {noun} cette saison, {int(round(proj))} à ce rythme (record de la base : {int(top['value'])}, {top['holder']}, {top['season']})"
+                    items.append({"kind": "season_pace", "team": team, "text": txt})
+        # rythme du club
+        if team_played >= 5:
+            for rid_, val, noun, better_low in (("ts_pts_max", table_row.pts, "points", False), ("ts_gf_max", table_row.gf, "buts marqués", False), ("ts_ga_min", table_row.ga, "buts encaissés", True)):
+                recs = rec.get(rid_, {}).get("top")
+                if not recs:
+                    continue
+                proj = val / team_played * team_total; top = recs[0]
+                if (proj <= 1.05 * top["value"]) if better_low else (proj >= 0.95 * top["value"]):
+                    items.append({"kind": "team_pace", "team": team, "text": f"{team} : {int(val)} {noun} en {team_played} matchs, {int(round(proj))} à ce rythme sur la saison (record de la base : {int(top['value'])}, {top['holder']}, {top['season']})"})
+        return items
+
+    def records_made(mrow, names_by_team: dict, tm_after: pd.DataFrame) -> list[dict]:
+        """Records de la base établis ou égalés lors de ce match (classements « top 5 » datés du jour du match)."""
+        items = []
+        d0 = str(mrow.date)
+        h, a = mrow.home_team, mrow.away_team
+        for rid_, r in rec.items():
+            for i, t in enumerate(r["top"]):
+                if t["date"] != d0:
+                    continue
+                ok_ = (t["kind"] == "team" and t["holder"] in (h, a)) or (t["kind"] == "match" and t["holder"] == f"{h} – {a}") or \
+                      (t["kind"] == "player" and t["team"] in (h, a) and t["holder"] in set().union(*names_by_team.values()))
+                if ok_:
+                    items.append({"kind": "record", "rank": i + 1, "text": f"{'RECORD DE LA BASE' if i == 0 else 'N°' + str(i + 1) + ' de la base'} · {r['label']} : {t['holder']}, {t['display']} {r['unit']} ({t['detail']})"})
+        items.sort(key=lambda x: x["rank"])
+        for team in (h, a):
+            cs = _streaks_now(tm_after, team)
+            if cs["win"] >= 4:
+                r0 = rec.get("win_streak", {}).get("top", [None]); r0 = r0[0] if r0 else None
+                items.append({"kind": "streak", "rank": 99, "text": f"{team} signe sa {_ord(cs['win'])} victoire de suite" + (f" (record de la base : {int(r0['value'])})" if r0 else "")})
+        return items[:8]
+
+    def performers(mid: str, team: str) -> dict:
+        d = pfp[(pfp["match_id"] == mid) & (pfp["team"] == team)] if len(pfp) else pfp
+        out = {}
+        if d is None or d.empty:
+            return out
+        r = d.sort_values(["match_note", "goals"], ascending=False).iloc[0]
+        out["best"] = {"name": r.full_name, "note": round(float(r.match_note), 2) if pd.notna(r.match_note) else None, "goals": int(r.goals), "shots": int(r.shots), "saves": int(r.saves), "gk": bool(r.is_gk)}
+        f = d[~d["is_gk"].astype(bool)]
+        if len(f) and f["goals"].max() > 0:
+            r = f.sort_values("goals", ascending=False).iloc[0]
+            out["scorer"] = {"name": r.full_name, "goals": int(r.goals), "shots": int(r.shots)}
+        g = d[d["is_gk"].astype(bool)]
+        if len(g):
+            r = g.sort_values("shots_faced", ascending=False).iloc[0]
+            out["keeper"] = {"name": r.full_name, "saves": int(r.saves), "faced": int(r.shots_faced), "pct": round(100 * r.saves / max(r.shots_faced, 1), 1)}
+        return out
+
+    def make_round(rnd: int, mode: str) -> dict:
+        rid = rid_next if mode == "next" else rid_prev
+        before_upto = K if mode == "next" else K - 1
+        mp_b = mS[mS["played"] & (mS["round"] <= before_upto)]
+        mp_a = mS[mS["played"] & (mS["round"] <= K)] if mode == "prev" else None
+        tb = _team_match_table(mp_b) if len(mp_b) else pd.DataFrame(columns=["team", "res", "home", "opp", "gf", "ga", "round"])
+        ta = _team_match_table(mp_a) if mp_a is not None and len(mp_a) else tb
+        tab_b = _table(mp_b, teams)
+        tab_a = _table(mp_a, teams) if mp_a is not None else None
+        rows = mS[mS["round"] == rnd].sort_values(["date", "match_id"])
+        mids = [str(x) for x in rows["match_id"]]
+        sw_pack = _build_swings(rid, mids, {str(r.match_id): (r.home_team, r.away_team) for r in rows.itertuples()})
+        z = sw_pack["zones"]
+        up = {str(u["match_id"]): u for u in json.loads((OUT / rid / "upcoming_scores.json").read_text(encoding="utf-8"))}
+        cur_key = prev_key = s_idx * 1000 + K
+        sheets = []
+        for r in rows.itertuples():
+            mid, h, a = str(r.match_id), r.home_team, r.away_team
+            sw = sw_pack["swings"].get(mid)
+            u = up.get(mid, {})
+            by_rank = tab_b["pts"].tolist()
+            tinfo = {}
+            for t in (h, a):
+                row = tab_b[tab_b["t"] == t].iloc[0]
+                tinfo[t] = {"rank": int(row["rank"]), "pts": int(row["pts"]), "j": int(row["j"]), "gd": int(row["gd"]), "gf": int(row["gf"]), "ga": int(row["ga"]),
+                            "lines": _stake_lines(int(row["rank"]), int(row["pts"]), by_rank, z)}
+                if tab_a is not None:
+                    ra = tab_a[tab_a["t"] == t].iloc[0]
+                    tinfo[t]["after"] = {"rank": int(ra["rank"]), "pts": int(ra["pts"]), "j": int(ra["j"]), "gd": int(ra["gd"])}
+            stake = _swing_stake(sw, h, a) if sw else {"score": 0.0, "zone": None, "team": None}
+            sheet = {"match_id": mid, "round": int(r.round), "date": str(r.date), "time": (str(r.time)[:5] if "time" in rows.columns and pd.notna(r.time) else ""),
+                     "venue": (str(r.venue) if "venue" in rows.columns and pd.notna(r.venue) and str(r.venue).strip() else ""),
+                     "home": h, "away": a, "status": "played" if mode == "prev" else "upcoming", "teams": tinfo,
+                     "form": {h: _form(tb, h), a: _form(tb, a)},
+                     "proba": {k: u.get(k) for k in ("p1", "pN", "p2", "exp_h", "exp_a", "modal")},
+                     "swing": sw, "stake": stake,
+                     "profile": profile(h, a), "duels": {h: duels(h, int(tinfo[h]["j"])), a: duels(a, int(tinfo[a]["j"]))},
+                     "h2h": _h2h(mall, h, a, exclude_mid=mid if mode == "prev" else None)}
+            if mode == "next":
+                sheet["rank_after"] = {c: _rank_after(tab_b, h, a, c) for c in ("1", "N", "2")}
+                last5 = lambda t: [str(x) for x in mS[(mS["played"]) & (mS["round"] <= K) & ((mS["home_team"] == t) | (mS["away_team"] == t))].sort_values("round")["match_id"].tail(5)]
+                totals = tot(cur_key)
+                tp = lambda t: int(tab_b[tab_b["t"] == t].iloc[0]["j"])
+                tt = lambda t: int(((mS["home_team"] == t) | (mS["away_team"] == t)).sum())
+                row_of = lambda t: tab_b[tab_b["t"] == t].iloc[0]
+                sheet["milestones"] = milestones_next(h, last5(h), totals) + milestones_next(a, last5(a), totals)
+                sheet["records"] = records_next(h, tb, last5(h), tp(h), tt(h), row_of(h)) + records_next(a, tb, last5(a), tp(a), tt(a), row_of(a))
+            else:
+                hg, ag = int(r.home_ft_goals), int(r.away_ft_goals)
+                code = "1" if hg > ag else "2" if ag > hg else "N"
+                ht = None
+                if "home_ht_goals" in rows.columns and pd.notna(r.home_ht_goals) and pd.notna(r.away_ht_goals):
+                    ht = [int(r.home_ht_goals), int(r.away_ht_goals)]
+                p_real = {"1": u.get("p1"), "N": u.get("pN"), "2": u.get("p2")}.get(code)
+                sheet["result"] = {"hg": hg, "ag": ag, "ht": ht, "code": code, "p_real": p_real,
+                                   "surprise": bool(p_real is not None and p_real < 0.25)}
+                sheet["performers"] = {h: performers(mid, h), a: performers(mid, a)}
+                names = {t: set(pfp[(pfp["match_id"] == mid) & (pfp["team"] == t)]["full_name"]) if len(pfp) else set() for t in (h, a)}
+                before_t, after_t = tot(prev_key, below=True), tot(prev_key)
+                sheet["milestones"] = milestones_crossed(names, before_t, after_t)
+                sheet["records"] = records_made(r, names, ta)
+            sheets.append(sheet)
+        # affiche de la journée = plus fort enjeu chiffré
+        order = sorted(range(len(sheets)), key=lambda i: -sheets[i]["stake"]["score"])
+        for pos_, i in enumerate(order):
+            sheets[i]["stake_rank"] = pos_ + 1
+        dates = sorted(x["date"] for x in sheets)
+        return {"round": rnd, "run": rid, "dates": [dates[0], dates[-1]] if dates else [], "zones": z, "n_sims": sw_pack["n_sims"], "matches": sheets}
+
+    out = {"version": 1, "season": S, "teams": teams, "last_played_round": K, "built": time.strftime("%Y-%m-%d %H:%M:%S"), "data_stamp": _stamp(),
+           "next": make_round(next_round, "next") if next_round else None,
+           "prev": make_round(prev_round, "prev") if prev_round else None}
+    return out
+
+
 # ---- Cache JSON : bundles prêts à afficher ---------------------------------
 _build_lock = threading.Lock()
 _gz_memo: dict = {}
@@ -1334,13 +1830,7 @@ def build_cache(n: int = CACHE_SIMS, force: bool = False) -> list[str]:
         CACHE.mkdir(parents=True, exist_ok=True)
         runs, rids = [], []
         for season, cutoff in cache_specs(seasons):
-            rid, d = _run_id(season, cutoff, n), OUT / _run_id(season, cutoff, n)
-            js = d / "summary_storytelling.json"
-            if force or not js.exists() or js.stat().st_mtime < stamp:
-                print(f"[cache] simulation {season} · journée {cutoff} · {n:,} simulations…".replace(",", " "), flush=True)
-                t0 = time.time()
-                _simulate(season, cutoff, n)
-                print(f"[cache]   terminée en {time.time() - t0:.0f} s", flush=True)
+            rid = _ensure_run(season, cutoff, n, force)
             rids.append(rid)
             runs.append({"id": rid, "season": season, "cutoff": cutoff, "n": n, "file": f"{rid}.json", "conditional": True})
         built = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -1352,6 +1842,14 @@ def build_cache(n: int = CACHE_SIMS, force: bool = False) -> list[str]:
         for b in bundles[1:]:
             _write_json(CACHE / f"{b['run']}.json", b)
         _write_json(CACHE / f"{bundles[0]['run']}.json", bundles[0])
+        # fiche journaliste (J-précédente / J+suivante) : un échec ici ne doit pas empêcher le reste du cache
+        try:
+            press = build_press(n)
+            if press:
+                _write_json(CACHE / "press.json", press)
+        except Exception as e:  # noqa
+            (CACHE / "press.json").unlink(missing_ok=True)
+            print(f"[cache] fiche journaliste non générée : {e}", flush=True)
         # default.json = 1er bundle + méta (saisons, journées) : c'est le seul fichier lu au démarrage du site
         _write_json(CACHE / "default.json", {**bundles[0], "meta": meta()})
         _write_json(CACHE / "stamp.json", {"data_stamp": stamp, "built": built, "n": n, "runs": runs})
@@ -1390,7 +1888,7 @@ class H(BaseHTTPRequestHandler):
         """Sert un bundle statique : ETag (304 si inchangé) + gzip."""
         if not re.fullmatch(r"[0-9A-Za-z_]+\.json", name) or name == "stamp.json":
             return self.send({"error": "not found"}, 404)
-        if name == "default.json" and not cache_fresh():
+        if name in ("default.json", "press.json") and not cache_fresh():
             return self.send({"error": "cache absent ou périmé"}, 404)
         p = CACHE / name
         if not p.is_file():
@@ -1430,6 +1928,8 @@ class H(BaseHTTPRequestHandler):
                 return self.send(api_player_detail(parse_qs(u.query)))
             if parts[:2] == ["api", "players"]:
                 return self.send(api_players_search(parse_qs(u.query)))
+            if parts[:2] == ["api", "search"]:
+                return self.send(api_search(parse_qs(u.query)))
             if parts[:2] == ["api", "teams"]:
                 return self.send(api_teams(parse_qs(u.query)))
             if parts[:2] == ["api", "records"]:

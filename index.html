@@ -161,7 +161,77 @@ svg text{font-family:Inter,sans-serif}
 .dchip{display:inline-block;padding:3px 8px;border-radius:5px;font-size:12px;font-weight:600;margin:0 4px 5px 0;border:1px solid var(--rule)}
 .diff-card{margin:0 0 14px}
 
+/* Recherche globale */
+.search{position:relative;flex:1;min-width:230px;max-width:440px}
+.search input{width:100%;font:500 14px Inter,sans-serif;border:1px solid var(--rule);border-radius:99px;padding:8px 14px 8px 36px;background:#fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235B6475' stroke-width='2.2' stroke-linecap='round'><circle cx='11' cy='11' r='7'/><path d='m20 20-3.5-3.5'/></svg>") no-repeat 12px center;color:var(--ink)}
+.search input:focus{outline:2px solid var(--blue);outline-offset:1px}
+.sr{position:absolute;top:calc(100% + 6px);left:0;right:0;min-width:320px;background:#fff;border:1px solid var(--rule);border-radius:8px;box-shadow:0 14px 34px rgba(14,22,38,.18);max-height:70vh;overflow:auto;z-index:60;padding:6px 0}
+.sr h5{margin:8px 14px 4px;font:600 11.5px Inter;color:var(--mute);letter-spacing:.02em}
+.sr-i{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:7px 14px;cursor:pointer}
+.sr-i[aria-selected=true],.sr-i:hover{background:var(--tint)}
+.sr-i b{font-size:14px;display:block}.sr-i small{color:var(--mute);font-size:12px}
+.sr-act{display:flex;gap:5px;flex-shrink:0}
+.sr-act button{border:1px solid var(--rule);background:#fff;border-radius:99px;padding:3px 9px;font:500 11.5px Inter;cursor:pointer;color:var(--ink)}
+.sr-act button:hover{border-color:var(--blue);color:var(--blue)}
+.sr-none{padding:14px;color:var(--mute);font-size:13px}
+.kbd{font:600 11px Inter;border:1px solid var(--rule);border-radius:4px;padding:0 5px;color:var(--mute)}
+
+/* Absences : constaté / simulé */
+.legend3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin:0 0 16px}
+.lg{border-radius:6px;padding:11px 13px;font-size:13px;line-height:1.45;border-left:4px solid}
+.lg b{display:block;font-size:14px;margin-bottom:2px}
+.lg.real{background:#EAF0FD;border-color:var(--blue)}.lg.sim{background:#FFEFE7;border-color:var(--ball)}.lg.now{background:#E8F5EE;border-color:var(--green)}
+.tbl th.g-real{background:#EAF0FD}.tbl th.g-sim{background:#FFEFE7}.tbl th.g-now{background:#E8F5EE}
+.ab{margin:0 0 5px}.ab small{color:var(--mute)}.muted{color:var(--mute)}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:99px;white-space:nowrap}
+.tag.new{background:#FFE0CF;color:#9A3B10}.tag.back{background:#DDF1E6;color:#0F6B47}.tag.still{background:#E9ECF2;color:#5B6475}
+
+/* Fiche journaliste */
+.press-ctl{align-items:end;margin:0 0 18px}
+.pr-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline;margin:0 0 12px}
+.pr-head h3{font:700 26px Newsreader,serif;margin:0}.pr-head small{color:var(--mute)}
+.strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:10px;margin:0 0 22px}
+.mcard{text-align:left;background:var(--card);border:1px solid var(--rule);border-radius:6px;padding:10px 12px;cursor:pointer;font:inherit;color:inherit}
+.mcard:hover{border-color:var(--blue)}.mcard[aria-pressed=true]{border-color:var(--ball);box-shadow:0 0 0 2px rgba(242,92,42,.25)}
+.mcard b{display:block;font-size:14px;margin-bottom:2px}.mcard small{color:var(--mute);font-size:12px;display:block}
+.sheet{background:var(--card);border:1px solid var(--rule);border-radius:8px;padding:24px}
+.sheet .kick{font-size:12.5px;color:var(--mute)}
+.sheet h3.mt{font:700 32px/1.12 Newsreader,serif;margin:3px 0 4px}
+.sheet .hl{font:italic 400 20px/1.4 Newsreader,serif;margin:12px 0 4px;padding-left:14px;border-left:3px solid var(--ball)}
+.sh-sec{margin-top:30px;padding-top:4px}.sh-sec h4{font:700 22px Newsreader,serif;margin:0 0 3px}.sh-sec .sub{font-size:12.5px;color:var(--mute);margin:0 0 14px}
+.afg{display:grid;grid-template-columns:1fr minmax(210px,270px) 1fr;gap:20px;align-items:start}
+.tpan .tn{font:700 23px Newsreader,serif;line-height:1.15}.tpan .ln{font-size:13px;color:var(--mute);margin:3px 0 8px}
+.tpan.r{text-align:right}.tpan.r .fch{justify-content:flex-end}
+.rkb{display:inline-block;font:700 12.5px Inter;background:var(--ink);color:#fff;border-radius:99px;padding:2px 10px;margin-bottom:6px}
+.fch{display:flex;gap:4px;margin:6px 0 10px}.fch span{width:25px;height:25px;line-height:25px;text-align:center;border-radius:5px;font-size:12px;font-weight:700;color:#fff}
+.fW{background:var(--green)}.fD{background:#8A91A1}.fL{background:var(--red)}
+.pl-li{font-size:13px;margin:3px 0}.pl-li small{color:var(--mute)}
+.pbar{display:flex;height:28px;border-radius:5px;overflow:hidden;font-size:12px;font-weight:600;color:#fff;margin:6px 0}
+.pbar span{display:flex;align-items:center;justify-content:center;white-space:nowrap}
+.bigscore{font:700 44px/1 Newsreader,serif;text-align:center}
+.cent{text-align:center;font-size:13px}.cent small{display:block;color:var(--mute);margin-top:3px}
+.stk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px}
+.stk-grid h5{margin:0 0 6px;font-size:15px}
+.stk-ul{margin:0 0 10px;padding-left:18px;font-size:13.5px}.stk-ul li{margin:2px 0}
+.note-li{padding:8px 0;border-bottom:1px solid var(--rule);font-size:14px;line-height:1.45}.note-li:last-child{border-bottom:0}
+.h2h-bar{display:flex;height:30px;border-radius:5px;overflow:hidden;font-weight:700;font-size:13px;color:#fff;margin:6px 0 8px}
+.h2h-bar span{display:flex;align-items:center;justify-content:center}
+.bf{display:grid;grid-template-columns:1fr 168px 1fr;gap:10px;align-items:center;font-size:13px;margin:6px 0}
+.bf .l,.bf .r{display:flex;align-items:center;gap:7px}.bf .l{justify-content:flex-end}.bf .m{text-align:center;color:var(--mute);font-size:12px}
+.bf i{display:block;height:9px;border-radius:4px;background:#C9D0DD}.bf i.win{background:var(--blue)}
+.bf .rk{color:var(--mute);font-size:11.5px}
+.duel{display:grid;grid-template-columns:1fr 130px 1fr;gap:10px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--rule);align-items:baseline}
+.duel .m{text-align:center;color:var(--mute);font-size:12px}.duel .l{text-align:right}
+@media print{
+  header.top,.press-ctl,.strip,.modal-bg,.tip,#boot{display:none!important}
+  main:not(#v-press){display:none!important}
+  body{background:#fff}.sheet{border:0;padding:0}.sh-sec{break-inside:avoid}
+}
+
 @media(max-width:760px){
+  .search{order:3;flex-basis:100%;max-width:none}
+  .afg{grid-template-columns:1fr}.tpan.r{text-align:left}.tpan.r .fch{justify-content:flex-start}
+  .bf,.duel{grid-template-columns:1fr 90px 1fr}
   .lock-row{grid-template-columns:1fr}
   .match{grid-template-columns:1fr 84px}.match .oc,.match>small:first-child{grid-column:1/-1}.calc{grid-template-columns:1fr}
   .exp-bar>*{flex:1 1 100%}.seg-btn{width:100%}.seg-btn button{flex:1}.exp-actions{margin-left:0}.exp-actions button{flex:1}
@@ -174,7 +244,9 @@ svg text{font-family:Inter,sans-serif}
 </head>
 <body>
 <header class="top">
-  <div class="bar"><span class="brand">La Starligue en chiffres</span><span class="status" id="status">Chargement…</span></div>
+  <div class="bar"><span class="brand">La Starligue en chiffres</span>
+    <div class="search" id="searchBox" role="search"><input type="search" id="gSearch" role="combobox" aria-expanded="false" aria-controls="gResults" aria-autocomplete="list" autocomplete="off" aria-label="Recherche globale : joueur, club, saison, section" placeholder="Joueur, club, saison, section…  ( / )"><div class="sr" id="gResults" role="listbox" hidden></div></div>
+    <span class="status" id="status">Chargement…</span></div>
   <div class="season-bar" id="seasonBar" hidden>
     <div class="tl-wrap" title="Clic : 1 saison · Glisser ou tirer les poignées : plage de saisons">
       <div class="tl-track" id="tlTrack"></div>
@@ -188,7 +260,7 @@ svg text{font-family:Inter,sans-serif}
       <span class="season-pill num" id="seasonLabel">Toutes les saisons</span>
     </div>
   </div>
-  <nav class="tabs" role="tablist"><button class="tab" role="tab" id="t-hist" aria-selected="true">Historique</button><button class="tab" role="tab" id="t-mc" aria-selected="false">Simulation Monte Carlo</button></nav>
+  <nav class="tabs" role="tablist"><button class="tab" role="tab" id="t-hist" aria-selected="true">Historique</button><button class="tab" role="tab" id="t-mc" aria-selected="false">Simulation Monte Carlo</button><button class="tab" role="tab" id="t-press" aria-selected="false">Fiche journaliste</button></nav>
 </header>
 <div class="tip" id="tip"></div>
 
@@ -210,9 +282,9 @@ svg text{font-family:Inter,sans-serif}
 <p id="heroSub">Le championnat de France de handball, lu dans les chiffres.</p></div>
 <div class="score" id="kpis"></div>
 
-<section><h2>Le jeu a-t-il changé ?</h2><p class="lede">Buts par match, victoires à domicile et avantage du terrain, saison après saison.</p><div class="grid3" id="spark"></div></section>
+<section id="sec-trends"><h2>Le jeu a-t-il changé ?</h2><p class="lede">Buts par match, victoires à domicile et avantage du terrain, saison après saison.</p><div class="grid3" id="spark"></div></section>
 
-<section><h2>La carte tactique : comparez les clubs sur deux critères</h2><p class="lede">Choisissez les axes et la taille des bulles : attaque contre défense, efficacité contre arrêts, domicile contre extérieur… Les axes où « moins » est mieux sont inversés pour que les clubs les plus forts soient toujours en haut à droite. Cliquez sur un club pour ouvrir sa fiche.</p>
+<section id="sec-scatter"><h2>La carte tactique : comparez les clubs sur deux critères</h2><p class="lede">Choisissez les axes et la taille des bulles : attaque contre défense, efficacité contre arrêts, domicile contre extérieur… Les axes où « moins » est mieux sont inversés pour que les clubs les plus forts soient toujours en haut à droite. Cliquez sur un club pour ouvrir sa fiche.</p>
 <div class="sc-ctl">
   <label>Axe horizontal<select id="scX"></select></label>
   <label>Axe vertical<select id="scY"></select></label>
@@ -223,17 +295,17 @@ svg text{font-family:Inter,sans-serif}
 <div class="sc-presets"><span>Comparaisons rapides :</span><div class="seg-btn wrap" id="scPresets" role="group" aria-label="Comparaisons rapides"></div></div>
 <div class="card"><svg id="scatter" viewBox="0 0 900 520" width="100%" role="img" aria-label="Nuage de points des clubs"></svg><p class="sc-note" id="scNote"></p></div></section>
 
-<section><h2>Les classements, saison par saison</h2><p class="lede">Rang final de chaque club. Sélectionnez un club pour suivre sa trajectoire ou ouvrir sa fiche complète.</p>
+<section id="sec-ranks"><h2>Les classements, saison par saison</h2><p class="lede">Rang final de chaque club. Sélectionnez un club pour suivre sa trajectoire ou ouvrir sa fiche complète.</p>
 <div class="row">
   <label>Club<select id="bumpTeam"></select></label>
   <button type="button" class="alt" id="bumpOpenClub" style="align-self:end">Ouvrir la fiche du club</button>
 </div>
 <div class="card scroll"><svg id="bump" width="100%"></svg></div></section>
 
-<section><h2>Mi-temps vs score final : les rois de la remontada</h2><p class="lede">Capacité à renverser un match après avoir été mené à la pause, tenue du score et domination en seconde période.</p>
+<section id="sec-ht"><h2>Mi-temps vs score final : les rois de la remontada</h2><p class="lede">Capacité à renverser un match après avoir été mené à la pause, tenue du score et domination en seconde période.</p>
 <div class="grid2" id="htCards"></div></section>
 
-<section><h2>Les joueurs qui font la différence</h2><p class="lede">Classements généraux et spécialistes par secteur de jeu, avec la note LNH sur 10 et la nouvelle note défensive. Cliquez sur un joueur pour ouvrir sa fiche, ses records et comparer son radar à celui d’un autre joueur.</p>
+<section id="sec-players"><h2>Les joueurs qui font la différence</h2><p class="lede">Classements généraux et spécialistes par secteur de jeu, avec la note LNH sur 10 et la nouvelle note défensive. Cliquez sur un joueur pour ouvrir sa fiche, ses records et comparer son radar à celui d’un autre joueur.</p>
 <div class="row">
   <div class="seg-btn" role="group" aria-label="Mode d'affichage joueurs" id="plModeGroup">
     <button type="button" data-plmode="total" aria-pressed="true">Total</button>
@@ -248,7 +320,7 @@ svg text{font-family:Inter,sans-serif}
 <div class="row"><div class="seg-btn wrap" id="recTabs" role="group" aria-label="Catégories de records"></div></div>
 <div id="recBody"><div class="empty">Chargement des records…</div></div></section>
 
-<section><h2>Explorer les données</h2><p class="lede">Parcourez les feuilles de match et statistiques individuelles sur la période sélectionnée, triez par colonne ou téléchargez les fichiers CSV.</p>
+<section id="sec-explorer"><h2>Explorer les données</h2><p class="lede">Parcourez les feuilles de match et statistiques individuelles sur la période sélectionnée, triez par colonne ou téléchargez les fichiers CSV.</p>
 <div class="exp-bar">
   <div class="seg-btn" role="group" aria-label="Type de données">
     <button type="button" id="expTypeM" aria-pressed="true">Matchs</button>
@@ -283,6 +355,13 @@ svg text{font-family:Inter,sans-serif}
 <div id="mcBody"><div class="empty" style="margin-top:40px">Lancez une simulation ou choisissez un résultat déjà calculé pour afficher les projections.</div></div>
 </main>
 
+<main id="v-press" hidden>
+<section style="padding-top:40px"><h2>La fiche journaliste</h2>
+<p class="lede">Tout ce qu’il faut savoir avant un match de la journée suivante, ou pour revenir sur celui de la journée écoulée : l’affiche, l’enjeu chiffré au classement, les caps et records en vue, le face-à-face. Les probabilités viennent de 10 000 simulations lancées à la bonne journée.</p>
+<div class="row press-ctl"><div class="seg-btn" id="pressRound" role="group" aria-label="Journée"></div><button type="button" class="alt" id="pressPrint">Imprimer / PDF</button><button type="button" class="alt" id="pressCopy">Copier la fiche (texte)</button></div>
+<div id="pressBody"><div class="empty">Chargement de la fiche journaliste…</div></div></section>
+</main>
+
 <script>
 const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const api=async(u,o)=>{const r=await fetch(u,o),j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j};
@@ -299,10 +378,10 @@ let PL_MODE='total';
 let EXP={dataset:'matches',sort:'date',dir:'desc',page:1,timer:null};
 
 // ---------- Onglets ----------
-function showTab(t){for(const k of['hist','mc']){$('#v-'+k).hidden=k!==t;$('#t-'+k).setAttribute('aria-selected',k===t)}
+function showTab(t){for(const k of['hist','mc','press']){$('#v-'+k).hidden=k!==t;$('#t-'+k).setAttribute('aria-selected',k===t)}
 // La barre des saisons pilote uniquement l'onglet Historique : on la masque sur Monte Carlo pour ne pas laisser croire qu'elle filtre les simulations.
-$('#boot').hidden=true;$('#seasonBar').hidden=(t==='mc')||!H;history.replaceState(0,'','#'+t);
-if(t==='hist')ensureHist()}
+$('#boot').hidden=true;$('#seasonBar').hidden=(t!=='hist')||!H;history.replaceState(0,'','#'+t);
+if(t==='hist')ensureHist();if(t==='press')ensurePress()}
 // L'historique (≈ 500 Ko d'API) n'est chargé qu'à la première ouverture de l'onglet : l'ouverture du site ne dépend plus que du bundle JSON Monte Carlo.
 let HIST_P=null;
 function ensureHist(){
@@ -314,14 +393,14 @@ function ensureHist(){
   return HIST_P;
 }
 const debounce=(fn,ms)=>{let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}};
-$('#t-hist').onclick=()=>showTab('hist');$('#t-mc').onclick=()=>showTab('mc');
+$('#t-hist').onclick=()=>showTab('hist');$('#t-mc').onclick=()=>showTab('mc');$('#t-press').onclick=()=>showTab('press');
 
 // ---------- Agrégation sur plage de saisons ----------
 function selectedSeasons(){return H.seasons.slice(SEL.start,SEL.end+1)}
 function isFullRange(){return SEL.start===0&&SEL.end===H.seasons.length-1}
 function periodKey(){if(isFullRange())return 'all';if(SEL.start===SEL.end)return H.seasons[SEL.start];return '__range__'}
-function periodLabel(){const N=H.seasons.length,s0=SEL.start,s1=SEL.end;return isFullRange()?`Toutes les saisons (${H.seasons[0]} → ${H.seasons[N-1]})`:s0===s1?`Saison ${H.seasons[s0]}`:`${H.seasons[s0]} → ${H.seasons[s1]}`}
-function seasonsQueryParam(){return isFullRange()?'all':selectedSeasons().join(',')}
+function periodLabel(){if(!H)return 'Toutes les saisons';const N=H.seasons.length,s0=SEL.start,s1=SEL.end;return isFullRange()?`Toutes les saisons (${H.seasons[0]} → ${H.seasons[N-1]})`:s0===s1?`Saison ${H.seasons[s0]}`:`${H.seasons[s0]} → ${H.seasons[s1]}`}
+function seasonsQueryParam(){if(!H)return 'all';return isFullRange()?'all':selectedSeasons().join(',')}
 
 function teamsForPeriod(key){
   if(key!=='__range__')return H.teams[key]||[];
@@ -671,7 +750,6 @@ async function openClubModal(team){
 
     const recentCard=`<div class="card"><h4 style="margin:0 0 8px;font-size:15px">5 derniers matchs de la période</h4>
       ${d.recent.length?`<div class="form-dots">${d.recent.map(m=>`<span class="dot-res dot-${m.res}" title="${esc(m.date)} · J${m.round}"><i>${m.res}</i>${m.is_home?'vs':'@'} ${esc(m.opponent)} (${m.score})</span>`).join('')}</div>`:'<div style="color:var(--mute);font-size:13px">Aucun match joué.</div>'}
-      ${d.venues.length?`<h4 style="margin:14px 0 6px;font-size:14px">Salles principales</h4><div style="font-size:12.5px;color:var(--mute)">${d.venues.slice(0,3).map(v=>`${esc(v.venue)} (${v.j} m., ${fmt(v.win_pct,0)} % V)`).join(' · ')}</div>`:''}
     </div>`;
 
     // Mini graphique historique des rangs du club
@@ -1130,22 +1208,39 @@ function forcesSection(){
 ${R.map((r,i)=>`<tr><td>${i+1}</td><td><b>${esc(r.Team)}</b>${r.Promoted?' <span class="badge" title="Club promu : valeurs initiales calibrées sur les promus précédents">promu</span>':''}</td><td>${bar(r.offRTG,'#1747C9')}</td><td>${bar(r.defRTG,'#F25C2A')}</td><td>${net(r.netRTG)}</td><td style="color:var(--mute)">${fmt(r.Raw_offRTG,1)} / ${fmt(r.Raw_defRTG,1)}</td><td>${fmt(r.Hist_Matches,0)}</td></tr>`).join('')}</table></div></section>`;
 }
 
-// --- Malus d'absences ---
+// --- Absences : constat réel (au cutoff, aujourd'hui) et hypothèse simulée ---
 function absencesSection(){
-  const A=SIM.availability||[],mod=SIM.model||{};
-  const head=`<section class="mc-sec" id="mc-abs"><h2>Les absences qui pèsent sur la fin de saison</h2>`;
-  if(!A.some(a=>a.analysed))return head+`<div class="empty">Malus d’absences non calculés : il faut les feuilles de match des joueurs et au moins ${mod.absence_min_games||5} matchs joués avant la journée de départ.</div></section>`;
-  const dec=mod.absence_decay??.85,avg=Math.exp(SIM.dc_meta?.mu_eff||3.42),mxp=Math.max(...A.map(a=>Math.max(Math.abs(a.off_pct),Math.abs(a.def_pct))),.5);
+  const A=SIM.availability||[],mod=SIM.model||{},view=SIM.absence_view||{},cut=view.cutoff??SIM.cutoff,now=view.now_round;
+  const lb=mod.absence_lookback||3,dec=mod.absence_decay??.85,avg=Math.exp(SIM.dc_meta?.mu_eff||3.42);
+  const head=`<section class="mc-sec" id="mc-abs"><h2>Les absences : ce qui est constaté, ce que la simulation suppose</h2>`;
+  if(!A.some(a=>a.analysed))return head+`<div class="empty">${cut===0?'La simulation part du début de saison : aucun match n’a été joué, donc aucune absence n’est constatée ni simulée.':`Absences non évaluées : il faut les feuilles de match des joueurs et au moins ${mod.absence_min_games||5} matchs joués avant la journée de départ.`}</div></section>`;
+  const showNow=now!=null&&now>cut&&A.some(a=>a.analysed_now);
+  const mxp=Math.max(...A.map(a=>Math.max(Math.abs(a.off_pct),Math.abs(a.def_pct))),.5);
   const at=(a,k)=>[100*(Math.exp(a.off_log_pen*dec**(k-1))-1),100*(Math.exp(a.def_log_pen*dec**(k-1))-1)];
-  const pbar=(v,dirRight)=>{const w=Math.abs(v)/mxp*60;return `<svg width="124" height="10" aria-hidden="true"><rect width="124" height="10" rx="2" fill="#E9ECF2"/><line x1="62" x2="62" y1="0" y2="10" stroke="#5B6475"/><rect x="${dirRight?62:62-w}" width="${w}" height="10" rx="2" fill="#C8302B"/></svg>`};
-  const rows=[...A].sort((a,b)=>(Math.abs(b.off_pct)+Math.abs(b.def_pct))-(Math.abs(a.off_pct)+Math.abs(a.def_pct)));
-  return head+`<p class="lede">Un cadre est un joueur présent dans au moins ${pc(mod.absence_core_presence??.5)} des matchs avant la période récente et qui n’a pas joué une minute sur les ${mod.absence_lookback||3} derniers matchs. Son absence réduit les buts marqués du club et augmente ceux qu’il encaisse. Le malus s’applique aux matchs restants et s’atténue de ${pc(1-dec)} à chaque journée.</p>
-<div class="card scroll"><table class="tbl num"><tr><th>Club</th><th>Buts marqués</th><th>Buts encaissés</th><th>Au match n+1 → n+5</th><th>Cadres absents (part de la valeur offensive / défensive)</th></tr>
-${rows.map(a=>{const [o5,d5]=at(a,5);return `<tr><td><b>${esc(a.Team)}</b></td>
-<td><div class="bar-cell"><span class="${a.off_pct<0?'badge-neg':''}">${sgn(a.off_pct)} %</span>${pbar(a.off_pct,false)}</div><small style="color:var(--mute)">≈ ${sgn(avg*a.off_pct/100,1)} but</small></td>
-<td><div class="bar-cell"><span class="${a.def_pct>0?'badge-neg':''}">${sgn(a.def_pct)} %</span>${pbar(a.def_pct,true)}</div><small style="color:var(--mute)">≈ ${sgn(avg*a.def_pct/100,1)} but</small></td>
-<td style="white-space:nowrap">${a.analysed?`${sgn(o5)} % / ${sgn(d5)} %`:'–'}</td>
-<td style="text-align:left;white-space:normal">${!a.analysed?'<span style="color:var(--mute)">Non évalué (historique de feuilles de match insuffisant)</span>':a.absent.length?a.absent.map(p=>`${esc(p.name)}${p.gk?' (gardien)':''} <small style="color:var(--mute)">att. ${pc(p.off_share)} · déf. ${pc(p.def_share)}</small>`).join('<br>'):'<span style="color:var(--mute)">Aucun cadre absent</span>'}</td></tr>`}).join('')}</table></div></section>`;
+  const pbar=(v,right)=>{const w=Math.abs(v)/mxp*60;return `<svg width="124" height="10" aria-hidden="true"><rect width="124" height="10" rx="2" fill="#E9ECF2"/><line x1="62" x2="62" y1="0" y2="10" stroke="#5B6475"/><rect x="${right?62:62-w}" width="${w}" height="10" rx="2" fill="#C8302B"/></svg>`};
+  const abs1=p=>`<div class="ab">${esc(p.name)}${p.gk?' <small>(gardien)</small>':''}<br><small>${p.last_round!=null?`dernier match joué : J${p.last_round}`:'pas joué récemment'} · ${p.missed} match${p.missed>1?'s':''} manqué${p.missed>1?'s':''} · att. ${pc(p.off_share)} · déf. ${pc(p.def_share)}</small></div>`;
+  const nowCell=a=>{
+    if(!a.analysed_now)return '<span class="muted">Non évalué</span>';
+    const cn=new Set((a.absent||[]).map(p=>p.name)),nn=new Set((a.absent_now||[]).map(p=>p.name));
+    const cur=(a.absent_now||[]).map(p=>`${abs1(p)}<span class="tag ${cn.has(p.name)?'still':'new'}">${cn.has(p.name)?'déjà dans la simulation':'pas dans la simulation'}</span>`);
+    const back=(a.absent||[]).filter(p=>!nn.has(p.name)).map(p=>`<div class="ab">${esc(p.name)} <span class="tag back">de retour depuis la J${cut}</span></div>`);
+    return [...cur,...back].join('')||'<span class="muted">Aucun cadre absent</span>';
+  };
+  const rows=[...A].sort((a,b)=>(Math.abs(b.off_pct)+Math.abs(b.def_pct))-(Math.abs(a.off_pct)+Math.abs(a.def_pct))||a.Team.localeCompare(b.Team,'fr'));
+  const nSim=A.filter(a=>a.absent&&a.absent.length).length,nNew=showNow?A.reduce((n,a)=>n+((a.absent_now||[]).filter(p=>!(a.absent||[]).some(q=>q.name===p.name)).length),0):0;
+  const sum=`<p style="margin:0 0 14px"><b>${nSim}</b> club${nSim>1?'s ont':' a'} au moins un cadre absent pris en compte dans la simulation.${showNow?` Depuis la J${cut}, <b>${nNew}</b> nouvelle${nNew>1?'s':''} absence${nNew>1?'s':''} constatée${nNew>1?'s':''} ne ${nNew>1?'sont':'est'} pas dans le modèle.`:''}</p>`;
+  return head+`<p class="lede">Deux choses à ne pas confondre : le <b>constat</b> (qui a réellement manqué les derniers matchs d’après les feuilles de match) et l’<b>hypothèse simulée</b> (ce que le modèle en déduit pour les matchs restants).</p>
+<div class="legend3">
+<div class="lg real"><b>Constaté à la J${cut} · réel</b>Cadres (présents dans au moins ${pc(mod.absence_core_presence??.5)} des matchs précédents) qui n’ont joué aucun des ${lb} derniers matchs avant la J${cut}. C’est un fait tiré des feuilles de match.</div>
+<div class="lg sim"><b>Simulé · hypothèse du modèle</b>Les absents manquent encore au prochain match : leur club marque moins, l’adversaire marque plus. L’effet s’atténue de ${pc(1-dec)} par journée, comme un retour progressif. Le modèle ignore les blessures annoncées et les retours.</div>
+${showNow?`<div class="lg now"><b>Constaté aujourd’hui (J${now}) · réel</b>Même calcul à la dernière journée jouée. À titre d’information : cela ne modifie pas la simulation, qui part de la J${cut}.</div>`:`<div class="lg now"><b>Situation actuelle</b>La simulation part de la dernière journée jouée : le constat de la J${cut} est donc la situation d’aujourd’hui.</div>`}
+</div>${sum}
+<div class="card scroll"><table class="tbl num"><tr><th class="g-real" style="text-align:left">Constaté à la J${cut}</th><th class="g-sim" colspan="3">Simulé</th>${showNow?`<th class="g-now">Constaté à la J${now}</th>`:''}</tr>
+<tr><th style="text-align:left">Club · cadres absents</th><th>Buts marqués</th><th>Buts encaissés</th><th>Au match n+1 → n+5</th>${showNow?'<th style="text-align:left">Situation actuelle</th>':''}</tr>
+${rows.map(a=>{const [o5,d5]=at(a,5);return `<tr><td style="text-align:left;white-space:normal"><b>${esc(a.Team)}</b><br>${!a.analysed?'<span class="muted">Non évalué (historique de feuilles de match insuffisant)</span>':a.absent.length?a.absent.map(abs1).join(''):'<span class="muted">Aucun cadre absent : aucun malus</span>'}</td>
+<td><div class="bar-cell"><span class="${a.off_pct<0?'badge-neg':''}">${sgn(a.off_pct)} %</span>${pbar(a.off_pct,false)}</div><small class="muted">≈ ${sgn(avg*a.off_pct/100,1)} but</small></td>
+<td><div class="bar-cell"><span class="${a.def_pct>0?'badge-neg':''}">${sgn(a.def_pct)} %</span>${pbar(a.def_pct,true)}</div><small class="muted">≈ ${sgn(avg*a.def_pct/100,1)} but</small></td>
+<td style="white-space:nowrap">${a.analysed&&a.absent.length?`${sgn(a.off_pct)} % → ${sgn(o5)} %<br>${sgn(a.def_pct)} % → ${sgn(d5)} %`:'–'}</td>${showNow?`<td style="text-align:left;white-space:normal">${nowCell(a)}</td>`:''}</tr>`}).join('')}</table></div></section>`;
 }
 
 // --- Heatmap Clubs × Rangs ---
@@ -1321,6 +1416,303 @@ hs.forEach((x,i)=>{s+=`<text x="44" y="${52+i*cw+4}" font-size="10" text-anchor=
 $('#heat').innerHTML=s;$('#heat').querySelectorAll('rect[data-h]').forEach(r=>{r.onclick=()=>{cH.value=r.dataset.h;cA.value=r.dataset.a;calc(false)};r.onmousemove=e=>{const n=m.scores[r.dataset.h+'-'+r.dataset.a]||0;tipOn(e,`<b>${r.dataset.h}–${r.dataset.a}</b><br>${pc(n/m.n,2)} (${n} sim.)`)};r.onmouseleave=tipOff})}
 
 
+// ---------- Recherche globale ----------
+const foldTxt=s=>String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const SECTIONS=[
+ {t:'Les tendances du jeu',tab:'hist',id:'sec-trends',k:'tendances buts avantage terrain'},
+ {t:'Carte tactique : comparer les clubs',tab:'hist',id:'sec-scatter',k:'scatter axes carte tactique comparer'},
+ {t:'Classements saison par saison',tab:'hist',id:'sec-ranks',k:'classement rang evolution bump'},
+ {t:'Mi-temps vs score final (remontadas)',tab:'hist',id:'sec-ht',k:'mi-temps remontada'},
+ {t:'Joueurs qui font la différence',tab:'hist',id:'sec-players',k:'joueurs buteurs gardiens note lnh defense 7 metres'},
+ {t:'Records de la Starligue',tab:'hist',id:'records',k:'record records palmares serie'},
+ {t:'Explorateur de données (export CSV)',tab:'hist',id:'sec-explorer',k:'explorateur donnees csv export'},
+ {t:'Classement final projeté',tab:'mc',id:'mc-proj',k:'classement projete simulation titre relegation'},
+ {t:'Forces Dixon & Coles (offRTG, defRTG, netRTG)',tab:'mc',id:'mc-forces',k:'forces dixon coles offrtg defrtg netrtg attaque defense'},
+ {t:'Absences : constatées et simulées',tab:'mc',id:'mc-abs',k:'absences absents malus blesses cadres'},
+ {t:'Heatmap clubs × rangs',tab:'mc',id:'mc-heat',k:'heatmap rangs distribution probabilites'},
+ {t:'Explorer les scénarios',tab:'mc',id:'mc-scen',k:'scenarios simulation typique'},
+ {t:'Simulateur conditionnel (et si… ?)',tab:'mc',id:'mc-cond',k:'conditionnel et si verrou issue'},
+ {t:'Matchs à venir et calendrier',tab:'mc',id:'mc-up',k:'calendrier matchs a venir difficulte'},
+ {t:'Calculateur de score',tab:'mc',id:'mc-calc',k:'calculateur score exact'},
+ {t:'Fiche journaliste · journée suivante',tab:'press',mode:'next',k:'journaliste presse fiche affiche enjeu prochaine journee'},
+ {t:'Fiche journaliste · journée précédente',tab:'press',mode:'prev',k:'journaliste presse fiche retour journee precedente'}
+];
+const SR={items:[],sel:-1,tok:0,timer:null,server:null,q:''};
+const gs=()=>$('#gSearch'),gr=()=>$('#gResults');
+function knownClubs(){const s=new Set();if(SIM)SIM.teams.forEach(t=>s.add(t));if(H)Object.values(H.ranks).flat().forEach(r=>s.add(r.team));if(PRESS)PRESS.teams.forEach(t=>s.add(t));return [...s]}
+function knownSeasons(){return (H?H.seasons:(M?M.seasons:[]))}
+const matches=(f,toks)=>toks.every(t=>f.includes(t));
+async function goSection(sec){
+  closeSearch();
+  if(sec.tab==='press'){PR.mode=sec.mode;PR.mid=null;showTab('press');await ensurePress();if(PRESS)renderPress();return}
+  showTab(sec.tab);
+  if(sec.tab==='hist')await ensureHist().catch(()=>{});
+  setTimeout(()=>{const el=document.getElementById(sec.id);if(el)el.scrollIntoView({behavior:'smooth'})},60);
+}
+async function goSeason(season){
+  closeSearch();showTab('hist');
+  try{await ensureHist()}catch(e){return}
+  const i=H.seasons.indexOf(season);if(i<0)return;
+  SEL={start:i,end:i};applyPeriodSelection();window.scrollTo({top:0,behavior:'smooth'});
+}
+function goClubCalendar(team){
+  closeSearch();showTab('mc');
+  const sel=$('#upClub');if(!sel)return;
+  sel.value=team;if(sel.value===team&&sel.onchange)sel.onchange();
+  setTimeout(()=>document.getElementById('mc-up')?.scrollIntoView({behavior:'smooth'}),60);
+}
+function buildItems(q){
+  const toks=foldTxt(q).split(/\s+/).filter(Boolean),out=[];
+  const sv=SR.server&&SR.server.q===foldTxt(q).trim()?SR.server:null;
+  const clubs=sv?sv.clubs.map(c=>c.team):knownClubs().filter(t=>matches(foldTxt(t),toks)).slice(0,6);
+  for(const t of clubs){
+    const acts=[{l:'Fiche',fn:()=>{closeSearch();openClubModal(t)}}];
+    if(SIM&&SIM.teams.includes(t))acts.push({l:'Calendrier',fn:()=>goClubCalendar(t)});
+    acts.push({l:'Prochain match',fn:()=>{closeSearch();openPress({club:t})}});
+    const c=sv&&sv.clubs.find(x=>x.team===t);
+    out.push({g:'Clubs',title:t,meta:c?`${c.seasons} saison${c.seasons>1?'s':''} dans la base${c.current?' · saison en cours':` · dernière : ${c.last_season}`}`:'Club',acts});
+  }
+  if(sv)for(const p of sv.players)out.push({g:'Joueurs',title:p.name,meta:`${p.gk?'Gardien':'Joueur de champ'} · ${p.team} · ${p.games} matchs${p.note!=null?` · note ${fmt(p.note,2)}`:''}`,acts:[{l:'Fiche',fn:()=>{closeSearch();openPlayerModal(p.name)}}]});
+  for(const s of knownSeasons())if(matches(foldTxt('saison '+s),toks)&&toks.some(t=>/\d/.test(t)||'saison'.startsWith(t)))out.push({g:'Saisons',title:`Saison ${s}`,meta:'Ouvrir l’historique sur cette saison',acts:[{l:'Voir',fn:()=>goSeason(s)}]});
+  for(const sec of SECTIONS)if(matches(foldTxt(sec.t+' '+sec.k),toks))out.push({g:'Aller à',title:sec.t,meta:{hist:'Historique',mc:'Monte Carlo',press:'Fiche journaliste'}[sec.tab],acts:[{l:'Ouvrir',fn:()=>goSection(sec)}]});
+  return out.slice(0,16);
+}
+function renderSearch(){
+  const box=gr(),q=gs().value.trim();SR.items=buildItems(q);
+  if(SR.sel>=SR.items.length)SR.sel=SR.items.length?0:-1;
+  if(!SR.items.length){box.innerHTML=`<div class="sr-none">Aucun résultat pour « ${esc(q)} ».</div>`}
+  else{
+    let g='',h='';SR.items.forEach((it,i)=>{
+      if(it.g!==g){g=it.g;h+=`<h5>${esc(g)}</h5>`}
+      h+=`<div class="sr-i" role="option" id="sr-${i}" data-i="${i}" aria-selected="${i===SR.sel}"><div><b>${esc(it.title)}</b><small>${esc(it.meta||'')}</small></div><div class="sr-act">${it.acts.map((a,j)=>`<button type="button" data-a="${j}">${esc(a.l)}</button>`).join('')}</div></div>`;
+    });
+    box.innerHTML=h;
+  }
+  box.hidden=false;gs().setAttribute('aria-expanded','true');
+  if(SR.sel>=0)gs().setAttribute('aria-activedescendant','sr-'+SR.sel);else gs().removeAttribute('aria-activedescendant');
+}
+function closeSearch(){gr().hidden=true;gs().setAttribute('aria-expanded','false');SR.sel=-1}
+function runAct(i,j=0){const it=SR.items[i];if(it&&it.acts[j])it.acts[j].fn()}
+async function serverSearch(q){
+  const tok=++SR.tok;
+  try{const d=await api('/api/search?q='+encodeURIComponent(q));if(tok!==SR.tok)return;SR.server=d;SR.sel=-1;if(gs().value.trim()===q)renderSearch()}catch(e){}
+}
+function initSearch(){
+  const inp=gs();
+  inp.addEventListener('input',()=>{
+    const q=inp.value.trim();clearTimeout(SR.timer);
+    if(!q){SR.server=null;closeSearch();return}
+    SR.sel=-1;renderSearch();
+    if(q.length>=2)SR.timer=setTimeout(()=>serverSearch(q),170);
+  });
+  inp.addEventListener('focus',()=>{if(inp.value.trim())renderSearch()});
+  inp.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){closeSearch();inp.blur();return}
+    if(gr().hidden&&e.key==='ArrowDown'&&inp.value.trim()){renderSearch();return}
+    if(!SR.items.length)return;
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();const n=SR.items.length;SR.sel=e.key==='ArrowDown'?(SR.sel+1)%n:(SR.sel<=0?n-1:SR.sel-1);renderSearch();document.getElementById('sr-'+SR.sel)?.scrollIntoView({block:'nearest'})}
+    else if(e.key==='Enter'){e.preventDefault();runAct(SR.sel>=0?SR.sel:0)}
+  });
+  gr().addEventListener('mousedown',e=>e.preventDefault());   // évite de perdre le focus avant le clic
+  gr().addEventListener('click',e=>{
+    const row=e.target.closest('.sr-i');if(!row)return;
+    const b=e.target.closest('button[data-a]');runAct(+row.dataset.i,b?+b.dataset.a:0);
+  });
+  document.addEventListener('click',e=>{if(!e.target.closest('#searchBox'))closeSearch()});
+  document.addEventListener('keydown',e=>{
+    if(e.key==='/'&&!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)&&!document.activeElement.isContentEditable){e.preventDefault();inp.focus();inp.select()}
+  });
+}
+initSearch();
+
+// ---------- Fiche journaliste ----------
+let PRESS=null,PRESS_P=null,PR={mode:'next',mid:null};
+const frOrd=n=>n===1?'1er':n+'e';
+const rankTxt=t=>t.j?frOrd(t.rank):'Début de saison';
+const frDate=d=>d?new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}):'';
+const frDay=d=>d?new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long'}):'';
+const ZTXT=(z,k)=>({title:'le titre',podium:'le podium',top:`le top ${k}`,rel:'le maintien'})[z]||'';
+function deltaHtml(b,c,badUp){const d=(c-b)*100;if(Math.abs(d)<.5)return '<small class="delta-0">≈</small>';const good=badUp?d<0:d>0;return `<small class="${good?'delta-pos':'delta-neg'}">${d>0?'+':'−'}${fmt(Math.abs(d),Math.abs(d)<10?1:0)}</small>`}
+
+function ensurePress(){
+  if(PRESS){renderPress();return Promise.resolve()}
+  if(!PRESS_P){
+    $('#pressBody').innerHTML='<div class="empty">Chargement de la fiche journaliste…</div>';
+    PRESS_P=api('/cache/press.json').then(d=>{PRESS=d;PRESS_P=null;initPressState();renderPress()}).catch(e=>{
+      PRESS_P=null;
+      $('#pressBody').innerHTML=`<div class="empty">La fiche journaliste n’est pas disponible (${esc(e.message)}). Elle est produite avec le cache JSON : lancez <code>python server.py --build-cache</code>, ou patientez quelques secondes si le serveur vient de démarrer. <button type="button" class="alt" id="pressRetry" style="margin-left:8px">Réessayer</button></div>`;
+      $('#pressRetry').onclick=ensurePress;
+    });
+  }
+  return PRESS_P;
+}
+function initPressState(){
+  if(!PR.mode||!PRESS[PR.mode])PR.mode=PRESS.next?'next':'prev';
+  const r=PRESS[PR.mode];if(!r)return;
+  if(!r.matches.some(m=>m.match_id===PR.mid))PR.mid=(r.matches.find(m=>m.stake_rank===1)||r.matches[0]).match_id;
+}
+async function openPress(opt={}){
+  showTab('press');await ensurePress();if(!PRESS)return;
+  if(opt.club){
+    for(const mode of ['next','prev']){
+      const m=PRESS[mode]&&PRESS[mode].matches.find(x=>x.home===opt.club||x.away===opt.club);
+      if(m){PR.mode=mode;PR.mid=m.match_id;break}
+    }
+  }
+  renderPress();
+}
+const curRound=()=>PRESS&&PRESS[PR.mode];
+const curSheet=()=>{const r=curRound();return r&&r.matches.find(m=>m.match_id===PR.mid)};
+
+function headline(s){
+  const h=s.home,a=s.away,th=s.teams[h],ta=s.teams[a],z=curRound().zones;
+  if(s.status==='played'){
+    const r=s.result,w=r.code==='1'?h:r.code==='2'?a:null,sc=`${r.hg}–${r.ag}`;
+    let t=w?`${w} s’impose ${w===h?r.hg+'–'+r.ag+' à domicile':r.ag+'–'+r.hg+' à l’extérieur'} face à ${w===h?a:h}`:`${h} et ${a} se quittent sur un nul ${sc}`;
+    if(r.surprise)t+=` : une surprise, le modèle ne donnait que ${pc(r.p_real)} à cette issue`;
+    return t+'.';
+  }
+  if(!th.j&&!ta.j)return `Ouverture de saison : ${h} reçoit ${a}. Le classement est vierge, tout se joue dès ce premier match.`;
+  const k=s.stake.score,zt=ZTXT(s.stake.zone,z.top_k);
+  if(s.stake.zone&&k>=15)return `Choc pour ${zt} : le ${frOrd(th.rank)} (${h}) reçoit le ${frOrd(ta.rank)} (${a}). Jusqu’à ${fmt(k,0)} points de pourcentage de chances en jeu pour ${s.stake.team}.`;
+  if(s.stake.zone&&k>=5)return `Un enjeu réel pour ${zt} : ${fmt(k,0)} points de pourcentage de chances en jeu pour ${s.stake.team} entre une victoire et une défaite.`;
+  return `Match sans enjeu majeur au classement : ${h} (${frOrd(th.rank)}) reçoit ${a} (${frOrd(ta.rank)}).`;
+}
+function probaBar(p){
+  if(!p||p.p1==null)return '';
+  return `<div class="pbar" title="Domicile ${pc(p.p1,1)} · nul ${pc(p.pN,1)} · extérieur ${pc(p.p2,1)}"><span style="flex:${p.p1};background:#1747C9">${p.p1>.12?pc(p.p1):''}</span><span style="flex:${p.pN};background:#8A91A1">${p.pN>.1?pc(p.pN):''}</span><span style="flex:${p.p2};background:#F25C2A">${p.p2>.12?pc(p.p2):''}</span></div>`;
+}
+const formChips=l=>`<div class="fch">${(l||[]).map(x=>`<span class="f${x.res}" title="J${x.round} · ${x.home?'à domicile vs':'à l’extérieur @'} ${esc(x.opp)} ${esc(x.score)}">${{W:'V',D:'N',L:'D'}[x.res]}</span>`).join('')||'<small class="muted">Début de saison</small>'}</div>`;
+function teamPanel(s,team,right){
+  const t=s.teams[team],d=s.duels[team]||{},pf=(s.performers||{})[team]||{};
+  const rk=s.status==='played'&&t.after?`${t.j?frOrd(t.rank):'Départ'} → ${frOrd(t.after.rank)}`:rankTxt(t);
+  const pts=s.status==='played'&&t.after?`${t.pts} → ${t.after.pts} pts`:`${t.pts} pts`;
+  let li='';
+  if(s.status==='played'){
+    if(pf.best)li+=`<div class="pl-li">Meilleure note : <b>${esc(pf.best.name)}</b> <small>${pf.best.note!=null?fmt(pf.best.note,2)+'/10 · ':''}${pf.best.gk?pf.best.saves+' arrêts':pf.best.goals+'/'+pf.best.shots+' buts'}</small></div>`;
+    if(pf.scorer&&!(pf.best&&pf.best.name===pf.scorer.name))li+=`<div class="pl-li">Meilleur marqueur : <b>${esc(pf.scorer.name)}</b> <small>${pf.scorer.goals}/${pf.scorer.shots}</small></div>`;
+    if(pf.keeper)li+=`<div class="pl-li">Gardien : <b>${esc(pf.keeper.name)}</b> <small>${pf.keeper.saves}/${pf.keeper.faced} (${fmt(pf.keeper.pct,0)} %)</small></div>`;
+  }else{
+    if(d.star)li+=`<div class="pl-li">Joueur en forme : <b>${esc(d.star.name)}</b> <small>note ${fmt(d.star.note,2)}</small></div>`;
+    if(d.scorer)li+=`<div class="pl-li">Meilleur buteur : <b>${esc(d.scorer.name)}</b> <small>${d.scorer.goals} buts</small></div>`;
+    if(d.keeper)li+=`<div class="pl-li">Gardien : <b>${esc(d.keeper.name)}</b> <small>${fmt(d.keeper.pct,0)} % d’arrêts</small></div>`;
+  }
+  return `<div class="tpan${right?' r':''}"><span class="rkb">${rk}</span><div class="tn"><button type="button" class="link-btn" data-cl="${esc(team)}" style="font:inherit">${esc(team)}</button></div>
+  <div class="ln">${pts} · ${t.j} match${t.j>1?'s':''} · diff. ${sgn(t.gd,0)} · ${fmt(t.gf/Math.max(t.j,1),1)} marqués / ${fmt(t.ga/Math.max(t.j,1),1)} encaissés par match</div>
+  <small class="muted">Forme (5 derniers)</small>${formChips(s.form[team])}${li}</div>`;
+}
+function afficheSection(s){
+  let cen;
+  if(s.status==='played'){
+    const r=s.result;
+    cen=`<div class="bigscore num">${r.hg} – ${r.ag}</div><div class="cent"><small>${r.ht?`Mi-temps : ${r.ht[0]}–${r.ht[1]}`:''}</small></div>${probaBar(s.proba)}
+    <div class="cent"><small>Avant le match, le modèle donnait ${pc(r.p_real)} à cette issue${r.surprise?' : <b style="color:var(--ball)">surprise</b>':''}.${s.proba&&s.proba.exp_h!=null?` Buts attendus : ${fmt(s.proba.exp_h,1)} – ${fmt(s.proba.exp_a,1)}.`:''}</small></div>`;
+  }else{
+    const p=s.proba||{};
+    cen=`<div class="cent"><b>${frDate(s.date)}</b><small>${[s.time,s.venue].filter(Boolean).map(esc).join(' · ')}</small></div>${probaBar(p)}
+    <div class="cent"><small>1 : ${esc(s.home)} · N : nul · 2 : ${esc(s.away)}</small>${p.modal?`<small>Score le plus fréquent : <b>${p.modal[0]}–${p.modal[1]}</b> (${pc(p.modal[2],1)}) · buts attendus ${fmt(p.exp_h,1)} – ${fmt(p.exp_a,1)}</small>`:''}</div>`;
+  }
+  return `<div class="sh-sec"><h4>L’affiche</h4><p class="sub">Classement, forme et hommes forts de chaque équipe${s.status==='played'?', puis ce qui s’est passé':''}.</p><div class="afg">${teamPanel(s,s.home,false)}<div>${cen}</div>${teamPanel(s,s.away,true)}</div></div>`;
+}
+function enjeuSection(s){
+  const R=curRound(),z=R.zones,sw=s.swing,played=s.status==='played';
+  const ZS=[['p1','Titre','title'],['podium','Podium','podium'],['top',`Top ${z.top_k}`,'top'],['rel','Relégation','rel']];
+  const lines=t=>`<h5>${esc(t)}</h5><ul class="stk-ul">${s.teams[t].lines.map(l=>`<li>${esc(l)}</li>`).join('')}</ul>`;
+  let tabs='';
+  if(sw){
+    const used=ZS.filter(([k])=>[sw.base[s.home],sw.base[s.away],...['1','N','2'].flatMap(c=>sw.cond[c]?[sw.cond[c][s.home],sw.cond[c][s.away]]:[])].some(o=>o&&o[k]>.01&&o[k]<.995));
+    const panel=team=>{
+      const b=sw.base[team],home=team===s.home,win=home?'1':'2',loss=home?'2':'1',opp=home?s.away:s.home;
+      const row=(label,v,rank,isBase)=>`<tr><td style="text-align:left">${label}</td><td>${rank||'–'}</td>${v?used.map(([k,,zk])=>`<td>${pc(v[k],v[k]>0&&v[k]<.1?1:0)} ${isBase?'':deltaHtml(b[k],v[k],k==='rel')}</td>`).join(''):`<td colspan="${used.length||1}" class="muted">échantillon trop faible</td>`}</tr>`;
+      let rows;
+      if(played){
+        const rc=s.result.code,t=s.teams[team];
+        rows=row('Avant le match',b,t.j?frOrd(t.rank):'–',true)+row('Après le résultat réel',sw.cond[rc]&&sw.cond[rc][team],frOrd(t.after.rank),false);
+      }else{
+        const ra=c=>s.rank_after[c][team];
+        rows=row('Situation actuelle',b,rankTxt(s.teams[team]),true)+
+          row(`Victoire <small class="muted">(${pc(sw.share[win])})</small>`,sw.cond[win]&&sw.cond[win][team],frOrd(ra(win)),false)+
+          row(`Nul <small class="muted">(${pc(sw.share.N)})</small>`,sw.cond.N&&sw.cond.N[team],frOrd(ra('N')),false)+
+          row(`Défaite <small class="muted">(${pc(sw.share[loss])})</small>`,sw.cond[loss]&&sw.cond[loss][team],frOrd(ra(loss)),false);
+      }
+      return `<div><h5>${esc(team)}${played?'':` <small class="muted">contre ${esc(opp)}</small>`}</h5><div class="scroll"><table class="tbl num"><tr><th style="text-align:left">${played?'Situation':'Selon l’issue'}</th><th>${played?'Rang':'Rang provisoire'}</th>${used.map(([,l])=>`<th>${l}</th>`).join('')}</tr>${rows}</table></div></div>`;
+    };
+    tabs=`<div class="stk-grid" style="margin-top:14px">${panel(s.home)}${panel(s.away)}</div>
+    <p class="sc-note">${played?'Chances de chaque zone avant le match (10 000 simulations lancées à la journée précédente) et une fois le résultat réel connu.':'Chances de chaque zone selon l’issue du match, d’après 10 000 simulations : on garde celles où l’issue se produit. En vert/rouge, l’écart en points de pourcentage par rapport à aujourd’hui.'} Le rang provisoire suppose les autres résultats inchangés (à points égaux : différence de buts).</p>`;
+  }
+  const st=s.stake;
+  const badge=st.zone?`<p style="margin:12px 0 0"><b>Enjeu maximal :</b> ${fmt(st.score,0)} points de pourcentage de chances sur ${ZTXT(st.zone,z.top_k)} pour ${esc(st.team)} entre une victoire et une défaite${s.stake_rank===1?' · <span class="badge gold">affiche de la journée</span>':''}.</p>`:'';
+  return `<div class="sh-sec"><h4>L’enjeu au classement</h4><p class="sub">${played?'Où en étaient les deux clubs, et ce que ce résultat a changé.':'Où en sont les deux clubs et ce que le résultat peut changer.'}</p>
+  <div class="stk-grid"><div>${lines(s.home)}</div><div>${lines(s.away)}</div></div>${badge}${tabs}</div>`;
+}
+function capsSection(s){
+  const played=s.status==='played',ms=s.milestones||[],rc=s.records||[];
+  const col=(t,arr,empty)=>`<div><h5 style="margin:0 0 4px;font-size:15px">${t}</h5>${arr.length?arr.map(x=>`<div class="note-li">${esc(x.text)}</div>`).join(''):`<div class="muted" style="font-size:13px">${empty}</div>`}</div>`;
+  return `<div class="sh-sec"><h4>${played?'Caps franchis et records':'Caps et records en approche'}</h4><p class="sub">${played?'Seuils symboliques passés (50, 100, 250… buts, passes, arrêts, matchs dans la base) et records de la base établis, égalés ou prolongés lors de cette rencontre.':'Seuils symboliques à portée (50, 100, 250… buts, passes, arrêts, matchs dans la base) et records de la base que ce match peut faire tomber ou prolonger.'}</p>
+  <div class="stk-grid">${col(played?'Caps franchis':'Caps en approche',ms,played?'Aucun cap franchi.':'Aucun cap à portée.')}${col('Records',rc,played?'Aucun record de la base lié à ce match.':'Aucun record à portée.')}</div></div>`;
+}
+function faceSection(s){
+  const h=s.home,a=s.away,x=s.h2h||{n:0};
+  let h2='';
+  if(!x.n)h2='<div class="muted">Première confrontation dans la base.</div>';
+  else{
+    const dr=x.n-x.w_a-x.w_b;
+    h2=`<div class="h2h-bar"><span style="flex:${Math.max(x.w_a,.0001)};background:#1747C9">${x.w_a?x.w_a+' V':''}</span><span style="flex:${Math.max(dr,.0001)};background:#8A91A1">${dr?dr+' N':''}</span><span style="flex:${Math.max(x.w_b,.0001)};background:#F25C2A">${x.w_b?x.w_b+' V':''}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:13px"><b>${esc(h)}</b><span class="muted">${x.n} confrontation${x.n>1?'s':''} · ${fmt(x.avg_total,1)} buts par match · ${x.gf_a}–${x.gf_b} aux buts</span><b>${esc(a)}</b></div>
+    <ul class="stk-ul" style="margin-top:10px">
+    ${x.biggest&&x.biggest.winner?`<li>Plus large victoire : <b>${esc(x.biggest.winner)}</b> ${esc(x.biggest.score)} (${esc(x.biggest.season)})</li>`:''}
+    ${x.streak?`<li>${esc(x.streak.team)} sur ${x.streak.n} victoires de suite dans ce duel</li>`:''}
+    <li>${esc(h)} à domicile dans ce duel : ${x.a_home.w} V · ${x.a_home.d} N · ${x.a_home.n-x.a_home.w-x.a_home.d} D</li></ul>
+    <div class="scroll"><table class="tbl num"><tr><th style="text-align:left">Dernières rencontres</th><th>Saison</th><th>J.</th><th>Score</th></tr>${x.last.map(r=>`<tr><td style="text-align:left">${esc(r.home)} – ${esc(r.away)}</td><td>${esc(r.season)}</td><td>${r.round}</td><td><b>${esc(r.score)}</b></td></tr>`).join('')}</table></div>`;
+  }
+  const prof=(s.profile||[]).map(p=>{
+    const mx=Math.max(Math.abs(p.home),Math.abs(p.away),.0001),bh=p.higher_better?p.home>p.away:p.home<p.away,ba=p.higher_better?p.away>p.home:p.away<p.home;
+    return `<div class="bf"><div class="l"><span class="rk">${frOrd(p.rank_home)}/${p.of}</span><b class="num">${fmt(p.home,p.key.endsWith('pct')?1:2)}</b><i class="${bh?'win':''}" style="width:${Math.round(p.home/mx*90)}px"></i></div><div class="m">${esc(p.label)}</div><div class="r"><i class="${ba?'win':''}" style="width:${Math.round(p.away/mx*90)}px"></i><b class="num">${fmt(p.away,p.key.endsWith('pct')?1:2)}</b><span class="rk">${frOrd(p.rank_away)}/${p.of}</span></div></div>`}).join('');
+  const dh=s.duels[h]||{},da=s.duels[a]||{};
+  const duel=(label,f)=>{const l=f(dh),r=f(da);return l||r?`<div class="duel"><div class="l">${l||'–'}</div><div class="m">${label}</div><div>${r||'–'}</div></div>`:''};
+  const duels=duel('Buteurs',d=>d.scorer?`<b>${esc(d.scorer.name)}</b> ${d.scorer.goals} buts`:'')+duel('Passeurs',d=>d.playmaker?`<b>${esc(d.playmaker.name)}</b> ${d.playmaker.a} PD`:'')+duel('Gardiens',d=>d.keeper?`<b>${esc(d.keeper.name)}</b> ${fmt(d.keeper.pct,0)} %`:'')+duel('Meilleure note',d=>d.star?`<b>${esc(d.star.name)}</b> ${fmt(d.star.note,2)}`:'');
+  return `<div class="sh-sec"><h4>Face-à-face</h4><p class="sub">L’historique des confrontations dans la base, puis le profil comparé de la saison${s.status==='played'?' (avant cette journée)':''}.</p>
+  <div class="stk-grid"><div>${h2}</div><div><h5 style="margin:0 0 6px;font-size:15px">Profil comparé <small class="muted">(rang sur ${(s.profile[0]||{}).of||'–'} clubs)</small></h5>${prof}${duels?`<h5 style="margin:16px 0 4px;font-size:15px">Duels de joueurs</h5>${duels}`:''}</div></div></div>`;
+}
+function pressText(s){
+  const R=curRound(),z=R.zones,L=[];
+  L.push(`J${s.round} · ${s.home} – ${s.away} · ${frDate(s.date)}${s.time?' · '+s.time:''}${s.venue?' · '+s.venue:''}`,headline(s),'');
+  L.push('CLASSEMENT');for(const t of [s.home,s.away]){const i=s.teams[t];L.push(`- ${t} : ${rankTxt(i)}, ${i.pts} pts (${i.j} matchs, diff. ${sgn(i.gd,0)}). ${i.lines.join(' ; ')}.`)}
+  if(s.status==='played')L.push(`Résultat : ${s.result.hg}–${s.result.ag}${s.result.ht?` (mi-temps ${s.result.ht[0]}–${s.result.ht[1]})`:''}.`);
+  else if(s.proba&&s.proba.p1!=null)L.push(`Probabilités (1/N/2) : ${pc(s.proba.p1)} / ${pc(s.proba.pN)} / ${pc(s.proba.p2)}.${s.proba.modal?` Score le plus fréquent : ${s.proba.modal[0]}–${s.proba.modal[1]}.`:''}`);
+  if(s.stake.zone)L.push(`ENJEU : jusqu’à ${fmt(s.stake.score,0)} points de pourcentage de chances sur ${ZTXT(s.stake.zone,z.top_k)} pour ${s.stake.team}.`);
+  L.push('',s.status==='played'?'CAPS FRANCHIS ET RECORDS':'CAPS ET RECORDS EN APPROCHE');
+  const items=[...(s.milestones||[]),...(s.records||[])];(items.length?items:[{text:'Rien de notable.'}]).forEach(x=>L.push('- '+x.text));
+  L.push('','FACE-À-FACE');const x=s.h2h;
+  if(x&&x.n){L.push(`- ${x.n} confrontations dans la base : ${s.home} ${x.w_a} V, ${x.d} N, ${s.away} ${x.w_b} V ; ${fmt(x.avg_total,1)} buts par match.`);(x.last||[]).slice(0,3).forEach(r=>L.push(`  · ${r.season} J${r.round} : ${r.home} ${r.score} ${r.away}`))}
+  else L.push('- Première confrontation dans la base.');
+  return L.join('\n');
+}
+function renderPress(){
+  if(!PRESS)return;
+  initPressState();
+  const R=curRound();
+  $('#pressRound').innerHTML=[['prev','◀ Journée précédente'],['next','Journée suivante ▶']].map(([m,l])=>PRESS[m]?`<button type="button" data-m="${m}" aria-pressed="${PR.mode===m}">${l} · J${PRESS[m].round}</button>`:`<button type="button" disabled title="Pas de journée disponible">${l}</button>`).join('');
+  $('#pressRound').querySelectorAll('button[data-m]').forEach(b=>b.onclick=()=>{PR.mode=b.dataset.m;PR.mid=null;renderPress()});
+  if(!R){$('#pressBody').innerHTML='<div class="empty">Aucune journée à afficher.</div>';return}
+  const played=PR.mode==='prev',d=R.dates;
+  const strip=R.matches.map(m=>`<button type="button" class="mcard" data-mid="${esc(m.match_id)}" aria-pressed="${m.match_id===PR.mid}"><b>${esc(m.home)} – ${esc(m.away)}</b><small>${played?`Score ${m.result.hg}–${m.result.ag}${m.result.surprise?' · surprise':''}`:`${frDay(m.date)}${m.time?' · '+esc(m.time):''}`}</small><small>${m.stake.zone?`Enjeu : ${fmt(m.stake.score,0)} pts sur ${ZTXT(m.stake.zone,R.zones.top_k)}`:'Peu d’enjeu au classement'}${m.stake_rank===1?' · ★ affiche de la journée':''}</small></button>`).join('');
+  const s=curSheet();
+  $('#pressBody').innerHTML=`<div class="pr-head"><h3>Journée ${R.round} <small>${played?'déjà jouée':'à venir'} · ${d.length?(d[0]===d[1]?frDate(d[0]):`du ${frDay(d[0])} au ${frDay(d[1])}`):''}</small></h3><small>${R.n_sims.toLocaleString('fr-FR')} simulations lancées à la journée ${R.round-1} · saison ${esc(PRESS.season)}</small></div>
+  <div class="strip">${strip}</div>
+  <article class="sheet" id="pressSheet"><div class="kick">${played?'Retour sur le match':'Avant-match'} · Journée ${s.round} · ${frDate(s.date)}${s.time?' · '+esc(s.time):''}${s.venue?' · '+esc(s.venue):''}</div>
+  <h3 class="mt">${esc(s.home)} – ${esc(s.away)}</h3><p class="hl">${esc(headline(s))}</p>
+  ${afficheSection(s)}${enjeuSection(s)}${capsSection(s)}${faceSection(s)}</article>`;
+  $('#pressBody').querySelectorAll('.mcard').forEach(b=>b.onclick=()=>{PR.mid=b.dataset.mid;renderPress()});
+  $('#pressBody').querySelectorAll('button[data-cl]').forEach(b=>b.onclick=()=>openClubModal(b.dataset.cl));
+}
+$('#pressPrint').onclick=()=>window.print();
+$('#pressCopy').onclick=async()=>{
+  const s=curSheet();if(!s)return;const txt=pressText(s),b=$('#pressCopy'),old=b.textContent;
+  try{await navigator.clipboard.writeText(txt)}catch(e){const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand('copy')}catch(_){}ta.remove()}
+  b.textContent='Copié ✓';setTimeout(()=>b.textContent=old,1800);
+};
+
 // ---------- Démarrage ----------
 // 1) Bundle JSON présent : le site s'ouvre directement sur Monte Carlo avec une simulation déjà affichée (1 requête).
 // 2) Sinon : mode API historique (Historique d'abord, comme avant).
@@ -1329,8 +1721,9 @@ $('#heat').innerHTML=s;$('#heat').querySelectorAll('rect[data-h]').forEach(r=>{r
   try{await initFromBundle();fromCache=true}
   catch(e){console.info('Cache JSON indisponible, repli sur l’API :',e.message);SIM=null;UP=[]}
   try{
-    if(fromCache){showTab(location.hash==='#hist'?'hist':'mc')}
-    else{await ensureHist();await initMC();showTab(location.hash==='#mc'?'mc':'hist')}
+    const hashTab=({'#hist':'hist','#mc':'mc','#press':'press'})[location.hash];
+    if(fromCache){showTab(hashTab||'mc')}
+    else{await ensureHist();await initMC();showTab(hashTab||'hist')}
   }catch(e){$('#status').innerHTML='<span class="err">'+esc(e.message)+'</span>';showTab('hist')}
 })();
 </script>
