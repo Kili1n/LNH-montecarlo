@@ -854,13 +854,14 @@ def load_player_tables(
     num_cols = [
         "seconds_played", "goals", "shots", "goals_7m", "shots_7m",
         "saves", "shots_faced", "saves_7m", "shots_faced_7m",
-        "br", "tc", "pp", "2p", "bp", "dp", "a", "2min", "d", "lnh_score",
+        "br", "tc", "pp", "2p", "bp", "dp", "a", "2min", "d",
     ]
     for c in num_cols:
         if c in box.columns:
             box[c] = pd.to_numeric(box[c], errors="coerce").fillna(0.0)
         else:
             box[c] = 0.0
+    box = box.drop(columns=["lnh_score"], errors="ignore")  # ancienne évaluation officielle : pas toujours présente, non utilisée
     box["match_id"] = box["match_id"].astype(str)
     box = box.drop_duplicates(subset=["season", "match_id", "team", "last_name", "first_name"], keep="last")
 
@@ -887,6 +888,126 @@ def load_player_tables(
     return box
 
 
+def compute_player_ratings(box: pd.DataFrame, matches: pd.DataFrame) -> pd.DataFrame:
+    """Calcule, pour chaque ligne joueur-match :
+      - impact_score : points d'impact bruts (attaque + défense + bonus de victoire)
+      - match_note   : NOTE LNH /10 du match (sigmoïde de l'impact)
+      - impact_def   : composante défensive brute (nouvelle métrique défensive)
+      - def_note     : note défensive /10 du match
+      - est_seconds  : temps de jeu réel ou estimé quand le chrono est absent."""
+    if box is None or box.empty:
+        return box
+
+    b = box.copy()
+    # 1. Contexte du match (buts encaissés par l'équipe et résultat)
+    m_sub = matches[["match_id", "home_team", "away_team", "home_ft_goals", "away_ft_goals", "played"]].drop_duplicates("match_id")
+    b = b.merge(m_sub, on="match_id", how="left")
+    b["played"] = b["played"].fillna(False).astype(bool)
+
+    is_home = (b["team"] == b["home_team"]).to_numpy()
+    hg = pd.to_numeric(b["home_ft_goals"], errors="coerce").to_numpy(dtype=float)
+    ag = pd.to_numeric(b["away_ft_goals"], errors="coerce").to_numpy(dtype=float)
+    gf_team = np.where(is_home, hg, ag)
+    ga_team = np.where(is_home, ag, hg)
+    league_avg_ga = float(np.nanmean(ga_team)) if np.isfinite(ga_team).any() else 29.5
+
+    win_bonus = np.where(
+        b["played"].to_numpy(),
+        np.where(gf_team > ga_team, 0.45, np.where(gf_team == ga_team, 0.15, 0.0)),
+        0.0,
+    )
+
+    # 2. Détection par match de la présence du chrono et des stats défensives individuelles
+    match_clock = b.groupby("match_id")["seconds_played"].transform("sum") > 0
+    adv_sum = b["br"] + b["tc"] + b["pp"] + b["2p"]
+    match_has_adv = adv_sum.groupby(b["match_id"]).transform("sum") > 0
+
+    total_events = (
+        b["shots"] + b["shots_faced"] + b["a"] + b["br"] + b["tc"]
+        + b["pp"] + b["2p"] + b["bp"] + b["dp"] + b["2min"] + b["d"]
+    )
+    b["played_match"] = np.where(match_clock, b["seconds_played"] > 0, total_events > 0)
+    b["has_real_clock"] = match_clock
+    is_gk = b["is_gk"].astype(bool)
+
+    # 3. Composantes Joueur de champ vs Gardien
+    open_goals = np.maximum(0.0, b["goals"] - b["goals_7m"])
+    open_shots = np.maximum(open_goals, b["shots"] - b["shots_7m"])
+    open_miss = np.maximum(0.0, open_shots - open_goals)
+    miss_7m = np.maximum(0.0, b["shots_7m"] - b["goals_7m"])
+
+    off_field = (
+        1.50 * open_goals
+        - 0.65 * open_miss
+        + 1.10 * b["goals_7m"]
+        - 0.90 * miss_7m
+        + 1.15 * b["a"]
+        + 0.95 * b["pp"]
+        + 1.10 * b["2p"]
+        + 0.40 * b["dp"]
+        - 1.25 * b["bp"]
+    )
+
+    team_def_delta = np.clip((league_avg_ga - np.nan_to_num(ga_team, nan=league_avg_ga)) / 4.5, -1.2, 1.5)
+    w_coll = np.where(match_has_adv, 1.0, 1.65)
+    disc_pen = -0.85 * b["2min"] - 2.50 * b["d"]
+
+    def_field = 1.65 * b["br"] + 1.35 * b["tc"] + w_coll * team_def_delta + disc_pen
+
+    # Gardiens
+    open_saves = np.maximum(0.0, b["saves"] - b["saves_7m"])
+    open_faced = np.maximum(open_saves, b["shots_faced"] - b["shots_faced_7m"])
+    open_ga = np.maximum(0.0, open_faced - open_saves)
+    ga_7m = np.maximum(0.0, b["shots_faced_7m"] - b["saves_7m"])
+
+    off_gk = 1.60 * b["goals"] + 1.25 * b["a"] - 1.25 * b["bp"]
+    def_gk = 1.35 * open_saves - 0.52 * open_ga + 2.20 * b["saves_7m"] - 0.15 * ga_7m + 1.40 * b["br"] + disc_pen
+
+    b["impact_off"] = np.where(is_gk, off_gk, off_field)
+    b["impact_def"] = np.where(is_gk, def_gk, def_field)
+    raw_impact = b["impact_off"] + b["impact_def"] + win_bonus
+    played = b["played_match"].to_numpy(dtype=bool)
+
+    b["impact_score"] = np.where(played, raw_impact, 0.0)
+    note_raw = 1.0 + 9.0 / (1.0 + np.exp(-(raw_impact - 2.0) / 5.2))
+    b["match_note"] = np.where(played, np.clip(note_raw, 1.0, 10.0), np.nan)
+
+    # Note défensive /10 : centre et pente propres à chaque rôle (les gardiens cumulent beaucoup plus de points défensifs)
+    centre = np.where(is_gk, 7.0, 1.5)
+    pente = np.where(is_gk, 4.0, 2.2)
+    def_note_raw = 1.0 + 9.0 / (1.0 + np.exp(-(b["impact_def"] - centre) / pente))
+    b["def_note"] = np.where(played, np.clip(def_note_raw, 1.0, 10.0), np.nan)
+
+    # 4. Estimation du temps de jeu (proxy) uniquement quand seconds_played est absent
+    team_faced = b.groupby(["match_id", "team"])["shots_faced"].transform("sum").clip(lower=1.0)
+    gk_est_sec = np.clip(3600.0 * (b["shots_faced"] / team_faced), 300.0, 3600.0)
+
+    usage = pd.Series(
+        np.where(
+            played & (~is_gk.to_numpy()),
+            1.0 + b["shots"] + b["a"] + b["bp"] + b["pp"] + b["2p"] + 1.5 * (b["br"] + b["tc"]) + 0.5 * b["dp"],
+            0.0,
+        ),
+        index=b.index,
+    )
+    team_usage = usage.groupby([b["match_id"], b["team"]]).transform("sum").clip(lower=1.0)
+    field_est_sec = np.clip(21600.0 * (usage / team_usage), 300.0, 3600.0)  # 6 joueurs * 3600s = 21600s
+
+    proxy_sec = np.where(played, np.where(is_gk, gk_est_sec, field_est_sec), 0.0)
+    b["est_seconds"] = np.where(match_clock, b["seconds_played"], proxy_sec)
+
+    drop_tmp = [c for c in ["home_team", "away_team", "home_ft_goals", "away_ft_goals", "played"] if c not in box.columns]
+    return b.drop(columns=drop_tmp)
+
+
+def add_player_ratings(box: Optional[pd.DataFrame], matches: pd.DataFrame) -> Optional[pd.DataFrame]:
+    """Ajoute à la feuille de match les notes calculées (impact_score, match_note, def_note, est_seconds…).
+    Idempotent : ne recalcule rien si les colonnes sont déjà présentes."""
+    if box is None or box.empty or "impact_score" in box.columns:
+        return box
+    return compute_player_ratings(box, matches)
+
+
 def compute_roster_turnover(
     box: Optional[pd.DataFrame],
     prev_season_matches: pd.DataFrame,
@@ -907,7 +1028,7 @@ def compute_roster_turnover(
         if tb.empty:
             continue
         g = tb.groupby(["last_name", "first_name"]).agg(
-            score=("lnh_score", "sum"),
+            score=("impact_score", "sum"),
             cur=("current_club", "last"),
         )
         g["score"] = g["score"].clip(lower=0.0)
@@ -926,8 +1047,12 @@ def compute_availability(
     known: pd.DataFrame,
     teams: list[str],
     p: ModelParams,
+    details: Optional[dict] = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Calcule les malus d'absence (attaque vs défense/gardiens) au moment du cutoff."""
+    """Calcule les malus d'absence (attaque vs défense/gardiens) au moment du cutoff.
+
+    Si `details` est fourni (dict), il est rempli avec, pour chaque club analysé, la liste des cadres
+    absents sur les derniers matchs et leur part de la valeur offensive / défensive de l'effectif."""
     n = len(teams)
     pen_off = np.zeros(n, dtype=float)
     pen_def = np.zeros(n, dtype=float)
@@ -951,13 +1076,13 @@ def compute_availability(
             + 0.7 * past_b["a"]
             + 0.5 * past_b["dp"]
             - 0.6 * past_b["bp"]
-            + 0.35 * past_b["lnh_score"].clip(lower=0.0)
+            + 0.35 * past_b["impact_score"].clip(lower=0.0)
         ).clip(lower=0.0)
 
         raw_def_pts = np.where(
             past_b["is_gk"],
-            (1.2 * past_b["saves"] + 0.5 * past_b["lnh_score"].clip(lower=0.0)).clip(lower=0.0) * p.gk_weight,
-            (1.2 * past_b["br"] + 1.0 * past_b["tc"] + 0.35 * past_b["lnh_score"].clip(lower=0.0)).clip(lower=0.0),
+            (1.2 * past_b["saves"] + 0.5 * past_b["impact_score"].clip(lower=0.0)).clip(lower=0.0) * p.gk_weight,
+            (1.2 * past_b["br"] + 1.0 * past_b["tc"] + 0.35 * past_b["impact_score"].clip(lower=0.0)).clip(lower=0.0),
         )
 
         work = past_b.assign(
@@ -967,7 +1092,8 @@ def compute_availability(
         )
         g = (
             work.groupby(["last_name", "first_name"])
-            .agg(games=("played_flag", "sum"), off_sum=("_off", "sum"), def_sum=("_def", "sum"))
+            .agg(games=("played_flag", "sum"), off_sum=("_off", "sum"), def_sum=("_def", "sum"),
+                 gk=("is_gk", "max"))
             .reset_index()
         )
         g["presence"] = g["games"] / len(past)
@@ -993,6 +1119,18 @@ def compute_availability(
             pen_off[t_idx] = -p.absence_off_per_share * float(absent["off_val"].sum()) / tot_off
         if tot_def > 0:
             pen_def[t_idx] = p.absence_def_per_share * float(absent["def_val"].sum()) / tot_def
+
+        if details is not None:
+            details[team] = [
+                {
+                    "name": f"{r.first_name} {r.last_name}".strip(),
+                    "gk": bool(r.gk),
+                    "presence": float(r.presence),
+                    "off_share": float(r.off_val / tot_off) if tot_off > 0 else 0.0,
+                    "def_share": float(r.def_val / tot_def) if tot_def > 0 else 0.0,
+                }
+                for r in absent.sort_values(["def_val", "off_val"], ascending=False).itertuples()
+            ]
 
     return pen_off, pen_def
 
@@ -1670,6 +1808,34 @@ class SimulationStore:
             if "team_aliases_applied" in pipeline_out:
                 story_payload["team_aliases_applied"] = pipeline_out["team_aliases_applied"]
             story_payload["ratings_dc"] = pipeline_out["ratings_table"].round(3).to_dict(orient="records")
+            av = pipeline_out["availability"]
+            det = pipeline_out.get("availability_details", {})
+            story_payload["availability"] = [
+                {
+                    "Team": str(t),
+                    "off_log_pen": float(r.off_log_pen), "def_log_pen": float(r.def_log_pen),
+                    # effet sur les buts du club : × exp(pénalité), avant décroissance par journée
+                    "off_pct": float(100.0 * (math.exp(r.off_log_pen) - 1.0)),
+                    "def_pct": float(100.0 * (math.exp(r.def_log_pen) - 1.0)),
+                    "analysed": str(t) in det,
+                    "absent": det.get(str(t), []),
+                }
+                for t, r in av.iterrows()
+            ]
+            story_payload["zones"] = {
+                "podium": 3,
+                "top_k": int(pipeline_out.get("top_k", 4)),
+                "n_relegated": int(pipeline_out.get("n_relegated", 2)),
+            }
+            dc = pipeline_out.get("dc_fit")
+            if dc is not None:
+                story_payload["dc_meta"] = {
+                    "mu_eff": float(dc.mu_eff),
+                    "home_adv_off": float(dc.home_adv_off),
+                    "away_adv_off": float(dc.away_adv_off),
+                    "promoted_off_used": float(dc.promoted_off_used),
+                    "promoted_def_used": float(dc.promoted_def_used),
+                }
             story_payload["team_summary"] = pipeline_out["simulation"].round(4).to_dict(orient="records")
             if pipeline_out["fixtures"]["played"].any():
                 story_payload["real_standings"] = pipeline_out["real_standings"].to_dict(orient="records")
@@ -1760,6 +1926,20 @@ class SimulationStore:
                         encoding="utf-8",
                     )
             written["sim_matches"] = mx_path
+
+        # 5. Issues des matchs restants uniquement (léger) : alimente le simulateur conditionnel
+        #    même quand sim_matches n'a pas été conservé.
+        remaining = ~self.fixtures["frozen"].to_numpy(dtype=bool)
+        if remaining.any():
+            oc_path = d / "sim_outcomes.npz"
+            np.savez_compressed(
+                oc_path,
+                simulation=np.arange(self.n_sims, dtype=np.int32),
+                match_id=self.fixtures["match_id"].to_numpy(dtype=str)[remaining],
+                hg=self.hg[:, remaining].astype(np.int16),
+                ag=self.ag[:, remaining].astype(np.int16),
+            )
+            written["sim_outcomes"] = oc_path
 
         if not HAS_PARQUET:
             logger.info("pyarrow absent : export réalisé en CSV compressé (.csv.gz). "
@@ -1977,6 +2157,8 @@ def run_pipeline(
         if alt in seasons:
             season = alt
 
+    box = add_player_ratings(box, all_matches)
+
     matches = all_matches[all_matches["season"] == season].copy()
     if matches.empty:
         raise ValueError(f"Aucun match pour la saison '{season}'. Saisons disponibles : {seasons}")
@@ -1995,7 +2177,8 @@ def run_pipeline(
     p = fit_dispersion_params(fx, dc, p0, cutoff_round)
 
     known = fx[fx["frozen"]]
-    pen_off, pen_def = compute_availability(box, known, teams, p)
+    avail_details: dict = {}
+    pen_off, pen_def = compute_availability(box, known, teams, p, details=avail_details)
     apply_availability(fx, pen_off, pen_def, cutoff_round, p)
 
     _, _, preds = run_history(fx, dc, p, cutoff_round)
@@ -2016,6 +2199,9 @@ def run_pipeline(
         "fixtures": fx,
         "store": store,
         "availability": pd.DataFrame({"off_log_pen": pen_off, "def_log_pen": pen_def}, index=teams),
+        "availability_details": avail_details,
+        "n_relegated": min(n_relegated, len(teams) - 1),
+        "top_k": top_k,
         "backtest_predictions": preds,
         "backtest_metrics": backtest_metrics(preds),
         "real_standings": real,
@@ -2042,6 +2228,7 @@ def run_multi_season_backtest(
     all_matches, seasons, aliases_applied = load_all_matches(
         match_csv, box, alias_map=alias_map
     )
+    box = add_player_ratings(box, all_matches)  # une seule fois pour toutes les saisons du backtest
     if len(seasons) <= min_prior_seasons:
         raise ValueError(f"Pas assez de saisons ({len(seasons)}) pour un backtest multi-saisons.")
 

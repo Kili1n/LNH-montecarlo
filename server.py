@@ -3,7 +3,7 @@
 Lancer :  python server.py   puis ouvrir http://localhost:8000"""
 from __future__ import annotations
 
-import json, os, re, subprocess, sys, threading, time, uuid
+import argparse, gzip, json, math, os, re, subprocess, sys, threading, time, unicodedata, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -16,156 +16,99 @@ import simulation_montecarlo as sim
 # ---- Configuration (en dur côté backend) -----------------------------------
 DATA_DIR = "./data/data_csv"     # contient un sous-dossier par saison : match.csv, players.csv, players_boxscore.csv
 OUTPUT_DIR = "./output"          # un sous-dossier par simulation lancée
+CACHE_DIR = "./output/mc_cache"  # bundles JSON prêts à afficher (1 requête pour ouvrir l'onglet Monte Carlo)
+CACHE_SIMS = int(os.environ.get("CACHE_SIMS", 10000))   # simulations par bundle
+CACHE_CUTOFF_CURRENT = 10        # saison en cours : départ à la J10 ; saison précédente : J0
 PORT = int(os.environ.get("PORT", 8000))
 # -----------------------------------------------------------------------------
 HERE = Path(__file__).resolve().parent
-DATA, OUT = (HERE / DATA_DIR).resolve(), (HERE / OUTPUT_DIR).resolve()
+DATA, OUT, CACHE = (HERE / DATA_DIR).resolve(), (HERE / OUTPUT_DIR).resolve(), (HERE / CACHE_DIR).resolve()
 JOBS: dict[str, dict] = {}
 _cache: dict = {}
-
-EXTRA_BOX_COLS = [
-    "seconds_played", "goals_7m", "shots_7m", "saves_7m", "shots_faced_7m",
-    "br", "tc", "pp", "2p", "bp", "dp", "a", "2min", "d",
-]
-
+_lock = threading.RLock()        # le serveur est multi-thread : on protège les caches
 
 def _stamp() -> float:
     fs = list(DATA.rglob("*.csv"))
     return max((f.stat().st_mtime for f in fs), default=0.0)
 
 
-def _enrich_box_columns(box: pd.DataFrame) -> pd.DataFrame:
-    """Garantit la présence des colonnes détaillées de players_boxscore.csv."""
-    missing = [c for c in EXTRA_BOX_COLS if c not in box.columns]
-    if missing:
-        raw_frames = []
-        for f in sim._find_csvs(DATA, "players_boxscore.csv"):
-            try:
-                raw_frames.append(pd.read_csv(f))
-            except Exception:
-                continue
-        if raw_frames:
-            raw = pd.concat(raw_frames, ignore_index=True)
-            key_cols = [c for c in ["match_id", "jersey_num", "last_name"] if c in box.columns and c in raw.columns]
-            keep = key_cols + [c for c in missing if c in raw.columns]
-            if key_cols and len(keep) > len(key_cols):
-                raw_sub = raw[keep].drop_duplicates(key_cols)
-                box = box.merge(raw_sub, on=key_cols, how="left")
-    for c in EXTRA_BOX_COLS:
-        if c not in box.columns:
-            box[c] = 0
-        box[c] = pd.to_numeric(box[c], errors="coerce").fillna(0)
-    return box
+def _fold(s: str) -> str:
+    """Minuscule sans accents (recherche de joueurs)."""
+    s = unicodedata.normalize("NFKD", str(s))
+    return "".join(c for c in s if not unicodedata.combining(c)).lower().strip()
 
-def compute_custom_player_rating(box: pd.DataFrame, matches: pd.DataFrame) -> pd.DataFrame:
-    """Calcule la Note Impact Handball (/10) et le temps de jeu estimé sur 100 % des saisons."""
-    if box is None or box.empty:
-        return box
 
-    b = box.copy()
-    # 1. Contexte du match (buts encaissés par l'équipe et résultat)
-    m_sub = matches[["match_id", "home_team", "away_team", "home_ft_goals", "away_ft_goals", "played"]].drop_duplicates("match_id")
-    b = b.merge(m_sub, on="match_id", how="left")
+def _jsonable(o):
+    """Rend n'importe quelle structure sérialisable en JSON valide (NaN/inf -> null, types numpy -> natifs)."""
+    if o is None or isinstance(o, (str, bool)):
+        return o
+    if isinstance(o, (np.bool_,)):
+        return bool(o)
+    if isinstance(o, (int, np.integer)):
+        return int(o)
+    if isinstance(o, (float, np.floating)):
+        f = float(o)
+        return f if math.isfinite(f) else None
+    if isinstance(o, dict):
+        return {str(k): _jsonable(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple, set)):
+        return [_jsonable(v) for v in o]
+    if isinstance(o, np.ndarray):
+        return _jsonable(o.tolist())
+    if isinstance(o, pd.Timestamp):
+        return o.isoformat()
+    if isinstance(o, pd.DataFrame):
+        return _jsonable(o.to_dict("records"))
+    if o is pd.NaT:
+        return None
+    return str(o)
 
-    is_home = b["team"] == b["home_team"]
-    gf_team = np.where(is_home, b["home_ft_goals"], b["away_ft_goals"])
-    ga_team = np.where(is_home, b["away_ft_goals"], b["home_ft_goals"])
-    league_avg_ga = float(np.nanmean(ga_team)) if np.isfinite(ga_team).any() else 29.5
-
-    win_bonus = np.where(
-        b["played"].fillna(False),
-        np.where(gf_team > ga_team, 0.45, np.where(gf_team == ga_team, 0.15, 0.0)),
-        0.0,
-    )
-
-    # 2. Détection par match de la présence du chrono et des stats défensives individuelles
-    match_clock = b.groupby("match_id")["seconds_played"].transform("sum") > 0
-    adv_sum = b["br"] + b["tc"] + b["pp"] + b["2p"]
-    match_has_adv = adv_sum.groupby(b["match_id"]).transform("sum") > 0
-
-    total_events = (
-        b["shots"] + b["shots_faced"] + b["a"] + b["br"] + b["tc"]
-        + b["pp"] + b["2p"] + b["bp"] + b["dp"] + b["2min"] + b["d"]
-    )
-    b["played_match"] = np.where(match_clock, b["seconds_played"] > 0, total_events > 0)
-    b["has_real_clock"] = match_clock
-
-    # 3. Composantes Joueur de champ vs Gardien
-    open_goals = np.maximum(0.0, b["goals"] - b["goals_7m"])
-    open_shots = np.maximum(open_goals, b["shots"] - b["shots_7m"])
-    open_miss = np.maximum(0.0, open_shots - open_goals)
-    miss_7m = np.maximum(0.0, b["shots_7m"] - b["goals_7m"])
-
-    off_field = (
-        1.50 * open_goals
-        - 0.65 * open_miss
-        + 1.10 * b["goals_7m"]
-        - 0.90 * miss_7m
-        + 1.15 * b["a"]
-        + 0.95 * b["pp"]
-        + 1.10 * b["2p"]
-        + 0.40 * b["dp"]
-        - 1.25 * b["bp"]
-    )
-
-    team_def_delta = np.clip((league_avg_ga - np.nan_to_num(ga_team, nan=league_avg_ga)) / 4.5, -1.2, 1.5)
-    w_coll = np.where(match_has_adv, 1.0, 1.65)
-    disc_pen = -0.85 * b["2min"] - 2.50 * b["d"]
-
-    def_field = 1.65 * b["br"] + 1.35 * b["tc"] + w_coll * team_def_delta + disc_pen
-
-    # Gardiens
-    open_saves = np.maximum(0.0, b["saves"] - b["saves_7m"])
-    open_faced = np.maximum(open_saves, b["shots_faced"] - b["shots_faced_7m"])
-    open_ga = np.maximum(0.0, open_faced - open_saves)
-    ga_7m = np.maximum(0.0, b["shots_faced_7m"] - b["saves_7m"])
-
-    off_gk = 1.60 * b["goals"] + 1.25 * b["a"] - 1.25 * b["bp"]
-    def_gk = 1.35 * open_saves - 0.52 * open_ga + 2.20 * b["saves_7m"] - 0.15 * ga_7m + 1.40 * b["br"] + disc_pen
-
-    b["impact_off"] = np.where(b["is_gk"], off_gk, off_field)
-    b["impact_def"] = np.where(b["is_gk"], def_gk, def_field)
-    raw_impact = b["impact_off"] + b["impact_def"] + win_bonus
-
-    b["impact_score"] = np.where(b["played_match"], raw_impact, 0.0)
-    note_raw = 1.0 + 9.0 / (1.0 + np.exp(-(raw_impact - 2.0) / 5.2))
-    b["match_note"] = np.where(b["played_match"], np.clip(note_raw, 1.0, 10.0), np.nan)
-
-    # 4. Estimation du temps de jeu (proxy) uniquement quand seconds_played est absent
-    team_faced = b.groupby(["match_id", "team"])["shots_faced"].transform("sum").clip(lower=1.0)
-    gk_est_sec = np.clip(3600.0 * (b["shots_faced"] / team_faced), 300.0, 3600.0)
-
-    usage = np.where(
-        b["played_match"] & (~b["is_gk"]),
-        1.0 + b["shots"] + b["a"] + b["bp"] + b["pp"] + b["2p"] + 1.5 * (b["br"] + b["tc"]) + 0.5 * b["dp"],
-        0.0,
-    )
-    team_usage = usage.groupby([b["match_id"], b["team"]]).transform("sum").clip(lower=1.0)
-    field_est_sec = np.clip(21600.0 * (usage / team_usage), 300.0, 3600.0)  # 6 joueurs * 3600s = 21600s
-
-    proxy_sec = np.where(b["played_match"], np.where(b["is_gk"], gk_est_sec, field_est_sec), 0.0)
-    b["est_seconds"] = np.where(match_clock, b["seconds_played"], proxy_sec)
-
-    drop_tmp = [c for c in ["home_team", "away_team", "home_ft_goals", "away_ft_goals", "played"] if c not in box.columns]
-    return b.drop(columns=drop_tmp)
 
 def load_data():
     """Charge matchs + feuilles de match une seule fois (rechargé si les CSV changent)."""
-    st = _stamp()
-    if _cache.get("stamp") == st and "m" in _cache:
-        return _cache["m"], _cache["box"], _cache["seasons"]
-    amap = sim.load_team_aliases(DATA)
-    has_box = bool(sim._find_csvs(DATA, "players_boxscore.csv"))
-    box = sim.load_player_tables(DATA, DATA, amap) if has_box else None
-    m, seasons, _ = sim.load_all_matches(DATA, None, alias_map=amap)
-    if box is not None and not m.empty:
-        season_by_match = m.drop_duplicates("match_id").set_index("match_id")["season"]
-        mapped = box["match_id"].map(season_by_match)
-        box["season"] = mapped.fillna(box["season"].astype(str).str.replace("-", "/", regex=False))
-        box = _enrich_box_columns(box)
-        box = compute_custom_player_rating(box, m)
-    _cache.update(stamp=st, m=m, box=box, seasons=seasons)
-    return m, box, seasons
+    with _lock:
+        st = _stamp()
+        if _cache.get("stamp") == st and "m" in _cache:
+            return _cache["m"], _cache["box"], _cache["seasons"]
+        for k in [k for k in _cache if k not in ("stamp",)]:
+            _cache.pop(k, None)
+        amap = sim.load_team_aliases(DATA)
+        has_box = bool(sim._find_csvs(DATA, "players_boxscore.csv"))
+        box = sim.load_player_tables(DATA, DATA, amap) if has_box else None
+        m, seasons, _ = sim.load_all_matches(DATA, None, alias_map=amap)
+        if box is not None and not m.empty:
+            season_by_match = m.drop_duplicates("match_id").set_index("match_id")["season"]
+            mapped = box["match_id"].map(season_by_match)
+            box["season"] = mapped.fillna(box["season"].astype(str).str.replace("-", "/", regex=False))
+            box = sim.add_player_ratings(box, m)
+            box["full_name"] = (box["first_name"].fillna("").astype(str) + " " + box["last_name"].fillna("").astype(str)).str.strip()
+        _cache.update(stamp=st, m=m, box=box, seasons=seasons)
+        return m, box, seasons
+
+
+def player_frame() -> pd.DataFrame | None:
+    """Feuilles de match enrichies du contexte du match (date, journée, adversaire, score). Mis en cache."""
+    m, box, _ = load_data()
+    if box is None or box.empty:
+        return None
+    with _lock:
+        if "pf" in _cache:
+            return _cache["pf"]
+        meta_cols = ["match_id", "date", "round", "season_idx", "home_team", "away_team", "home_ft_goals", "away_ft_goals"]
+        meta_m = m[meta_cols].drop_duplicates("match_id")
+        base = box.drop(columns=[c for c in meta_cols if c != "match_id" and c in box.columns])
+        pf = base.merge(meta_m, on="match_id", how="left")
+        is_home = pf["team"] == pf["home_team"]
+        pf["opponent"] = np.where(is_home, pf["away_team"], pf["home_team"])
+        gf = pd.Series(np.where(is_home, pf["home_ft_goals"], pf["away_ft_goals"]), index=pf.index)
+        ga = pd.Series(np.where(is_home, pf["away_ft_goals"], pf["home_ft_goals"]), index=pf.index)
+        pf["score"] = np.where(gf.notna(), gf.fillna(0).astype(int).astype(str) + "–" + ga.fillna(0).astype(int).astype(str), "")
+        pf["date"] = pf["date"].fillna("").astype(str)
+        pf["round"] = pd.to_numeric(pf["round"], errors="coerce").fillna(0).astype(int)
+        pf["season_idx"] = pd.to_numeric(pf["season_idx"], errors="coerce").fillna(-1).astype(int)
+        pf["two_min"] = pf["2min"]
+        _cache["pf"] = pf
+        return pf
 
 
 def standings(df: pd.DataFrame) -> pd.DataFrame:
@@ -236,10 +179,10 @@ def top_players(box: pd.DataFrame | None, season: str | None) -> dict:
     if box is None:
         return empty
     b = box if season is None else box[box["season"] == season]
+    b = b[b["played_match"]]
     if b.empty:
         return empty
-    b = b[b["played_match"]].assign(name=(b["first_name"].fillna("") + " " + b["last_name"].fillna("")).str.strip())
-    g = b.groupby(["name", "team"]).agg(
+    g = b.groupby(["full_name", "team"]).agg(
         games=("match_id", "nunique"),
         seconds=("est_seconds", "sum"),
         real_clock_share=("has_real_clock", "mean"),
@@ -256,18 +199,20 @@ def top_players(box: pd.DataFrame | None, season: str | None) -> dict:
         a=("a", "sum"),
         bp=("bp", "sum"),
         two_min=("2min", "sum"),
-        lnh=("impact_score", "sum"),
+        impact=("impact_score", "sum"),
         note=("match_note", "mean"),
+        def_note=("def_note", "mean"),
         impact_def=("impact_def", "sum"),
         gk=("is_gk", "max"),
-    ).reset_index()
+    ).reset_index().rename(columns={"full_name": "name"})
 
     g["note"] = g["note"].fillna(5.0).round(2)
+    g["def_note"] = g["def_note"].fillna(5.0).round(2)
     g["impact_def"] = g["impact_def"].round(1)
+    g["impact"] = g["impact"].round(1)
     g["est_clock"] = g["real_clock_share"] < 0.5
 
     g["minutes"] = (g["seconds"] / 60.0).round(1)
-    g["lnh"] = g["lnh"].round(1)
     g["pct"] = np.where(g.shots > 0, 100 * g.goals / g.shots.clip(lower=1), 0).round(1)
     g["save_pct"] = np.where(g.faced > 0, 100 * g.saves / g.faced.clip(lower=1), 0).round(1)
     g["pct_7m"] = np.where(g.shots_7m > 0, 100 * g.goals_7m / g.shots_7m.clip(lower=1), 0).round(1)
@@ -278,22 +223,27 @@ def top_players(box: pd.DataFrame | None, season: str | None) -> dict:
         "name", "team", "games", "minutes", "goals", "shots", "pct",
         "goals_7m", "shots_7m", "pct_7m", "saves", "faced", "save_pct",
         "saves_7m", "faced_7m", "br", "tc", "def_act", "a", "bp", "two_min",
-        "lnh", "note", "impact_def", "est_clock", "gk",
+        "impact", "note", "def_note", "impact_def", "est_clock", "gk",
     ]
     rec = lambda d: d[cols].to_dict("records")
     min_faced = 60 if season else 150
     min_7m = 10 if season else 25
     min_games_mvp = 5 if season else 15
+    min_games_def = 5 if season else 15
     mvp_pool = g[g["games"] >= min_games_mvp]
     if len(mvp_pool) < 5:
         mvp_pool = g
+    def_pool = g[(~g.gk) & (g["games"] >= min_games_def)]
+    if len(def_pool) < 5:
+        def_pool = g[~g.gk]
     return {
-        "mvp": rec(mvp_pool.sort_values(["note", "lnh"], ascending=False).head(30)),
-        "scorers": rec(g[~g.gk].sort_values("goals", ascending=False).head(30)),
-        "keepers": rec(g[g.gk & (g.faced >= min_faced)].sort_values("save_pct", ascending=False).head(30)),
-        "seven_m": rec(g[g.shots_7m >= min_7m].sort_values(["goals_7m", "pct_7m"], ascending=False).head(30)),
-        "defense": rec(g[~g.gk].sort_values(["def_act", "br"], ascending=False).head(30)),
-        "discipline": rec(g[~g.gk].sort_values(["a", "clean_idx"], ascending=False).head(30)),
+        "mvp": rec(mvp_pool.sort_values(["note", "impact"], ascending=False).head(40)),
+        "scorers": rec(g[~g.gk].sort_values("goals", ascending=False).head(40)),
+        "keepers": rec(g[g.gk & (g.faced >= min_faced)].sort_values("save_pct", ascending=False).head(40)),
+        "seven_m": rec(g[g.shots_7m >= min_7m].sort_values(["goals_7m", "pct_7m"], ascending=False).head(40)),
+        # nouvelle métrique défensive : points d'impact défensif (récupérations, contres, bloc collectif, discipline)
+        "defense": rec(def_pool.sort_values(["impact_def", "def_note"], ascending=False).head(40)),
+        "discipline": rec(g[~g.gk].sort_values(["a", "clean_idx"], ascending=False).head(40)),
     }
 
 
@@ -420,31 +370,32 @@ def api_club_detail(qs: dict) -> dict:
                 "ga_m": round(float(r.ga), 1),
             } for r in vg.itertuples()]
 
-    # Effectif sur la période
+    # Effectif sur la période (note LNH /10 et note défensive)
     roster = []
     if box is not None and not box.empty:
-        b_club = _filter_seasons_df(box[box["team"] == team], seasons_raw)
+        b_club = _filter_seasons_df(box[(box["team"] == team) & box["played_match"]], seasons_raw)
         if not b_club.empty:
-            b_club = b_club.assign(name=(b_club["first_name"].fillna("") + " " + b_club["last_name"].fillna("")).str.strip())
-            rg = b_club.groupby("name").agg(
+            rg = b_club.groupby("full_name").agg(
                 games=("match_id", "nunique"),
-                seconds=("seconds_played", "sum"),
+                seconds=("est_seconds", "sum"),
                 goals=("goals", "sum"),
                 shots=("shots", "sum"),
                 saves=("saves", "sum"),
                 faced=("shots_faced", "sum"),
-                lnh=("lnh_score", "sum"),
+                note=("match_note", "mean"),
+                impact_def=("impact_def", "sum"),
                 gk=("is_gk", "max"),
-            ).reset_index().sort_values(["seconds", "lnh"], ascending=False)
+            ).reset_index().sort_values(["seconds", "impact_def"], ascending=False)
             roster = [{
-                "name": str(r.name),
+                "name": str(r.full_name),
                 "games": int(r.games),
                 "min_m": round(float(r.seconds) / 60.0 / max(int(r.games), 1), 1),
                 "goals": int(r.goals),
                 "shots": int(r.shots),
                 "saves": int(r.saves),
                 "faced": int(r.faced),
-                "lnh": round(float(r.lnh), 1),
+                "note": round(float(r.note), 2) if pd.notna(r.note) else None,
+                "impact_def": round(float(r.impact_def), 1),
                 "gk": bool(r.gk),
             } for r in rg.head(18).itertuples()]
 
@@ -476,14 +427,406 @@ def api_club_detail(qs: dict) -> dict:
     }
 
 
+# ---- Métriques d'équipes (scatter à axes configurables) ---------------------
+def api_teams(qs: dict) -> dict:
+    """Une ligne par club sur la période : ~30 indicateurs que le scatter peut croiser librement."""
+    seasons_raw = (qs.get("seasons", ["all"])[0] or "all").strip()
+    key = ("teams", seasons_raw)
+    with _lock:
+        if key in _cache:
+            return _cache[key]
+    m, box, _ = load_data()
+    mp = _filter_seasons_df(m[m["played"]], seasons_raw)
+    if mp.empty:
+        return {"teams": [], "period": seasons_raw}
+
+    hm = pd.DataFrame({"t": mp["home_team"], "gf": mp["home_ft_goals"], "ga": mp["away_ft_goals"], "home": 1})
+    aw = pd.DataFrame({"t": mp["away_team"], "gf": mp["away_ft_goals"], "ga": mp["home_ft_goals"], "home": 0})
+    x = pd.concat([hm, aw], ignore_index=True)
+    x["w"] = (x.gf > x.ga).astype(int)
+    x["d"] = (x.gf == x.ga).astype(int)
+    x["l"] = (x.gf < x.ga).astype(int)
+    x["close"] = ((x.gf - x.ga).abs() <= 2).astype(int)
+    x["w_h"], x["w_a"] = x.w * x.home, x.w * (1 - x.home)
+    g = x.groupby("t").agg(j=("gf", "size"), w=("w", "sum"), d=("d", "sum"), l=("l", "sum"),
+                           gf=("gf", "sum"), ga=("ga", "sum"), close=("close", "sum"),
+                           j_h=("home", "sum"), w_h=("w_h", "sum"), w_a=("w_a", "sum"))
+    g["pts"] = 2 * g.w + g.d
+    g["j_a"] = g.j - g.j_h
+    out = pd.DataFrame({
+        "team": g.index.astype(str),
+        "j": g.j, "pts": g.pts,
+        "pts_m": g.pts / g.j,
+        "win_pct": 100 * g.w / g.j,
+        "draw_pct": 100 * g.d / g.j,
+        "gf_m": g.gf / g.j, "ga_m": g.ga / g.j,
+        "gd_m": (g.gf - g.ga) / g.j,
+        "tot_m": (g.gf + g.ga) / g.j,
+        "close_pct": 100 * g.close / g.j,
+        "home_win_pct": np.where(g.j_h > 0, 100 * g.w_h / g.j_h.clip(lower=1), np.nan),
+        "away_win_pct": np.where(g.j_a > 0, 100 * g.w_a / g.j_a.clip(lower=1), np.nan),
+    }).reset_index(drop=True)
+    st = standings(mp)[["t", "rank"]].rename(columns={"t": "team"})
+    out = out.merge(st, on="team", how="left")
+
+    ht = pd.DataFrame(halftime_stats(mp))
+    if not ht.empty:
+        ht["h2_diff"] = (ht["h2_gf"] - ht["h2_ga"]) / ht["j_ht"].clip(lower=1)
+        ht["kept_pct"] = np.where(ht["ahead_ht"] > 0, 100 * ht["kept"] / ht["ahead_ht"].clip(lower=1), np.nan)
+        ht["cb_pct"] = np.where(ht["behind_ht"] > 0, 100 * (ht["cb_w"] + ht["cb_d"]) / ht["behind_ht"].clip(lower=1), np.nan)
+        out = out.merge(ht[["team", "cb_pts", "h2_diff", "kept_pct", "cb_pct"]], on="team", how="left")
+
+    pf = player_frame()
+    if pf is not None:
+        pb = _filter_seasons_df(pf[pf["played_match"]], seasons_raw)
+        if not pb.empty:
+            tg = pb.groupby("team").agg(
+                bx_games=("match_id", "nunique"), goals=("goals", "sum"), shots=("shots", "sum"),
+                g7=("goals_7m", "sum"), s7=("shots_7m", "sum"), saves=("saves", "sum"), faced=("shots_faced", "sum"),
+                a=("a", "sum"), bp=("bp", "sum"), br=("br", "sum"), tc=("tc", "sum"), two=("2min", "sum"),
+            )
+            core = pb[pb["est_seconds"] >= 600]
+            notes = core.groupby("team").agg(note=("match_note", "mean"), def_note=("def_note", "mean"))
+            ex = pd.DataFrame({
+                "shoot_pct": 100 * tg.goals / tg.shots.clip(lower=1),
+                "pct_7m": np.where(tg.s7 > 0, 100 * tg.g7 / tg.s7.clip(lower=1), np.nan),
+                "save_pct": np.where(tg.faced > 0, 100 * tg.saves / tg.faced.clip(lower=1), np.nan),
+                "ast_m": tg.a / tg.bx_games, "bp_m": tg.bp / tg.bx_games,
+                "br_m": tg.br / tg.bx_games, "tc_m": tg.tc / tg.bx_games,
+                "two_min_m": tg.two / tg.bx_games,
+            }, index=tg.index).join(notes).reset_index().rename(columns={"index": "team"})
+            ex = ex.rename(columns={ex.columns[0]: "team"})
+            out = out.merge(ex, on="team", how="left")
+
+    res = {"period": seasons_raw, "teams": _jsonable(out.round(3))}
+    with _lock:
+        _cache[key] = res
+    return res
+
+
+# ---- Records ----------------------------------------------------------------
+def _longest_run(flags) -> tuple[int, int, int]:
+    """(longueur, index de début, index de fin) de la plus longue série de True."""
+    best, cur, start = (0, -1, -1), 0, 0
+    for i, f in enumerate(flags):
+        if f:
+            if cur == 0:
+                start = i
+            cur += 1
+            if cur > best[0]:
+                best = (cur, start, i)
+        else:
+            cur = 0
+    return best
+
+
+def _fmtv(v: float, d: int = 0) -> str:
+    v = float(v)
+    return str(int(round(v))) if d == 0 else f"{v:.{d}f}".replace(".", ",")
+
+
+def _row(holder, value, detail="", *, team="", season="", date="", kind="team", d=0) -> dict:
+    return {"holder": str(holder), "team": str(team), "value": float(value), "display": _fmtv(value, d),
+            "detail": detail, "season": str(season), "date": str(date), "kind": kind}
+
+
+def _team_match_table(mp: pd.DataFrame) -> pd.DataFrame:
+    nan = pd.Series(np.nan, index=mp.index)
+    hth = pd.to_numeric(mp["home_ht_goals"], errors="coerce") if "home_ht_goals" in mp.columns else nan
+    ath = pd.to_numeric(mp["away_ht_goals"], errors="coerce") if "away_ht_goals" in mp.columns else nan
+
+    def side(home: bool) -> pd.DataFrame:
+        return pd.DataFrame({
+            "match_id": mp["match_id"], "season": mp["season"], "season_idx": mp["season_idx"],
+            "round": mp["round"], "date": mp["date"].astype(str),
+            "team": mp["home_team"] if home else mp["away_team"],
+            "opp": mp["away_team"] if home else mp["home_team"],
+            "home": home,
+            "gf": mp["home_ft_goals"] if home else mp["away_ft_goals"],
+            "ga": mp["away_ft_goals"] if home else mp["home_ft_goals"],
+            "ht_gf": hth if home else ath, "ht_ga": ath if home else hth,
+        })
+    tm = pd.concat([side(True), side(False)], ignore_index=True)
+    tm["margin"] = tm["gf"] - tm["ga"]
+    tm["total"] = tm["gf"] + tm["ga"]
+    tm["res"] = np.where(tm["margin"] > 0, "W", np.where(tm["margin"] == 0, "D", "L"))
+    return tm.sort_values(["season_idx", "round", "date"], kind="mergesort").reset_index(drop=True)
+
+
+def compute_records(seasons_raw: str = "all") -> dict:
+    seasons_raw = (seasons_raw or "all").strip() or "all"
+    key = ("records", seasons_raw)
+    with _lock:
+        if key in _cache:
+            return _cache[key]
+    m, box, _ = load_data()
+    mp = _filter_seasons_df(m[m["played"]], seasons_raw)
+    groups: list[dict] = []
+    N = 5
+
+    # ---- 1. Matchs & équipes -------------------------------------------------
+    if not mp.empty:
+        tm = _team_match_table(mp)
+        loc = lambda r: ("vs" if r.home else "@")
+        recs = []
+
+        d = tm[tm["margin"] > 0].sort_values(["margin", "gf", "date"], ascending=[False, False, True]).head(N)
+        recs.append({"id": "biggest_win", "label": "Plus large victoire", "unit": "buts d'écart", "top": [
+            _row(r.team, r.margin, f"{int(r.gf)}–{int(r.ga)} {loc(r)} {r.opp} · J{int(r.round)}", season=r.season, date=r.date) for r in d.itertuples()]})
+
+        hmatch = tm[tm["home"]]
+        d = hmatch.sort_values(["total", "date"], ascending=[False, True]).head(N)
+        recs.append({"id": "highest_total", "label": "Match le plus prolifique", "unit": "buts au total", "top": [
+            _row(f"{r.team} – {r.opp}", r.total, f"{int(r.gf)}–{int(r.ga)} · J{int(r.round)}", season=r.season, date=r.date, kind="match") for r in d.itertuples()]})
+        d = hmatch.sort_values(["total", "date"], ascending=[True, True]).head(N)
+        recs.append({"id": "lowest_total", "label": "Match le plus fermé", "unit": "buts au total", "top": [
+            _row(f"{r.team} – {r.opp}", r.total, f"{int(r.gf)}–{int(r.ga)} · J{int(r.round)}", season=r.season, date=r.date, kind="match") for r in d.itertuples()]})
+
+        d = tm.sort_values(["gf", "margin", "date"], ascending=[False, False, True]).head(N)
+        recs.append({"id": "most_scored", "label": "Plus de buts marqués par une équipe", "unit": "buts", "top": [
+            _row(r.team, r.gf, f"{int(r.gf)}–{int(r.ga)} {loc(r)} {r.opp} · J{int(r.round)}", season=r.season, date=r.date) for r in d.itertuples()]})
+
+        dr = hmatch[hmatch["res"] == "D"].sort_values(["total", "date"], ascending=[False, True]).head(N)
+        recs.append({"id": "wild_draw", "label": "Nul le plus spectaculaire", "unit": "buts au total", "top": [
+            _row(f"{r.team} – {r.opp}", r.total, f"{int(r.gf)}–{int(r.ga)} · J{int(r.round)}", season=r.season, date=r.date, kind="match") for r in dr.itertuples()]})
+
+        ht = tm[tm["ht_gf"].notna() & ((tm["ht_gf"] + tm["ht_ga"]) > 0)].copy()
+        if not ht.empty:
+            ht["lead"] = ht["ht_gf"] - ht["ht_ga"]
+            d = ht.sort_values(["lead", "date"], ascending=[False, True]).head(N)
+            recs.append({"id": "ht_lead", "label": "Plus grosse avance à la pause", "unit": "buts d'écart", "top": [
+                _row(r.team, r.lead, f"{int(r.ht_gf)}–{int(r.ht_ga)} à la pause, final {int(r.gf)}–{int(r.ga)} vs {r.opp}", season=r.season, date=r.date) for r in d.itertuples()]})
+            cb = ht[(ht["lead"] < 0) & (ht["margin"] > 0)].assign(deficit=lambda z: -z["lead"])
+            d = cb.sort_values(["deficit", "margin", "date"], ascending=[False, False, True]).head(N)
+            recs.append({"id": "comeback", "label": "Plus grande remontada", "unit": "buts de retard effacés", "top": [
+                _row(r.team, r.deficit, f"menée {int(r.ht_gf)}–{int(r.ht_ga)} à la pause, gagne {int(r.gf)}–{int(r.ga)} {loc(r)} {r.opp}", season=r.season, date=r.date) for r in d.itertuples()]})
+            ht["h2"] = (ht["gf"] - ht["ht_gf"]) - (ht["ga"] - ht["ht_ga"])
+            d = ht.sort_values(["h2", "date"], ascending=[False, True]).head(N)
+            recs.append({"id": "best_half", "label": "Meilleure seconde période", "unit": "buts d'écart en 2e mi-temps", "top": [
+                _row(r.team, r.h2, f"{int(r.gf - r.ht_gf)}–{int(r.ga - r.ht_ga)} en 2e période {loc(r)} {r.opp}", season=r.season, date=r.date) for r in d.itertuples()]})
+        groups.append({"id": "matches", "title": "Matchs", "blurb": "Les scores qui ont marqué la Starligue.", "records": recs})
+
+        # ---- 2. Séries (au sein d'une même saison) ---------------------------
+        def streak_rows(cond, home_only=False, label="") -> list[dict]:
+            best = []
+            for (team, season), grp in tm.groupby(["team", "season"], sort=False):
+                grp = grp[grp["home"]] if home_only else grp
+                if grp.empty:
+                    continue
+                ln, a, b = _longest_run(cond(grp).to_numpy())
+                if ln > 0:
+                    best.append((ln, team, season, int(grp["round"].iloc[a]), int(grp["round"].iloc[b]), str(grp["date"].iloc[b])))
+            best.sort(key=lambda t: (-t[0], t[5]))
+            return [_row(t[1], t[0], f"{t[2]} · de la J{t[3]} à la J{t[4]}", season=t[2], date=t[5]) for t in best[:N]]
+
+        groups.append({"id": "streaks", "title": "Séries", "blurb": "Calculées au sein d'une même saison.", "records": [
+            {"id": "win_streak", "label": "Plus longue série de victoires", "unit": "matchs", "top": streak_rows(lambda z: z["res"] == "W")},
+            {"id": "unbeaten", "label": "Plus longue série d'invincibilité", "unit": "matchs", "top": streak_rows(lambda z: z["res"] != "L")},
+            {"id": "home_unbeaten", "label": "Plus longue série invaincue à domicile", "unit": "matchs", "top": streak_rows(lambda z: z["res"] != "L", home_only=True)},
+            {"id": "loss_streak", "label": "Plus longue série de défaites", "unit": "matchs", "top": streak_rows(lambda z: z["res"] == "L")},
+        ]})
+
+        # ---- 3. Saisons de club ---------------------------------------------
+        ts = tm.groupby(["team", "season"]).agg(j=("gf", "size"), gf=("gf", "sum"), ga=("ga", "sum"),
+                                                w=("res", lambda s: int((s == "W").sum())), d=("res", lambda s: int((s == "D").sum()))).reset_index()
+        ts["pts"] = 2 * ts.w + ts.d
+        ts["gd"] = ts.gf - ts.ga
+        full = ts[ts["j"] >= 0.9 * ts["j"].max()]
+        if len(full) >= 3:
+            def top_ts(col, asc, label, unit, fmt=lambda r: f"{r.w}V {r.d}N {int(r.j - r.w - r.d)}D · {int(r.gf)}–{int(r.ga)}"):
+                keys = [col] + [k for k in ("pts", "gd") if k != col]
+                d_ = full.sort_values(keys, ascending=[asc] + [not asc] * (len(keys) - 1)).head(N)
+                return {"id": f"ts_{col}_{'min' if asc else 'max'}", "label": label, "unit": unit,
+                        "top": [_row(r.team, getattr(r, col), fmt(r), season=r.season) for r in d_.itertuples()]}
+            groups.append({"id": "club_seasons", "title": "Saisons de club", "blurb": "Saisons complètes uniquement.", "records": [
+                top_ts("pts", False, "Meilleur total de points", "points"),
+                top_ts("gf", False, "Meilleure attaque", "buts marqués"),
+                top_ts("ga", True, "Meilleure défense", "buts encaissés"),
+                top_ts("gd", False, "Meilleure différence de buts", "buts"),
+                top_ts("pts", True, "Saison la plus difficile", "points"),
+            ]})
+
+    # ---- 4. Joueurs : un seul match ------------------------------------------
+    pf = player_frame()
+    if pf is not None:
+        pp = _filter_seasons_df(pf[pf["played_match"]], seasons_raw)
+        if not pp.empty:
+            pp = pp.assign(save_ratio=np.where(pp["shots_faced"] >= 15, 100 * pp["saves"] / pp["shots_faced"].clip(lower=1), np.nan))
+
+            def p_top(col, label, unit, detail, *, d=0, mask=None, minv=0.0):
+                df = pp if mask is None else pp[mask(pp)]
+                df = df[df[col].notna() & (df[col] > minv)].sort_values([col, "date"], ascending=[False, True]).drop_duplicates("full_name").head(N)
+                return {"id": f"pm_{col}", "label": label, "unit": unit, "top": [
+                    _row(r.full_name, getattr(r, col), detail(r), team=r.team, season=r.season, date=r.date, kind="player", d=d) for r in df.itertuples()]}
+
+            base = lambda r: f"vs {r.opponent} ({r.score}) · J{int(r.round)}"
+            gk_mask = lambda z: z["is_gk"].astype(bool)
+            groups.append({"id": "players_match", "title": "Joueurs : un seul match", "blurb": "Meilleure performance de chaque joueur (un nom n'apparaît qu'une fois par classement).", "records": [
+                p_top("goals", "Plus de buts", "buts", lambda r: f"{int(r.goals)}/{int(r.shots)} aux tirs {base(r)}", mask=lambda z: ~z["is_gk"].astype(bool)),
+                p_top("goals_7m", "Plus de jets de 7 m marqués", "buts à 7 m", lambda r: f"{int(r.goals_7m)}/{int(r.shots_7m)} {base(r)}"),
+                p_top("a", "Plus de passes décisives", "passes", base),
+                p_top("br", "Plus de balles récupérées", "BR", base),
+                p_top("tc", "Plus de contres", "TC", base),
+                p_top("saves", "Plus d'arrêts", "arrêts", lambda r: f"{int(r.saves)}/{int(r.shots_faced)} {base(r)}", mask=gk_mask),
+                p_top("saves_7m", "Plus d'arrêts sur 7 m", "arrêts à 7 m", lambda r: f"{int(r.saves_7m)}/{int(r.shots_faced_7m)} {base(r)}", mask=gk_mask),
+                p_top("save_ratio", "Meilleur % d'arrêts (15 tirs minimum)", "% d'arrêts", lambda r: f"{int(r.saves)}/{int(r.shots_faced)} {base(r)}", d=1, mask=gk_mask),
+                p_top("match_note", "Meilleure note LNH sur un match", "/ 10", lambda r: f"{base(r)}", d=2),
+            ]})
+
+            # ---- 5. Joueurs : saison & série --------------------------------
+            ps = pp.groupby(["full_name", "team", "season"]).agg(
+                games=("match_id", "nunique"), goals=("goals", "sum"), g7=("goals_7m", "sum"), a=("a", "sum"),
+                saves=("saves", "sum"), faced=("shots_faced", "sum"), br=("br", "sum"), tc=("tc", "sum"),
+                note=("match_note", "mean"), impact_def=("impact_def", "sum"), gk=("is_gk", "max")).reset_index()
+            ps["def_act"] = ps["br"] + ps["tc"]
+            min_g = 8 if seasons_raw not in ("all",) and "," not in seasons_raw else 10
+
+            def s_top(col, label, unit, detail, *, d=0, mask=None, minv=0.0):
+                df = ps if mask is None else ps[mask(ps)]
+                df = df[df[col].notna() & (df[col] > minv)].sort_values([col, "games"], ascending=[False, True]).head(N)
+                return {"id": f"ps_{col}", "label": label, "unit": unit, "top": [
+                    _row(r.full_name, getattr(r, col), detail(r), team=r.team, season=r.season, kind="player", d=d) for r in df.itertuples()]}
+
+            sd = lambda r: f"{r.games} matchs · {r.season}"
+            recs = [
+                s_top("goals", "Plus de buts sur une saison", "buts", sd, mask=lambda z: ~z["gk"].astype(bool)),
+                s_top("g7", "Plus de buts à 7 m sur une saison", "buts à 7 m", sd),
+                s_top("a", "Plus de passes décisives sur une saison", "passes", sd),
+                s_top("saves", "Plus d'arrêts sur une saison", "arrêts", sd, mask=lambda z: z["gk"].astype(bool)),
+                s_top("def_act", "Plus de BR + TC sur une saison", "actions défensives", sd, mask=lambda z: ~z["gk"].astype(bool)),
+                s_top("note", f"Meilleure note LNH moyenne ({min_g} matchs min.)", "/ 10", sd, d=2, mask=lambda z: z["games"] >= min_g),
+            ]
+            # série de matchs consécutifs avec au moins un but (joueurs de champ)
+            fld = pp[~pp["is_gk"].astype(bool)].sort_values(["full_name", "season_idx", "round", "date"], kind="mergesort")
+            runs = []
+            for name, grp in fld.groupby("full_name", sort=False):
+                ln, a0, b0 = _longest_run((grp["goals"] > 0).to_numpy())
+                if ln >= 3:
+                    runs.append((ln, name, str(grp["team"].iloc[b0]), str(grp["season"].iloc[a0]), str(grp["season"].iloc[b0]),
+                                 int(grp["round"].iloc[a0]), int(grp["round"].iloc[b0]), str(grp["date"].iloc[b0])))
+            runs.sort(key=lambda t: (-t[0], t[7]))
+            recs.append({"id": "scoring_streak", "label": "Plus longue série de matchs avec un but", "unit": "matchs consécutifs", "top": [
+                _row(t[1], t[0], (f"{t[3]} · J{t[5]} → J{t[6]}" if t[3] == t[4] else f"{t[3]} J{t[5]} → {t[4]} J{t[6]}"),
+                     team=t[2], season=t[4], date=t[7], kind="player") for t in runs[:N]]})
+            cr = pp.groupby("full_name").agg(team=("team", "last"), games=("match_id", "nunique"), goals=("goals", "sum"),
+                                              a=("a", "sum"), saves=("saves", "sum"), g7=("goals_7m", "sum")).reset_index()
+            cd = lambda r: f"{int(r.games)} matchs sur la période"
+            for col, label, unit in (("goals", "Total de buts", "buts"), ("a", "Total de passes décisives", "passes"),
+                                     ("saves", "Total d'arrêts", "arrêts"), ("games", "Matchs disputés", "matchs")):
+                df = cr[cr[col] > 0].sort_values([col, "games"], ascending=[False, True]).head(N)
+                recs.append({"id": f"cr_{col}", "label": label, "unit": unit, "top": [
+                    _row(r.full_name, getattr(r, col), cd(r), team=r.team, kind="player") for r in df.itertuples()]})
+            groups.append({"id": "players_season", "title": "Joueurs : saison, série et cumul",
+                           "blurb": "Records sur une saison, séries de buts et totaux sur la période sélectionnée.", "records": recs})
+
+    n_players = int(pf[pf["played_match"]]["full_name"].nunique()) if pf is not None else 0
+    res = {"period": seasons_raw, "matches": int(len(mp)), "players": n_players, "groups": _jsonable(groups)}
+    with _lock:
+        _cache[key] = res
+    return res
+
+
+def api_records(qs: dict) -> dict:
+    return compute_records(qs.get("seasons", ["all"])[0])
+
+
+def player_records(name: str, is_gk: bool) -> dict:
+    """Records personnels sur toute la carrière présente dans la base + places au palmarès de la Starligue."""
+    pf = player_frame()
+    pp = pf[pf["played_match"]]
+    mine = pp[pp["full_name"] == name]
+    if mine.empty:
+        return {"best": [], "season_best": [], "placements": [], "streak": None}
+
+    with _lock:
+        bests = _cache.setdefault("pl_bests", {})
+
+    def league_best(col: str) -> pd.Series:
+        with _lock:
+            if col not in bests:
+                src = pp if col != "save_ratio" else pp.assign(save_ratio=np.where(pp["shots_faced"] >= 15, 100 * pp["saves"] / pp["shots_faced"].clip(lower=1), np.nan))
+                bests[col] = src.groupby("full_name")[col].max()
+            return bests[col]
+
+    specs = ([("saves", "Arrêts", 0), ("saves_7m", "Arrêts sur 7 m", 0), ("save_ratio", "% d'arrêts (≥ 15 tirs)", 1), ("match_note", "Note LNH", 2)] if is_gk
+             else [("goals", "Buts", 0), ("goals_7m", "Buts à 7 m", 0), ("a", "Passes décisives", 0), ("br", "Balles récupérées", 0), ("tc", "Contres", 0), ("match_note", "Note LNH", 2)])
+    src_mine = mine.assign(save_ratio=np.where(mine["shots_faced"] >= 15, 100 * mine["saves"] / mine["shots_faced"].clip(lower=1), np.nan))
+    best = []
+    for col, label, d in specs:
+        s = src_mine[src_mine[col].notna()]
+        if s.empty or float(s[col].max()) <= 0:
+            continue
+        r = s.sort_values([col, "date"], ascending=[False, True]).iloc[0]
+        lb = league_best(col)
+        rank = int((lb > float(r[col]) + 1e-9).sum()) + 1
+        best.append({"stat": col, "label": label, "value": float(r[col]), "display": _fmtv(r[col], d),
+                     "detail": f"vs {r['opponent']} ({r['score']}) · J{int(r['round'])} · {r['season']}",
+                     "rank": rank, "of": int(lb.notna().sum())})
+
+    ps = mine.groupby(["season", "team"]).agg(games=("match_id", "nunique"), goals=("goals", "sum"), a=("a", "sum"),
+                                              saves=("saves", "sum"), def_act=("br", "sum"), tc=("tc", "sum"), note=("match_note", "mean")).reset_index()
+    ps["def_act"] = ps["def_act"] + ps["tc"]
+    season_best = []
+    cols = ([("saves", "Arrêts sur une saison", 0), ("note", "Meilleure note LNH moyenne", 2)] if is_gk
+            else [("goals", "Buts sur une saison", 0), ("a", "Passes décisives sur une saison", 0), ("def_act", "BR + TC sur une saison", 0), ("note", "Meilleure note LNH moyenne", 2)])
+    for col, label, d in cols:
+        s = ps[ps["games"] >= (5 if col == "note" else 1)]
+        if s.empty or float(s[col].max()) <= 0:
+            continue
+        r = s.sort_values([col, "games"], ascending=[False, True]).iloc[0]
+        season_best.append({"stat": col, "label": label, "display": _fmtv(r[col], d), "detail": f"{r['season']} · {r['team']} · {int(r['games'])} matchs"})
+
+    streak = None
+    if not is_gk:
+        grp = mine.sort_values(["season_idx", "round", "date"], kind="mergesort")
+        ln, a0, b0 = _longest_run((grp["goals"] > 0).to_numpy())
+        if ln >= 3:
+            streak = {"length": int(ln), "detail": f"{grp['season'].iloc[a0]} J{int(grp['round'].iloc[a0])} → {grp['season'].iloc[b0]} J{int(grp['round'].iloc[b0])}"}
+
+    placements = []
+    for grp_ in compute_records("all")["groups"]:
+        for rec in grp_["records"]:
+            for i, t in enumerate(rec["top"]):
+                if t["kind"] == "player" and t["holder"] == name:
+                    placements.append({"id": rec["id"], "label": rec["label"], "rank": i + 1, "display": t["display"], "unit": rec["unit"], "detail": t["detail"]})
+    placements.sort(key=lambda p: p["rank"])
+    return {"best": best, "season_best": season_best, "placements": placements, "streak": streak}
+
+
+# ---- Fiche joueur & recherche (comparaison de deux joueurs) -----------------
+def api_players_search(qs: dict) -> list[dict]:
+    """Recherche de joueurs par nom (insensible aux accents) pour alimenter la comparaison."""
+    pf = player_frame()
+    if pf is None:
+        return []
+    q = _fold(qs.get("q", [""])[0])
+    gk = qs.get("gk", [""])[0]
+    exclude = qs.get("exclude", [""])[0]
+    seasons_raw = qs.get("seasons", ["all"])[0].strip() or "all"
+    pp = _filter_seasons_df(pf[pf["played_match"]], seasons_raw)
+    if pp.empty:
+        pp = pf[pf["played_match"]]
+    g = pp.groupby("full_name").agg(team=("team", "last"), games=("match_id", "nunique"), minutes=("est_seconds", "sum"),
+                                    note=("match_note", "mean"), gk=("is_gk", "max")).reset_index()
+    g = g[g["full_name"] != exclude]
+    if gk in ("0", "1"):
+        g = g[g["gk"].astype(bool) == (gk == "1")]
+    if q:
+        g = g[g["full_name"].map(_fold).str.contains(re.escape(q), regex=True)]
+    g = g.sort_values(["minutes", "games"], ascending=False).head(int(np.clip(int(qs.get("limit", [12])[0]), 1, 40)))
+    return [{"name": r.full_name, "team": str(r.team), "games": int(r.games), "note": round(float(r.note), 2) if pd.notna(r.note) else None,
+             "gk": bool(r.gk)} for r in g.itertuples()]
+
+
 def api_player_detail(qs: dict) -> dict:
     name = qs.get("name", [""])[0].strip()
     seasons_raw = qs.get("seasons", ["all"])[0].strip()
     m, box, seasons = load_data()
-    if not name or box is None or box.empty:
+    pf = player_frame()
+    if not name or pf is None:
         raise ValueError("Joueur introuvable")
 
-    b_all = box.assign(full_name=(box["first_name"].fillna("") + " " + box["last_name"].fillna("")).str.strip())
+    b_all = pf[pf["played_match"]]
     b_per_all = _filter_seasons_df(b_all, seasons_raw)
     bp = b_per_all[b_per_all["full_name"] == name].copy()
     if bp.empty:
@@ -495,139 +838,99 @@ def api_player_detail(qs: dict) -> dict:
     is_gk = bool(bp["is_gk"].max())
     teams_list = list(dict.fromkeys(bp["team"].dropna().astype(str).tolist()))
     games = int(bp["match_id"].nunique())
-    tot_min = float(bp["seconds_played"].sum()) / 60.0
+    tot_min = float(bp["est_seconds"].sum()) / 60.0
     min_m = tot_min / max(games, 1)
 
-    goals = int(bp["goals"].sum())
-    shots = int(bp["shots"].sum())
-    goals_7m = int(bp["goals_7m"].sum())
-    shots_7m = int(bp["shots_7m"].sum())
-    saves = int(bp["saves"].sum())
-    faced = int(bp["shots_faced"].sum())
-    saves_7m = int(bp["saves_7m"].sum())
-    faced_7m = int(bp["shots_faced_7m"].sum())
-    br = int(bp["br"].sum())
-    tc = int(bp["tc"].sum())
-    a = int(bp["a"].sum())
-    bp_lost = int(bp["bp"].sum())
-    two_min = int(bp["2min"].sum())
-    lnh = float(bp["lnh_score"].sum())
+    goals, shots = int(bp["goals"].sum()), int(bp["shots"].sum())
+    goals_7m, shots_7m = int(bp["goals_7m"].sum()), int(bp["shots_7m"].sum())
+    saves, faced = int(bp["saves"].sum()), int(bp["shots_faced"].sum())
+    saves_7m, faced_7m = int(bp["saves_7m"].sum()), int(bp["shots_faced_7m"].sum())
+    br, tc, a = int(bp["br"].sum()), int(bp["tc"].sum()), int(bp["a"].sum())
+    bp_lost, two_min = int(bp["bp"].sum()), int(bp["2min"].sum())
+    note = float(bp["match_note"].mean()) if bp["match_note"].notna().any() else 5.0
+    def_note = float(bp["def_note"].mean()) if bp["def_note"].notna().any() else 5.0
+    impact_def = float(bp["impact_def"].sum())
+    est_clock = bool(bp["has_real_clock"].mean() < 0.5)
 
     stats = {
-        "games": games,
-        "tot_min": round(tot_min, 1),
-        "min_m": round(min_m, 1),
-        "goals": goals,
-        "shots": shots,
-        "pct": round(100.0 * goals / max(shots, 1), 1) if shots > 0 else 0.0,
-        "goals_7m": goals_7m,
-        "shots_7m": shots_7m,
+        "games": games, "tot_min": round(tot_min, 1), "min_m": round(min_m, 1), "est_clock": est_clock,
+        "goals": goals, "shots": shots, "pct": round(100.0 * goals / max(shots, 1), 1) if shots > 0 else 0.0,
+        "goals_7m": goals_7m, "shots_7m": shots_7m,
         "pct_7m": round(100.0 * goals_7m / max(shots_7m, 1), 1) if shots_7m > 0 else 0.0,
-        "saves": saves,
-        "faced": faced,
-        "save_pct": round(100.0 * saves / max(faced, 1), 1) if faced > 0 else 0.0,
-        "saves_7m": saves_7m,
-        "faced_7m": faced_7m,
+        "saves": saves, "faced": faced, "save_pct": round(100.0 * saves / max(faced, 1), 1) if faced > 0 else 0.0,
+        "saves_7m": saves_7m, "faced_7m": faced_7m,
         "save_pct_7m": round(100.0 * saves_7m / max(faced_7m, 1), 1) if faced_7m > 0 else 0.0,
-        "br": br,
-        "tc": tc,
-        "a": a,
-        "bp": bp_lost,
-        "two_min": two_min,
-        "lnh": round(lnh, 1),
-        "lnh_m": round(lnh / max(games, 1), 2),
+        "br": br, "tc": tc, "a": a, "bp": bp_lost, "two_min": two_min,
+        "note": round(note, 2), "def_note": round(def_note, 2), "impact_def": round(impact_def, 1),
     }
 
     # Radar normalisé (50 = moyenne de la ligue sur la période pour le même rôle)
-    lg = b_per_all[(b_per_all["is_gk"] == is_gk) & (b_per_all["seconds_played"] >= 600)]
+    lg = b_per_all[(b_per_all["is_gk"].astype(bool) == is_gk) & (b_per_all["est_seconds"] >= 600)]
     if lg.empty:
-        lg = b_per_all[b_per_all["is_gk"] == is_gk]
-    lg_min = max(float(lg["seconds_played"].sum()) / 60.0, 1.0)
+        lg = b_per_all[b_per_all["is_gk"].astype(bool) == is_gk]
+    lg_min = max(float(lg["est_seconds"].sum()) / 60.0, 1.0)
     p_min = max(tot_min, 1.0)
+    lg_note = float(lg["match_note"].mean()) if lg["match_note"].notna().any() else 5.0
+    lg_def_note = float(lg["def_note"].mean()) if lg["def_note"].notna().any() else 5.0
 
     def _norm(val: float, avg: float) -> int:
         if avg <= 0:
             return 50 if val <= 0 else 85
         return int(np.clip(round(50.0 * (val / avg)), 5, 100))
 
+    ax = lambda axis, score, val, avg, key: {"axis": axis, "key": key, "score": score, "val": val, "avg": avg}
     if is_gk:
         lg_sv_pct = 100.0 * float(lg["saves"].sum()) / max(float(lg["shots_faced"].sum()), 1.0)
         lg_7m_pct = 100.0 * float(lg["saves_7m"].sum()) / max(float(lg["shots_faced_7m"].sum()), 1.0)
         lg_sv_60 = 60.0 * float(lg["saves"].sum()) / lg_min
-        lg_lnh_60 = 60.0 * float(lg["lnh_score"].sum()) / lg_min
-        lg_min_g = float(lg["seconds_played"].mean()) / 60.0
+        lg_min_g = float(lg["est_seconds"].mean()) / 60.0
         radar = [
-            {"axis": "% Arrêts", "score": _norm(stats["save_pct"], lg_sv_pct), "val": f"{stats['save_pct']} %", "avg": f"{lg_sv_pct:.1f} %"},
-            {"axis": "% Arrêts 7m", "score": _norm(stats["save_pct_7m"], lg_7m_pct), "val": f"{stats['save_pct_7m']} %", "avg": f"{lg_7m_pct:.1f} %"},
-            {"axis": "Arrêts / 60m", "score": _norm(60.0 * saves / p_min, lg_sv_60), "val": f"{60.0 * saves / p_min:.1f}", "avg": f"{lg_sv_60:.1f}"},
-            {"axis": "Éval. LNH / 60m", "score": _norm(60.0 * lnh / p_min, lg_lnh_60), "val": f"{60.0 * lnh / p_min:.1f}", "avg": f"{lg_lnh_60:.1f}"},
-            {"axis": "Temps / match", "score": _norm(min_m, lg_min_g), "val": f"{min_m:.1f} min", "avg": f"{lg_min_g:.1f} min"},
+            ax("% Arrêts", _norm(stats["save_pct"], lg_sv_pct), f"{stats['save_pct']} %", f"{lg_sv_pct:.1f} %", "save_pct"),
+            ax("% Arrêts 7m", _norm(stats["save_pct_7m"], lg_7m_pct), f"{stats['save_pct_7m']} %", f"{lg_7m_pct:.1f} %", "save_pct_7m"),
+            ax("Arrêts / 60m", _norm(60.0 * saves / p_min, lg_sv_60), f"{60.0 * saves / p_min:.1f}", f"{lg_sv_60:.1f}", "saves_60"),
+            ax("Note LNH", _norm(note, lg_note), f"{note:.2f} / 10", f"{lg_note:.2f} / 10", "note"),
+            ax("Temps / match", _norm(min_m, lg_min_g), f"{min_m:.1f} min", f"{lg_min_g:.1f} min", "min_m"),
         ]
     else:
         lg_g_60 = 60.0 * float(lg["goals"].sum()) / lg_min
         lg_sh_pct = 100.0 * float(lg["goals"].sum()) / max(float(lg["shots"].sum()), 1.0)
         lg_a_60 = 60.0 * float(lg["a"].sum()) / lg_min
         lg_def_60 = 60.0 * float((lg["br"] + lg["tc"]).sum()) / lg_min
-        lg_lnh_60 = 60.0 * float(lg["lnh_score"].sum()) / lg_min
         radar = [
-            {"axis": "Buts / 60m", "score": _norm(60.0 * goals / p_min, lg_g_60), "val": f"{60.0 * goals / p_min:.1f}", "avg": f"{lg_g_60:.1f}"},
-            {"axis": "Précision tir", "score": _norm(stats["pct"], lg_sh_pct), "val": f"{stats['pct']} %", "avg": f"{lg_sh_pct:.1f} %"},
-            {"axis": "Passes D. / 60m", "score": _norm(60.0 * a / p_min, lg_a_60), "val": f"{60.0 * a / p_min:.1f}", "avg": f"{lg_a_60:.1f}"},
-            {"axis": "Défense / 60m", "score": _norm(60.0 * (br + tc) / p_min, lg_def_60), "val": f"{60.0 * (br + tc) / p_min:.1f}", "avg": f"{lg_def_60:.1f}"},
-            {"axis": "Éval. LNH / 60m", "score": _norm(60.0 * lnh / p_min, lg_lnh_60), "val": f"{60.0 * lnh / p_min:.1f}", "avg": f"{lg_lnh_60:.1f}"},
+            ax("Buts / 60m", _norm(60.0 * goals / p_min, lg_g_60), f"{60.0 * goals / p_min:.1f}", f"{lg_g_60:.1f}", "goals_60"),
+            ax("Précision tir", _norm(stats["pct"], lg_sh_pct), f"{stats['pct']} %", f"{lg_sh_pct:.1f} %", "pct"),
+            ax("Passes D. / 60m", _norm(60.0 * a / p_min, lg_a_60), f"{60.0 * a / p_min:.1f}", f"{lg_a_60:.1f}", "a_60"),
+            ax("Défense / 60m", _norm(60.0 * (br + tc) / p_min, lg_def_60), f"{60.0 * (br + tc) / p_min:.1f}", f"{lg_def_60:.1f}", "def_60"),
+            ax("Note LNH", _norm(note, lg_note), f"{note:.2f} / 10", f"{lg_note:.2f} / 10", "note"),
+            ax("Note défensive LNH", _norm(def_note, lg_def_note), f"{def_note:.2f} / 10", f"{lg_def_note:.2f} / 10", "def_note"),
         ]
 
     # Historique par saison sur l'ensemble des données du joueur
     bp_full = b_all[b_all["full_name"] == name]
     sg = bp_full.groupby(["season", "team"]).agg(
-        games=("match_id", "nunique"),
-        seconds=("seconds_played", "sum"),
-        goals=("goals", "sum"),
-        shots=("shots", "sum"),
-        saves=("saves", "sum"),
-        faced=("shots_faced", "sum"),
-        lnh=("lnh_score", "sum"),
+        games=("match_id", "nunique"), seconds=("est_seconds", "sum"), goals=("goals", "sum"), shots=("shots", "sum"),
+        saves=("saves", "sum"), faced=("shots_faced", "sum"), note=("match_note", "mean"),
     ).reset_index().sort_values("season")
     seasons_hist = [{
-        "season": str(r.season),
-        "team": str(r.team),
-        "games": int(r.games),
+        "season": str(r.season), "team": str(r.team), "games": int(r.games),
         "min_m": round(float(r.seconds) / 60.0 / max(int(r.games), 1), 1),
-        "goals": int(r.goals),
-        "pct": round(100.0 * r.goals / max(int(r.shots), 1), 1) if r.shots > 0 else 0.0,
-        "saves": int(r.saves),
-        "save_pct": round(100.0 * r.saves / max(int(r.faced), 1), 1) if r.faced > 0 else 0.0,
-        "lnh": round(float(r.lnh), 1),
+        "goals": int(r.goals), "pct": round(100.0 * r.goals / max(int(r.shots), 1), 1) if r.shots > 0 else 0.0,
+        "saves": int(r.saves), "save_pct": round(100.0 * r.saves / max(int(r.faced), 1), 1) if r.faced > 0 else 0.0,
+        "note": round(float(r.note), 2) if pd.notna(r.note) else None,
     } for r in sg.itertuples()]
 
-    # Top 5 matchs individuels sur la période
-    meta_m = m[["match_id", "date", "round", "home_team", "away_team", "home_ft_goals", "away_ft_goals"]].drop_duplicates("match_id")
-    bp_m = bp.merge(meta_m, on="match_id", how="left").sort_values(["lnh_score", "goals", "saves"], ascending=False)
-    best_games = []
-    for r in bp_m.head(5).itertuples():
-        opp = r.away_team if r.team == r.home_team else r.home_team
-        sc_txt = f"{int(r.home_ft_goals)}–{int(r.away_ft_goals)}" if pd.notna(r.home_ft_goals) else ""
-        best_games.append({
-            "date": str(r.date) if pd.notna(r.date) else "",
-            "season": str(r.season),
-            "team": str(r.team),
-            "opponent": str(opp) if pd.notna(opp) else "",
-            "score": sc_txt,
-            "goals": int(r.goals),
-            "shots": int(r.shots),
-            "saves": int(r.saves),
-            "faced": int(r.shots_faced),
-            "lnh": round(float(r.lnh_score), 1),
-        })
+    # Top 5 matchs individuels sur la période (classés par note LNH)
+    bp_m = bp.sort_values(["match_note", "goals", "saves"], ascending=False)
+    best_games = [{
+        "date": str(r.date), "season": str(r.season), "team": str(r.team),
+        "opponent": str(r.opponent) if pd.notna(r.opponent) else "", "score": str(r.score),
+        "goals": int(r.goals), "shots": int(r.shots), "saves": int(r.saves), "faced": int(r.shots_faced),
+        "note": round(float(r.match_note), 2) if pd.notna(r.match_note) else None,
+    } for r in bp_m.head(5).itertuples()]
 
     return {
-        "name": name,
-        "teams": teams_list,
-        "is_gk": is_gk,
-        "stats": stats,
-        "radar": radar,
-        "seasons_history": seasons_hist,
-        "best_games": best_games,
+        "name": name, "teams": teams_list, "is_gk": is_gk, "stats": stats, "radar": radar,
+        "seasons_history": seasons_hist, "best_games": best_games, "records": player_records(name, is_gk),
     }
 
 
@@ -635,23 +938,17 @@ def api_player_detail(qs: dict) -> dict:
 def _prepare_explorer_df(dataset: str) -> pd.DataFrame:
     m, box, _ = load_data()
     if dataset == "players":
-        if box is None or box.empty:
+        pf = player_frame()
+        if pf is None or pf.empty:
             return pd.DataFrame()
-        b = box.copy()
-        if "date" not in b.columns or "round" not in b.columns:
-            meta_m = m[["match_id", "date", "round", "home_team", "away_team"]].drop_duplicates("match_id")
-            b = b.merge(meta_m, on="match_id", how="left")
-        if "opponent" not in b.columns and {"home_team", "away_team"}.issubset(b.columns):
-            b["opponent"] = np.where(b["team"] == b["home_team"], b["away_team"], b["home_team"])
-        b["player"] = (b.get("first_name", pd.Series("", index=b.index)).fillna("") + " "
-                       + b.get("last_name", pd.Series("", index=b.index)).fillna("")).str.strip()
-        for col in ["goals", "shots", "saves", "shots_faced", "lnh_score", "seconds_played", "a", "br", "bp", "2min"]:
-            if col not in b.columns:
-                b[col] = 0
-            b[col] = pd.to_numeric(b[col], errors="coerce").fillna(0)
-        b["date"] = b.get("date", pd.Series("", index=b.index)).fillna("").astype(str)
-        b["season"] = b.get("season", pd.Series("", index=b.index)).fillna("").astype(str)
-        b["round"] = pd.to_numeric(b.get("round", 0), errors="coerce").fillna(0).astype(int)
+        b = pf[pf["played_match"]].copy()
+        b["player"] = b["full_name"]
+        for col in ["goals", "shots", "saves", "shots_faced", "est_seconds", "a", "br", "bp", "two_min", "match_note"]:
+            b[col] = pd.to_numeric(b[col], errors="coerce")
+            if col != "match_note":
+                b[col] = b[col].fillna(0)
+        b["season"] = b["season"].fillna("").astype(str)
+        b["opponent"] = b["opponent"].fillna("").astype(str)
         return b
 
     df = m.copy()
@@ -715,11 +1012,11 @@ def api_explorer(qs: dict) -> dict:
     if dataset == "players":
         sort_map = {
             "player": "player", "team": "team", "goals": "goals", "saves": "saves",
-            "lnh_score": "lnh_score", "seconds_played": "seconds_played",
-            "a": "a", "br": "br", "bp": "bp", "2min": "2min",
+            "note": "match_note", "seconds_played": "est_seconds",
+            "a": "a", "br": "br", "bp": "bp", "2min": "two_min",
             "opponent": "opponent", "date": "date", "season": "season", "round": "round",
         }
-        col = sort_map.get(sort_key, "lnh_score")
+        col = sort_map.get(sort_key, "match_note")
         df = df.sort_values([col, "date"], ascending=[asc, False], kind="mergesort")
     else:
         sort_map = {
@@ -742,12 +1039,12 @@ def api_explorer(qs: dict) -> dict:
             "team": r.team,
             "goals_shots": f"{int(r.goals)}/{int(r.shots)}",
             "saves_faced": f"{int(r.saves)}/{int(r.shots_faced)}" if r.shots_faced > 0 else "–",
-            "lnh_score": round(float(r.lnh_score), 1),
-            "minutes": f"{int(r.seconds_played) // 60}:{int(r.seconds_played) % 60:02d}",
+            "note": round(float(r.match_note), 2) if pd.notna(r.match_note) else "–",
+            "minutes": ("" if r.has_real_clock else "~") + f"{int(r.est_seconds) // 60}:{int(r.est_seconds) % 60:02d}",
             "a": int(r.a),
             "br": int(r.br),
             "bp": int(r.bp),
-            "2min": int(getattr(r, "2min", 0)),
+            "2min": int(r.two_min),
             "opponent": r.opponent or "",
             "date": r.date,
             "season": r.season,
@@ -784,22 +1081,38 @@ def api_export_csv(qs: dict) -> tuple[bytes, str]:
     return clean.to_csv(index=False).encode("utf-8-sig"), fname
 
 
+
 # ---- Simulations ------------------------------------------------------------
-def run_job(jid: str, season: str, cutoff: int, n: int, keep_matches: bool):
-    job = JOBS[jid]
-    run_id = re.sub(r"[^0-9A-Za-z]+", "_", f"{season}_c{cutoff}_n{n}")
-    out = OUT / run_id
-    cmd = [sys.executable, str(HERE / "simulation_montecarlo.py"), "--data-dir", str(DATA), "--output-dir", str(out),
+def _run_id(season: str, cutoff: int, n: int) -> str:
+    return re.sub(r"[^0-9A-Za-z]+", "_", f"{season}_c{cutoff}_n{n}")
+
+
+def _simulate(season: str, cutoff: int, n: int, keep_matches: bool = False, on_line=None) -> str:
+    """Lance simulation_montecarlo.py (sous-processus) et renvoie l'identifiant du run."""
+    run_id = _run_id(season, cutoff, n)
+    cmd = [sys.executable, str(HERE / "simulation_montecarlo.py"), "--data-dir", str(DATA), "--output-dir", str(OUT / run_id),
            "--season", season, "--cutoff-round", str(cutoff), "--n-simulations", str(n)]
     if not keep_matches:
         cmd.append("--no-export-matches")
-    job.update(status="running", run=run_id, started=time.time())
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=HERE)
+    for line in p.stdout:
+        if on_line:
+            on_line(line.rstrip())
+    if p.wait() != 0:
+        raise RuntimeError(f"La simulation {run_id} a échoué")
+    return run_id
+
+
+def run_job(jid: str, season: str, cutoff: int, n: int, keep_matches: bool):
+    job = JOBS[jid]
+    job.update(status="running", run=_run_id(season, cutoff, n), started=time.time())
+
+    def on_line(line: str):
+        job["log"].append(line)
+        job["log"] = job["log"][-60:]
     try:
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=HERE)
-        for line in p.stdout:
-            job["log"].append(line.rstrip())
-            job["log"] = job["log"][-60:]
-        job["status"] = "done" if p.wait() == 0 else "error"
+        _simulate(season, cutoff, n, keep_matches, on_line)
+        job["status"] = "done"
     except Exception as e:  # noqa
         job["log"].append(str(e)); job["status"] = "error"
 
@@ -807,9 +1120,13 @@ def run_job(jid: str, season: str, cutoff: int, n: int, keep_matches: bool):
 def list_runs() -> list[dict]:
     runs = []
     for d in OUT.glob("*/summary_storytelling.json"):
-        j = json.loads(d.read_text(encoding="utf-8"))
-        runs.append({"id": d.parent.name, "season": j["season"], "cutoff": j["cutoff_round"], "n": j["n_simulations"],
-                     "time": d.stat().st_mtime})
+        try:
+            j = json.loads(d.read_text(encoding="utf-8"))
+            runs.append({"id": d.parent.name, "season": j["season"], "cutoff": j["cutoff_round"], "n": j["n_simulations"],
+                         "time": d.stat().st_mtime,
+                         "conditional": any((d.parent / f).exists() for f in ("sim_matches.parquet", "sim_matches.csv.gz", "sim_outcomes.npz"))})
+        except Exception:  # run corrompu ou en cours d'écriture : on l'ignore
+            continue
     return sorted(runs, key=lambda r: -r["time"])
 
 
@@ -825,57 +1142,301 @@ def run_dir(rid: str) -> Path:
     return d
 
 
+def _load_run(d: Path) -> dict:
+    """Classements de toutes les simulations, sous forme matricielle (S x T), mis en cache (3 runs max)."""
+    j_path = d / "summary_storytelling.json"
+    key = ("run", d.name, j_path.stat().st_mtime)
+    with _lock:
+        if key in _cache:
+            return _cache[key]
+    j = json.loads(j_path.read_text(encoding="utf-8"))
+    teams = list(j["teams"])
+    ss = read_table(d, "sim_standings")
+    ss = ss.assign(Team=ss["Team"].astype(str))
+    rk = ss.pivot(index="simulation", columns="Team", values="Rank")[teams]
+    pts = ss.pivot(index="simulation", columns="Team", values="Pts")[teams]
+    run = {"json": j, "teams": teams, "ss": ss, "sims": rk.index.to_numpy(),
+           "rk": rk.to_numpy(dtype=np.int16), "pts": pts.to_numpy(dtype=np.int16)}
+    with _lock:
+        for k in [k for k in _cache if isinstance(k, tuple) and k[0] == "run"][:-2]:
+            _cache.pop(k, None)
+        _cache[key] = run
+    return run
+
+
+def _zones(j: dict, ts: list[dict]) -> dict:
+    z = j.get("zones")
+    if z:
+        return z
+    top_col = next((c for c in (ts[0] if ts else {}) if re.match(r"^P_Top\d+", c)), "P_Top4")
+    return {"podium": 3, "top_k": int(re.sub(r"\D", "", top_col) or 4), "n_relegated": 2}
+
+
 def api_sim(rid: str) -> dict:
     d = run_dir(rid)
-    j = json.loads((d / "summary_storytelling.json").read_text(encoding="utf-8"))
+    run = _load_run(d)
+    j, ss = run["json"], run["ss"]
     ts = read_table(d, "team_summary").round(4).to_dict("records")
-    ss = read_table(d, "sim_standings")
     notable = j["notable_simulations"]
     ids = {"typical": notable["typical_sim"]}
     for t, v in notable["by_team"].items():
         ids[f"best:{t}"], ids[f"worst:{t}"] = v["best_sim"], v["worst_sim"]
-    pick = ss[ss["simulation"].isin(set(ids.values()))]
-    tab = {int(k): g.sort_values("Rank")[["Team", "Rank", "Pts", "W", "D", "L", "GF", "GA", "GD"]].astype({"Team": str}).to_dict("records")
-           for k, g in pick.groupby("simulation")}
-    exp = pd.Series({r["Team"]: r["Expected_Pts"] for r in ts})
-    piv = ss.assign(Team=ss["Team"].astype(str)).pivot(index="simulation", columns="Team", values="Pts")
-    out_id = int(((piv - exp[piv.columns]) ** 2).sum(axis=1).idxmax())
-    if out_id not in tab:
-        tab[out_id] = ss[ss.simulation == out_id].sort_values("Rank").astype({"Team": str})[["Team", "Rank", "Pts", "W", "D", "L", "GF", "GA", "GD"]].to_dict("records")
-    return {"season": j["season"], "cutoff": j["cutoff_round"], "n": j["n_simulations"], "teams": j["teams"],
-            "summary": ts, "ratings": j.get("ratings_dc", []), "ids": ids, "outlier": out_id, "tables": tab,
-            "rank_probs": j["rank_probabilities"], "metrics": j.get("backtest_metrics", {}),
-            "rank_metrics": j.get("rank_metrics", {})}
+    exp = run["pts"].mean(axis=0)
+    out_id = int(run["sims"][int(np.argmax(((run["pts"] - exp) ** 2).sum(axis=1)))])
+    wanted = set(ids.values()) | {out_id}
+    cols = ["Team", "Rank", "Pts", "W", "D", "L", "GF", "GA", "GD"]
+    pick = ss[ss["simulation"].isin(wanted)]
+    tab = {int(k): g.sort_values("Rank")[cols].to_dict("records") for k, g in pick.groupby("simulation")}
+    return _jsonable({
+        "season": j["season"], "cutoff": j["cutoff_round"], "n": j["n_simulations"], "teams": j["teams"],
+        "summary": ts, "ratings": j.get("ratings_dc", []), "ids": ids, "outlier": out_id, "tables": tab,
+        "rank_probs": j["rank_probabilities"], "metrics": j.get("backtest_metrics", {}),
+        "rank_metrics": j.get("rank_metrics", {}),
+        # forces Dixon & Coles au cutoff + malus d'absence appliqués aux matchs restants
+        "dc_meta": j.get("dc_meta", {}),
+        "availability": j.get("availability", []),
+        "model": {k: j.get("params", {}).get(k) for k in
+                  ("absence_off_per_share", "absence_def_per_share", "absence_decay", "absence_lookback",
+                   "absence_min_games", "absence_core_presence", "gk_weight")},
+        "zones": _zones(j, ts),
+        "conditional": any((d / f).exists() for f in ("sim_matches.parquet", "sim_matches.csv.gz", "sim_outcomes.npz")),
+        "has_matches": any((d / f).exists() for f in ("sim_matches.parquet", "sim_matches.csv.gz")),
+    })
+
+
+# ---- Simulateur conditionnel -----------------------------------------------
+def _load_outcomes(d: Path, match_ids: list[str]) -> pd.DataFrame:
+    """Issue (1 / N / 2) de chaque simulation pour les matchs demandés.
+    Source : sim_matches.parquet si conservé, sinon la version légère sim_outcomes.npz."""
+    wanted = [str(x) for x in match_ids]
+    cols = ["simulation", "match_id", "hg", "ag"]
+    pq, gz, npz = d / "sim_matches.parquet", d / "sim_matches.csv.gz", d / "sim_outcomes.npz"
+    if pq.exists():
+        try:
+            df = pd.read_parquet(pq, columns=cols, filters=[("match_id", "in", wanted)])
+        except Exception:  # filtre non supporté pour les colonnes dictionnaire : on filtre côté pandas
+            df = pd.read_parquet(pq, columns=cols)
+    elif gz.exists():
+        df = pd.read_csv(gz, usecols=cols, dtype={"match_id": str})
+    elif npz.exists():
+        z = np.load(npz, allow_pickle=False)
+        ids = z["match_id"].astype(str)
+        idx = [int(np.flatnonzero(ids == w)[0]) for w in wanted if (ids == w).any()]
+        sims = z["simulation"]
+        df = pd.concat([pd.DataFrame({"simulation": sims, "match_id": ids[i], "hg": z["hg"][:, i], "ag": z["ag"][:, i]}) for i in idx],
+                       ignore_index=True) if idx else pd.DataFrame(columns=cols)
+    else:
+        raise FileNotFoundError("sim_matches.parquet / sim_outcomes.npz")
+    df["match_id"] = df["match_id"].astype(str)
+    df = df[df["match_id"].isin(wanted)]
+    res = np.where(df["hg"] > df["ag"], "1", np.where(df["hg"] == df["ag"], "N", "2"))
+    wide = pd.DataFrame({"simulation": df["simulation"].to_numpy(), "match_id": df["match_id"].to_numpy(), "res": res})
+    return wide.pivot(index="simulation", columns="match_id", values="res")
+
+
+def _zone_stats(rk: np.ndarray, pts: np.ndarray, z: dict) -> dict:
+    T = rk.shape[1]
+    return {
+        "p1": (rk == 1).mean(axis=0), "podium": (rk <= z["podium"]).mean(axis=0), "top": (rk <= z["top_k"]).mean(axis=0),
+        "rel": (rk > T - z["n_relegated"]).mean(axis=0), "mean_rank": rk.mean(axis=0), "exp_pts": pts.mean(axis=0),
+    }
+
+
+def api_conditional(rid: str, body: dict) -> dict:
+    d = run_dir(rid)
+    locks = body.get("locks") or []
+    if not (1 <= len(locks) <= 3):
+        raise ValueError("Verrouillez entre 1 et 3 matchs.")
+    clean, seen = [], set()
+    for l in locks:
+        mid, res = str(l.get("match_id", "")), str(l.get("result", "")).upper()
+        if res not in ("1", "N", "2"):
+            raise ValueError("Issue invalide : choisir 1 (domicile), N (nul) ou 2 (extérieur).")
+        if mid in seen:
+            raise ValueError("Un même match ne peut être verrouillé qu'une seule fois.")
+        seen.add(mid); clean.append((mid, res))
+    upcoming = {str(u["match_id"]): u for u in json.loads((d / "upcoming_scores.json").read_text(encoding="utf-8"))}
+    for mid, _ in clean:
+        if mid not in upcoming:
+            raise ValueError(f"Match {mid} introuvable parmi les matchs restants de cette simulation.")
+
+    run = _load_run(d)
+    try:
+        oc = _load_outcomes(d, [mid for mid, _ in clean])
+    except FileNotFoundError:
+        raise ValueError("Cette simulation ne contient pas les issues match par match : relancez-la pour activer le simulateur conditionnel.")
+    ok = np.ones(len(oc), dtype=bool)
+    for mid, res in clean:
+        if mid not in oc.columns:
+            raise ValueError(f"Match {mid} absent des résultats détaillés.")
+        ok &= oc[mid].to_numpy() == res
+    pos = np.searchsorted(run["sims"], oc.index.to_numpy()[ok])
+
+    j, teams = run["json"], run["teams"]
+    ts = read_table(d, "team_summary").to_dict("records")
+    z = _zones(j, ts)
+    base = _zone_stats(run["rk"], run["pts"], z)
+    n_total, n_match = int(len(run["sims"])), int(len(pos))
+    echo = [{"match_id": mid, "result": res, "home": upcoming[mid]["home"], "away": upcoming[mid]["away"], "round": upcoming[mid]["round"],
+             "p": float(upcoming[mid]["p1"] if res == "1" else upcoming[mid]["pN"] if res == "N" else upcoming[mid]["p2"])} for mid, res in clean]
+    out = {"n_total": n_total, "n_match": n_match, "share": n_match / max(n_total, 1), "locks": echo, "zones": z, "teams": []}
+    if n_match == 0:
+        out["warning"] = "Aucune simulation ne réunit ces issues : combinaison trop improbable pour ce nombre de simulations."
+        return _jsonable(out)
+    if n_match < 100:
+        out["warning"] = f"Seulement {n_match} simulations respectent ces issues : les écarts sont à prendre avec prudence. Relancez avec davantage de simulations pour affiner."
+    rk_c, pts_c = run["rk"][pos], run["pts"][pos]
+    cond = _zone_stats(rk_c, pts_c, z)
+    T = len(teams)
+    rmat = np.stack([(rk_c == r).mean(axis=0) for r in range(1, T + 1)], axis=1)
+    for i, t in enumerate(teams):
+        out["teams"].append({"team": t,
+                             "base": {k: float(v[i]) for k, v in base.items()},
+                             "cond": {k: float(v[i]) for k, v in cond.items()},
+                             "rank_probs": [float(x) for x in rmat[i]]})
+    return _jsonable(out)
+
+
+# ---- Cache JSON : bundles prêts à afficher ---------------------------------
+_build_lock = threading.Lock()
+_gz_memo: dict = {}
+
+
+def _write_json(path: Path, obj) -> None:
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(_jsonable(obj), ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    tmp.replace(path)  # écriture atomique : le navigateur ne lit jamais un fichier à moitié écrit
+
+
+def cache_specs(seasons: list[str]) -> list[tuple[str, int]]:
+    """Saison en cours (dernière des données) à la J10, puis saison précédente à la J0."""
+    specs = [(seasons[-1], CACHE_CUTOFF_CURRENT)]
+    if len(seasons) >= 2:
+        specs.append((seasons[-2], 0))
+    return specs
+
+
+def cache_fresh() -> bool:
+    """Vrai si les bundles existent et ont été générés à partir des CSV actuels."""
+    try:
+        st = json.loads((CACHE / "stamp.json").read_text(encoding="utf-8"))
+        return (CACHE / "default.json").is_file() and st.get("data_stamp") == _stamp()
+    except Exception:
+        return False
+
+
+def build_cache(n: int = CACHE_SIMS, force: bool = False) -> list[str]:
+    """Génère (si besoin) les simulations puis un bundle JSON par run : tout ce que l'onglet Monte Carlo
+    demandait en 2 appels API (classement, forces, absences, heatmap, matchs à venir) tient dans 1 fichier statique."""
+    with _build_lock:
+        m, box, seasons = load_data()
+        stamp = _stamp()
+        CACHE.mkdir(parents=True, exist_ok=True)
+        runs, rids = [], []
+        for season, cutoff in cache_specs(seasons):
+            rid, d = _run_id(season, cutoff, n), OUT / _run_id(season, cutoff, n)
+            js = d / "summary_storytelling.json"
+            if force or not js.exists() or js.stat().st_mtime < stamp:
+                print(f"[cache] simulation {season} · journée {cutoff} · {n:,} simulations…".replace(",", " "), flush=True)
+                t0 = time.time()
+                _simulate(season, cutoff, n)
+                print(f"[cache]   terminée en {time.time() - t0:.0f} s", flush=True)
+            rids.append(rid)
+            runs.append({"id": rid, "season": season, "cutoff": cutoff, "n": n, "file": f"{rid}.json", "conditional": True})
+        built = time.strftime("%Y-%m-%d %H:%M:%S")
+        bundles = []
+        for rid in rids:
+            d = OUT / rid
+            bundles.append({"version": 1, "run": rid, "built": built, "data_stamp": stamp, "sim": api_sim(rid),
+                            "upcoming": json.loads((d / "upcoming_scores.json").read_text(encoding="utf-8")), "runs": runs})
+        for b in bundles[1:]:
+            _write_json(CACHE / f"{b['run']}.json", b)
+        _write_json(CACHE / f"{bundles[0]['run']}.json", bundles[0])
+        # default.json = 1er bundle + méta (saisons, journées) : c'est le seul fichier lu au démarrage du site
+        _write_json(CACHE / "default.json", {**bundles[0], "meta": meta()})
+        _write_json(CACHE / "stamp.json", {"data_stamp": stamp, "built": built, "n": n, "runs": runs})
+        for f in CACHE.glob("*.json"):
+            print(f"[cache]   {f.name} : {f.stat().st_size / 1024:.0f} Ko", flush=True)
+        return rids
+
+
+def build_cache_async(force: bool = False) -> None:
+    if os.environ.get("NO_AUTO_CACHE") == "1":
+        return
+
+    def work():
+        try:
+            build_cache(force=force)
+            print("[cache] prêt : le site s'ouvrira directement sur l'onglet Monte Carlo.", flush=True)
+        except Exception as e:  # noqa
+            print(f"[cache] échec de la génération : {e}", flush=True)
+    threading.Thread(target=work, daemon=True).start()
 
 
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 
     def send(self, obj, code=200, ctype="application/json", headers: dict | None = None):
-        b = obj if isinstance(obj, bytes) else json.dumps(obj, ensure_ascii=False, default=float).encode()
+        b = obj if isinstance(obj, bytes) else json.dumps(_jsonable(obj), ensure_ascii=False).encode()
         self.send_response(code); self.send_header("Content-Type", ctype + "; charset=utf-8")
         self.send_header("Content-Length", str(len(b)))
+        if "Cache-Control" not in (headers or {}):
+            self.send_header("Cache-Control", "no-store")
         for k, v in (headers or {}).items():
             self.send_header(k, v)
         self.end_headers(); self.wfile.write(b)
+
+    def send_cached_json(self, name: str):
+        """Sert un bundle statique : ETag (304 si inchangé) + gzip."""
+        if not re.fullmatch(r"[0-9A-Za-z_]+\.json", name) or name == "stamp.json":
+            return self.send({"error": "not found"}, 404)
+        if name == "default.json" and not cache_fresh():
+            return self.send({"error": "cache absent ou périmé"}, 404)
+        p = CACHE / name
+        if not p.is_file():
+            return self.send({"error": "cache absent"}, 404)
+        st = p.stat()
+        etag = f'"{st.st_mtime_ns:x}-{st.st_size:x}"'
+        if self.headers.get("If-None-Match") == etag:
+            self.send_response(304); self.send_header("ETag", etag); self.send_header("Cache-Control", "no-cache"); self.end_headers()
+            return
+        hdr = {"ETag": etag, "Cache-Control": "no-cache"}   # no-cache = revalider à chaque fois (réponse 304 quasi instantanée)
+        if "gzip" in self.headers.get("Accept-Encoding", ""):
+            key = (name, st.st_mtime_ns)
+            if key not in _gz_memo:
+                _gz_memo.clear()
+                _gz_memo[key] = gzip.compress(p.read_bytes(), 6)
+            hdr["Content-Encoding"] = "gzip"
+            return self.send(_gz_memo[key], headers=hdr)
+        return self.send(p.read_bytes(), headers=hdr)
 
     def do_GET(self):
         u = urlparse(self.path); parts = [x for x in u.path.split("/") if x]
         try:
             if not parts:
                 return self.send((HERE / "index.html").read_bytes(), ctype="text/html")
+            if len(parts) == 2 and parts[0] == "cache": return self.send_cached_json(parts[1])
             if parts[:2] == ["api", "meta"]: return self.send(meta())
             if parts[:2] == ["api", "history"]:
-                if "history" not in _cache or _cache.get("h_stamp") != _cache.get("stamp"):
-                    load_data(); _cache["history"] = build_history(); _cache["h_stamp"] = _cache["stamp"]
-                return self.send(_cache["history"])
+                load_data()
+                with _lock:
+                    if "history" not in _cache:
+                        _cache["history"] = build_history()
+                    hist = _cache["history"]
+                return self.send(hist)
             if parts[:2] == ["api", "club"]:
                 return self.send(api_club_detail(parse_qs(u.query)))
             if parts[:2] == ["api", "player"]:
                 return self.send(api_player_detail(parse_qs(u.query)))
+            if parts[:2] == ["api", "players"]:
+                return self.send(api_players_search(parse_qs(u.query)))
+            if parts[:2] == ["api", "teams"]:
+                return self.send(api_teams(parse_qs(u.query)))
+            if parts[:2] == ["api", "records"]:
+                return self.send(api_records(parse_qs(u.query)))
             if parts[:2] == ["api", "runs"]: return self.send(list_runs())
-            if parts[:2] == ["api", "jobs"]: return self.send(JOBS.get(parts[2], {"status": "unknown"}))
-            if parts[:2] == ["api", "sim"]:
+            if parts[:2] == ["api", "jobs"]: return self.send(JOBS.get(parts[2] if len(parts) > 2 else "", {"status": "unknown"}))
+            if parts[:2] == ["api", "sim"] and len(parts) > 2:
                 if len(parts) > 3 and parts[3] == "upcoming":
                     return self.send((run_dir(parts[2]) / "upcoming_scores.json").read_bytes())
                 return self.send(api_sim(parts[2]))
@@ -887,13 +1448,28 @@ class H(BaseHTTPRequestHandler):
             self.send({"error": "not found"}, 404)
         except FileNotFoundError as e:
             self.send({"error": f"Fichier introuvable : {e}"}, 404)
+        except ValueError as e:
+            self.send({"error": str(e)}, 400)
         except Exception as e:  # noqa
             self.send({"error": str(e)}, 500)
 
     def do_POST(self):
-        if urlparse(self.path).path != "/api/simulate":
+        parts = [x for x in urlparse(self.path).path.split("/") if x]
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+        except Exception:
+            return self.send({"error": "Corps de requête JSON invalide"}, 400)
+        if parts[:2] == ["api", "sim"] and len(parts) == 4 and parts[3] == "conditional":
+            try:
+                return self.send(api_conditional(parts[2], body))
+            except FileNotFoundError as e:
+                return self.send({"error": f"Fichier introuvable : {e}"}, 404)
+            except ValueError as e:
+                return self.send({"error": str(e)}, 400)
+            except Exception as e:  # noqa
+                return self.send({"error": str(e)}, 500)
+        if parts != ["api", "simulate"]:
             return self.send({"error": "not found"}, 404)
-        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
         try:
             season, cutoff = str(body["season"]), max(0, int(body.get("cutoff_round", 0)))
             n = int(np.clip(int(body.get("n_simulations", 5000)), 200, 50000))
@@ -906,8 +1482,24 @@ class H(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    ap = argparse.ArgumentParser(description="Serveur LNH Starligue")
+    ap.add_argument("--build-cache", action="store_true", help="génère les bundles JSON Monte Carlo puis quitte")
+    ap.add_argument("--force", action="store_true", help="avec --build-cache : relance aussi les simulations déjà calculées")
+    ap.add_argument("--sims", type=int, default=CACHE_SIMS, help=f"simulations par bundle (défaut {CACHE_SIMS})")
+    args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     if not DATA.is_dir():
         sys.exit(f"Dossier de données introuvable : {DATA}")
+    if args.build_cache:
+        build_cache(n=args.sims, force=args.force)
+        sys.exit(0)
     print(f"Données : {DATA}\nSorties : {OUT}\n→ http://localhost:{PORT}")
-    ThreadingHTTPServer(("0.0.0.0", PORT), H).serve_forever()
+    if cache_fresh():
+        print("[cache] bundles JSON à jour : le site s'ouvre directement sur l'onglet Monte Carlo.")
+    else:
+        print("[cache] bundles JSON absents ou périmés : génération en arrière-plan (le site fonctionne en attendant, en mode API).")
+        build_cache_async()
+    try:
+        ThreadingHTTPServer(("", PORT), H).serve_forever()
+    except KeyboardInterrupt:
+        print("\nArrêt du serveur.")
