@@ -49,8 +49,10 @@ def data_fingerprint() -> str:
         st = f.stat()
         key = (str(f), st.st_mtime_ns, st.st_size)
         if key not in _fp_memo:
-            _fp_memo[key] = hashlib.sha1(f.read_bytes()).hexdigest()
-        h.update(f"{f.relative_to(DATA)}:{st.st_size}:{_fp_memo[key]};".encode())
+            raw = f.read_bytes().replace(b"\r\n", b"\n")   # insensible CRLF (Windows) / LF (Linux, Render)
+            _fp_memo[key] = (len(raw), hashlib.sha1(raw).hexdigest())
+        n_b, dig = _fp_memo[key]
+        h.update(f"{f.relative_to(DATA)}:{n_b}:{dig};".encode())
     return h.hexdigest()[:16]
 
 
