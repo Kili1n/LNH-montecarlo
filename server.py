@@ -52,7 +52,7 @@ def data_fingerprint() -> str:
             raw = f.read_bytes().replace(b"\r\n", b"\n")   # insensible CRLF (Windows) / LF (Linux, Render)
             _fp_memo[key] = (len(raw), hashlib.sha1(raw).hexdigest())
         n_b, dig = _fp_memo[key]
-        h.update(f"{f.relative_to(DATA)}:{n_b}:{dig};".encode())
+        h.update(f"{f.relative_to(DATA).as_posix()}:{n_b}:{dig};".encode())
     return h.hexdigest()[:16]
 
 
