@@ -3,7 +3,7 @@
 Lancer :  python server.py   puis ouvrir http://localhost:8000"""
 from __future__ import annotations
 
-import argparse, gzip, json, math, os, re, subprocess, sys, threading, time, unicodedata, uuid
+import argparse, contextlib, gzip, hashlib, io, json, math, os, re, subprocess, sys, threading, time, unicodedata, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -16,9 +16,15 @@ import simulation_montecarlo as sim
 # ---- Configuration (en dur côté backend) -----------------------------------
 DATA_DIR = "./data/data_csv"     # contient un sous-dossier par saison : match.csv, players.csv, players_boxscore.csv
 OUTPUT_DIR = "./output"          # un sous-dossier par simulation lancée
-CACHE_DIR = "./output/mc_cache"  # bundles JSON prêts à afficher (1 requête pour ouvrir l'onglet Monte Carlo)
+CACHE_DIR = "./cache"            # bundles JSON prêts à afficher : À VERSIONNER (git) pour un hébergement à disque éphémère
 CACHE_SIMS = int(os.environ.get("CACHE_SIMS", 10000))   # simulations par bundle
 CACHE_CUTOFF_CURRENT = 10        # saison en cours : départ à la J10 ; saison précédente : J0
+# Garde-fous mémoire (hébergements plafonnés, ex. 512 Mo) -----------------------------------------
+MAX_SIMS = int(os.environ.get("MAX_SIMS", 10000))             # plafond du nombre de simulations demandé depuis le site
+MIN_FREE_MB = int(os.environ.get("MIN_FREE_MB", 240))         # mémoire libre exigée avant de lancer une simulation (~220 Mo)
+MEMORY_LIMIT_MB = int(os.environ.get("MEMORY_LIMIT_MB", 0))   # plafond de l'hébergeur si non détecté automatiquement
+AUTO_BUILD_CACHE = os.environ.get("AUTO_BUILD_CACHE") == "1"  # génération du cache au démarrage : désactivée par défaut
+ALLOW_KEEP_MATCHES = os.environ.get("ALLOW_KEEP_MATCHES") == "1"  # export sim_matches (≈ 900 Mo !) : désactivé sur le web
 PORT = int(os.environ.get("PORT", 8000))
 # -----------------------------------------------------------------------------
 HERE = Path(__file__).resolve().parent
@@ -30,6 +36,79 @@ _lock = threading.RLock()        # le serveur est multi-thread : on protège les
 def _stamp() -> float:
     fs = list(DATA.rglob("*.csv"))
     return max((f.stat().st_mtime for f in fs), default=0.0)
+
+
+_fp_memo: dict = {}
+
+
+def data_fingerprint() -> str:
+    """Empreinte du CONTENU des CSV (pas de leurs dates : un déploiement les réécrit toutes).
+    Sert à savoir si le cache JSON correspond bien aux données actuelles. Recalculée seulement si un fichier change."""
+    h = hashlib.sha1()
+    for f in sorted(DATA.rglob("*.csv")):
+        st = f.stat()
+        key = (str(f), st.st_mtime_ns, st.st_size)
+        if key not in _fp_memo:
+            _fp_memo[key] = hashlib.sha1(f.read_bytes()).hexdigest()
+        h.update(f"{f.relative_to(DATA)}:{st.st_size}:{_fp_memo[key]};".encode())
+    return h.hexdigest()[:16]
+
+
+def _read_int(path: str) -> int | None:
+    try:
+        v = Path(path).read_text().strip()
+        return None if v == "max" else int(v)
+    except Exception:
+        return None
+
+
+def mem_limit_mb() -> float | None:
+    """Plafond mémoire du conteneur : variable MEMORY_LIMIT_MB, sinon cgroup v2 puis v1."""
+    if MEMORY_LIMIT_MB:
+        return float(MEMORY_LIMIT_MB)
+    for p in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
+        v = _read_int(p)
+        if v and v < (1 << 45):
+            return v / 1e6
+    return None
+
+
+def mem_used_mb() -> float | None:
+    """Mémoire « de travail » du conteneur (hors cache disque récupérable), comme le calcule l'hébergeur."""
+    for cur_p, stat_p, key in (("/sys/fs/cgroup/memory.current", "/sys/fs/cgroup/memory.stat", "inactive_file"),
+                               ("/sys/fs/cgroup/memory/memory.usage_in_bytes", "/sys/fs/cgroup/memory/memory.stat", "total_inactive_file")):
+        cur = _read_int(cur_p)
+        if cur is not None:
+            inactive = 0
+            try:
+                for line in Path(stat_p).read_text().splitlines():
+                    k, _, v = line.partition(" ")
+                    if k == key:
+                        inactive = int(v)
+            except Exception:
+                pass
+            return (cur - inactive) / 1e6
+    try:  # sans cgroup : mémoire résidente de ce processus et de ses enfants directs
+        total = 0.0
+        me = os.getpid()
+        for d in Path("/proc").iterdir():
+            if not d.name.isdigit():
+                continue
+            try:
+                st = (d / "status").read_text()
+                ppid = int(re.search(r"PPid:\s+(\d+)", st).group(1))
+                if int(d.name) == me or ppid == me:
+                    total += int(re.search(r"VmRSS:\s+(\d+)", st).group(1)) / 1024
+            except Exception:
+                continue
+        return total or None
+    except Exception:
+        return None
+
+
+def mem_available_mb() -> float | None:
+    lim, used = mem_limit_mb(), mem_used_mb()
+    return None if lim is None or used is None else lim - used
 
 
 def _fold(s: str) -> str:
@@ -47,7 +126,7 @@ def _jsonable(o):
     if isinstance(o, (int, np.integer)):
         return int(o)
     if isinstance(o, (float, np.floating)):
-        f = float(o)
+        f = round(float(o), 6) if isinstance(o, np.float32) else float(o)
         return f if math.isfinite(f) else None
     if isinstance(o, dict):
         return {str(k): _jsonable(v) for k, v in o.items()}
@@ -64,51 +143,79 @@ def _jsonable(o):
     return str(o)
 
 
+def load_matches():
+    """Matchs seuls (quelques milliers de lignes) : suffit à l'onglet Monte Carlo, sans charger les feuilles de match."""
+    with _lock:
+        st = _stamp()
+        if _cache.get("mstamp") == st and "m_only" in _cache:
+            return _cache["m_only"], _cache["seasons_only"]
+        amap = sim.load_team_aliases(DATA)
+        m, seasons, _ = sim.load_all_matches(DATA, None, alias_map=amap)
+        _cache.update(mstamp=st, m_only=m, seasons_only=seasons)
+        return m, seasons
+
+
+def _add_match_context(box: pd.DataFrame, m: pd.DataFrame) -> None:
+    """Ajoute à la feuille de match (EN PLACE, sans copie) la date, la journée, l'adversaire et le score."""
+    mi = m.drop_duplicates("match_id").set_index("match_id")
+    mid = box["match_id"]
+    home, away = mid.map(mi["home_team"]), mid.map(mi["away_team"])
+    is_home = (box["team"] == home).to_numpy()
+    box["opponent"] = np.where(is_home, away, home)
+    hg = pd.to_numeric(mid.map(mi["home_ft_goals"]), errors="coerce")
+    ag = pd.to_numeric(mid.map(mi["away_ft_goals"]), errors="coerce")
+    gf = pd.Series(np.where(is_home, hg, ag), index=box.index)
+    ga = pd.Series(np.where(is_home, ag, hg), index=box.index)
+    box["score"] = np.where(gf.notna(), gf.fillna(0).astype(int).astype(str) + "–" + ga.fillna(0).astype(int).astype(str), "")
+    box["date"] = mid.map(mi["date"]).fillna("").astype(str)
+    box["round"] = pd.to_numeric(mid.map(mi["round"]), errors="coerce").fillna(0).astype(np.int16)
+    box["season_idx"] = pd.to_numeric(mid.map(mi["season_idx"]), errors="coerce").fillna(-1).astype(np.int16)
+    box["two_min"] = box["2min"]
+
+
 def load_data():
     """Charge matchs + feuilles de match une seule fois (rechargé si les CSV changent)."""
     with _lock:
         st = _stamp()
         if _cache.get("stamp") == st and "m" in _cache:
             return _cache["m"], _cache["box"], _cache["seasons"]
-        for k in [k for k in _cache if k not in ("stamp",)]:
+        for k in [k for k in _cache if k not in ("stamp", "mstamp", "m_only", "seasons_only")]:
             _cache.pop(k, None)
         amap = sim.load_team_aliases(DATA)
         has_box = bool(sim._find_csvs(DATA, "players_boxscore.csv"))
         box = sim.load_player_tables(DATA, DATA, amap) if has_box else None
-        m, seasons, _ = sim.load_all_matches(DATA, None, alias_map=amap)
+        m, seasons = load_matches()
         if box is not None and not m.empty:
             season_by_match = m.drop_duplicates("match_id").set_index("match_id")["season"]
             mapped = box["match_id"].map(season_by_match)
             box["season"] = mapped.fillna(box["season"].astype(str).str.replace("-", "/", regex=False))
-            box = sim.add_player_ratings(box, m)
+            box = sim.add_player_ratings(box, m)          # en place
             box["full_name"] = (box["first_name"].fillna("").astype(str) + " " + box["last_name"].fillna("").astype(str)).str.strip()
+            _add_match_context(box, m)
         _cache.update(stamp=st, m=m, box=box, seasons=seasons)
+        sim.trim_memory()
         return m, box, seasons
 
 
-def player_frame() -> pd.DataFrame | None:
-    """Feuilles de match enrichies du contexte du match (date, journée, adversaire, score). Mis en cache."""
-    m, box, _ = load_data()
-    if box is None or box.empty:
-        return None
+_PLAYED_COLS = ["match_id", "full_name", "team", "opponent", "date", "score", "season", "season_idx", "round", "is_gk", "goals", "shots",
+                "goals_7m", "shots_7m", "saves", "shots_faced", "saves_7m", "shots_faced_7m", "a", "br", "tc", "bp", "2min", "match_note",
+                "def_note", "impact_def", "est_seconds"]
+
+
+def played_rows() -> pd.DataFrame:
+    """Lignes joueur-match réellement jouées, limitées aux colonnes utiles (~15 Mo au lieu de ~30 Mo), mises en cache."""
+    load_data()
     with _lock:
-        if "pf" in _cache:
-            return _cache["pf"]
-        meta_cols = ["match_id", "date", "round", "season_idx", "home_team", "away_team", "home_ft_goals", "away_ft_goals"]
-        meta_m = m[meta_cols].drop_duplicates("match_id")
-        base = box.drop(columns=[c for c in meta_cols if c != "match_id" and c in box.columns])
-        pf = base.merge(meta_m, on="match_id", how="left")
-        is_home = pf["team"] == pf["home_team"]
-        pf["opponent"] = np.where(is_home, pf["away_team"], pf["home_team"])
-        gf = pd.Series(np.where(is_home, pf["home_ft_goals"], pf["away_ft_goals"]), index=pf.index)
-        ga = pd.Series(np.where(is_home, pf["away_ft_goals"], pf["home_ft_goals"]), index=pf.index)
-        pf["score"] = np.where(gf.notna(), gf.fillna(0).astype(int).astype(str) + "–" + ga.fillna(0).astype(int).astype(str), "")
-        pf["date"] = pf["date"].fillna("").astype(str)
-        pf["round"] = pd.to_numeric(pf["round"], errors="coerce").fillna(0).astype(int)
-        pf["season_idx"] = pd.to_numeric(pf["season_idx"], errors="coerce").fillna(-1).astype(int)
-        pf["two_min"] = pf["2min"]
-        _cache["pf"] = pf
-        return pf
+        if "played_rows" not in _cache:
+            pf = player_frame()
+            _cache["played_rows"] = pf.loc[pf["played_match"], _PLAYED_COLS] if pf is not None else pd.DataFrame(columns=_PLAYED_COLS)
+        return _cache["played_rows"]
+
+
+def player_frame() -> pd.DataFrame | None:
+    """Feuilles de match enrichies (date, journée, adversaire, score). C'est la même table que `box` : aucune copie."""
+    m, box, _ = load_data()
+    return box if box is not None and not box.empty else None
 
 
 def standings(df: pd.DataFrame) -> pd.DataFrame:
@@ -284,7 +391,7 @@ def build_history() -> dict:
 
 
 def meta() -> dict:
-    m, _, seasons = load_data()
+    m, seasons = load_matches()
     info = {s: {"max_round": int(m[m.season == s]["round"].max()),
                 "played_round": int(m[(m.season == s) & m.played]["round"].max()) if m[(m.season == s) & m.played].shape[0] else 0,
                 "unplayed": int((~m[m.season == s].played).sum())} for s in seasons}
@@ -457,7 +564,7 @@ def api_teams(qs: dict) -> dict:
 
     pf = player_frame()
     if pf is not None:
-        pb = _filter_seasons_df(pf[pf["played_match"]], seasons_raw)
+        pb = _filter_seasons_df(played_rows(), seasons_raw)
         if not pb.empty:
             tg = pb.groupby("team").agg(
                 bx_games=("match_id", "nunique"), goals=("goals", "sum"), shots=("shots", "sum"),
@@ -628,7 +735,7 @@ def compute_records(seasons_raw: str = "all") -> dict:
     # ---- 4. Joueurs : un seul match ------------------------------------------
     pf = player_frame()
     if pf is not None:
-        pp = _filter_seasons_df(pf[pf["played_match"]], seasons_raw)
+        pp = _filter_seasons_df(played_rows(), seasons_raw)
         if not pp.empty:
             pp = pp.assign(save_ratio=np.where(pp["shots_faced"] >= 15, 100 * pp["saves"] / pp["shots_faced"].clip(lower=1), np.nan))
 
@@ -698,10 +805,11 @@ def compute_records(seasons_raw: str = "all") -> dict:
             groups.append({"id": "players_season", "title": "Joueurs : saison, série et cumul",
                            "blurb": "Records sur une saison, séries de buts et totaux sur la période sélectionnée.", "records": recs})
 
-    n_players = int(pf[pf["played_match"]]["full_name"].nunique()) if pf is not None else 0
+    n_players = int(played_rows()["full_name"].nunique()) if pf is not None else 0
     res = {"period": seasons_raw, "matches": int(len(mp)), "players": n_players, "groups": _jsonable(groups)}
     with _lock:
         _cache[key] = res
+    sim.trim_memory()
     return res
 
 
@@ -711,8 +819,7 @@ def api_records(qs: dict) -> dict:
 
 def player_records(name: str, is_gk: bool) -> dict:
     """Records personnels sur toute la carrière présente dans la base + places au palmarès de la Starligue."""
-    pf = player_frame()
-    pp = pf[pf["played_match"]]
+    pp = played_rows()
     mine = pp[pp["full_name"] == name]
     if mine.empty:
         return {"best": [], "season_best": [], "placements": [], "streak": None}
@@ -782,9 +889,9 @@ def api_players_search(qs: dict) -> list[dict]:
     gk = qs.get("gk", [""])[0]
     exclude = qs.get("exclude", [""])[0]
     seasons_raw = qs.get("seasons", ["all"])[0].strip() or "all"
-    pp = _filter_seasons_df(pf[pf["played_match"]], seasons_raw)
+    pp = _filter_seasons_df(played_rows(), seasons_raw)
     if pp.empty:
-        pp = pf[pf["played_match"]]
+        pp = played_rows()
     g = pp.groupby("full_name").agg(team=("team", "last"), games=("match_id", "nunique"), minutes=("est_seconds", "sum"),
                                     note=("match_note", "mean"), gk=("is_gk", "max")).reset_index()
     g = g[g["full_name"] != exclude]
@@ -1066,47 +1173,136 @@ def _run_id(season: str, cutoff: int, n: int) -> str:
     return re.sub(r"[^0-9A-Za-z]+", "_", f"{season}_c{cutoff}_n{n}")
 
 
-def _simulate(season: str, cutoff: int, n: int, keep_matches: bool = False, on_line=None) -> str:
-    """Lance simulation_montecarlo.py (sous-processus) et renvoie l'identifiant du run."""
+_SIM_THREAD_SLOT = threading.Semaphore(1)
+_HELD_LOCKS: list = []
+
+
+class _sim_slot:
+    """Une seule simulation à la fois, tous processus confondus (serveur web + générateur de cache) :
+    chacune occupe ~220 Mo, et deux en parallèle dépassent un plafond de 512 Mo."""
+
+    def __init__(self, hold_until_exit: bool = False):
+        # hold_until_exit : le créneau n'est rendu qu'à la mort du processus. Sous Linux le noyau libère la mémoire d'un processus
+        # AVANT de fermer ses fichiers : la simulation suivante ne démarre donc jamais pendant que celui-ci occupe encore sa mémoire.
+        self.hold = hold_until_exit
+
+    def __enter__(self):
+        _SIM_THREAD_SLOT.acquire()
+        self._f = None
+        try:
+            import fcntl
+            OUT.mkdir(parents=True, exist_ok=True)
+            self._f = open(OUT / ".sim.lock", "w")
+            fcntl.flock(self._f, fcntl.LOCK_EX)
+        except Exception:   # Windows : verrou de thread seul
+            pass
+        return self
+
+    def __exit__(self, *a):
+        if self.hold:
+            _HELD_LOCKS.append(self._f)   # référence conservée : le verrou ne saute pas avant la fin du processus
+            _SIM_THREAD_SLOT.release()
+            return
+        try:
+            if self._f:
+                self._f.close()
+        finally:
+            _SIM_THREAD_SLOT.release()
+
+
+def _wait_for_memory(on_line=None, timeout: float | None = None) -> None:
+    """Attend que la mémoire libre permette de lancer une simulation ; échoue proprement plutôt que de faire tuer le serveur."""
+    timeout = float(os.environ.get("MEM_WAIT_S", 150)) if timeout is None else timeout
+    t0 = time.time()
+    while True:
+        avail = mem_available_mb()
+        if avail is None or avail >= MIN_FREE_MB:
+            return
+        if time.time() - t0 > timeout:
+            raise RuntimeError(f"Mémoire insuffisante ({avail:.0f} Mo libres, {MIN_FREE_MB} Mo nécessaires). Réessayez dans un instant.")
+        if on_line:
+            on_line(f"En attente de mémoire libre ({avail:.0f} Mo disponibles, {MIN_FREE_MB} Mo nécessaires)…")
+        sim.trim_memory()
+        time.sleep(4)
+
+
+def _simulate(season: str, cutoff: int, n: int, keep_matches: bool = False, on_line=None, inproc: bool = False, slot_held: bool = False) -> str:
+    """Lance simulation_montecarlo.py et renvoie l'identifiant du run.
+    Sous-processus par défaut (la mémoire est rendue à la fin) ; inproc=True dans le générateur de cache, qui s'exécute
+    déjà dans son propre processus : on évite ainsi de cumuler ses ~140 Mo avec ceux de la simulation."""
+    n = int(max(1, min(n, MAX_SIMS)))
+    keep_matches = bool(keep_matches and ALLOW_KEEP_MATCHES)
     run_id = _run_id(season, cutoff, n)
     cmd = [sys.executable, str(HERE / "simulation_montecarlo.py"), "--data-dir", str(DATA), "--output-dir", str(OUT / run_id),
            "--season", season, "--cutoff-round", str(cutoff), "--n-simulations", str(n)]
     if not keep_matches:
         cmd.append("--no-export-matches")
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=HERE)
-    for line in p.stdout:
+    if on_line:
+        on_line("En file d'attente : une autre simulation est peut-être en cours…")
+    with (contextlib.nullcontext() if slot_held else _sim_slot()):
+        _wait_for_memory(on_line)
         if on_line:
-            on_line(line.rstrip())
-    if p.wait() != 0:
-        raise RuntimeError(f"La simulation {run_id} a échoué")
+            on_line("Simulation en cours…")
+        if inproc:
+            with contextlib.redirect_stdout(io.StringIO()):
+                sim.main(cmd[2:])
+            sim.trim_memory()
+        else:
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=HERE)
+            for line in p.stdout:
+                if on_line:
+                    on_line(line.rstrip())
+            if p.wait() != 0:
+                raise RuntimeError(f"La simulation {run_id} a échoué")
+    (OUT / run_id / "data_fp.txt").write_text(data_fingerprint())
     return run_id
 
 
 def run_job(jid: str, season: str, cutoff: int, n: int, keep_matches: bool):
     job = JOBS[jid]
-    job.update(status="running", run=_run_id(season, cutoff, n), started=time.time())
+    n = int(max(1, min(n, MAX_SIMS)))
+    job.update(status="queued", run=_run_id(season, cutoff, n), started=time.time())
 
     def on_line(line: str):
         job["log"].append(line)
         job["log"] = job["log"][-60:]
+        if line.startswith("Simulation en cours"):
+            job["status"] = "running"
     try:
-        _simulate(season, cutoff, n, keep_matches, on_line)
+        rid = _simulate(season, cutoff, n, keep_matches, on_line)
+        job["status"] = "finalizing"   # la simulation est finie (créneau libéré) : seule l'écriture des JSON reste à faire
+        job["log"].append("Écriture des fichiers…")
+        try:   # fichiers statiques du run (affichage instantané + simulateur conditionnel dans le navigateur)
+            write_run_bundle(rid)
+        except Exception as e:  # noqa
+            job["log"].append(f"Bundle JSON non écrit : {e}")
         job["status"] = "done"
     except Exception as e:  # noqa
         job["log"].append(str(e)); job["status"] = "error"
+    finally:
+        sim.trim_memory()
 
 
 def list_runs() -> list[dict]:
-    runs = []
+    runs = {}
+    try:   # runs du cache versionné (présents même sans dossier output/)
+        for r in json.loads((CACHE / "stamp.json").read_text(encoding="utf-8")).get("runs", []):
+            runs[r["id"]] = {**r, "time": (CACHE / r["file"]).stat().st_mtime if (CACHE / r["file"]).exists() else 0}
+    except Exception:
+        pass
     for d in OUT.glob("*/summary_storytelling.json"):
         try:
             j = json.loads(d.read_text(encoding="utf-8"))
-            runs.append({"id": d.parent.name, "season": j["season"], "cutoff": j["cutoff_round"], "n": j["n_simulations"],
-                         "time": d.stat().st_mtime,
-                         "conditional": any((d.parent / f).exists() for f in ("sim_matches.parquet", "sim_matches.csv.gz", "sim_outcomes.npz"))})
+            rid = d.parent.name
+            runs[rid] = {"id": rid, "season": j["season"], "cutoff": j["cutoff_round"], "n": j["n_simulations"], "time": d.stat().st_mtime,
+                         "conditional": True}
         except Exception:  # run corrompu ou en cours d'écriture : on l'ignore
             continue
-    return sorted(runs, key=lambda r: -r["time"])
+    for r in runs.values():
+        if (CACHE / f"{r['id']}.json").exists():
+            r["file"] = f"{r['id']}.json"
+            r["cond_file"] = f"{r['id']}.cond.json" if (CACHE / f"{r['id']}.cond.json").exists() else None
+    return sorted(runs.values(), key=lambda r: -r.get("time", 0))
 
 
 def read_table(run: Path, stem: str) -> pd.DataFrame:
@@ -1293,7 +1489,7 @@ def _search_index() -> dict:
     players = []
     pf = player_frame()
     if pf is not None:
-        pp = pf[pf["played_match"]].sort_values(["season_idx", "round"], kind="mergesort")
+        pp = played_rows().sort_values(["season_idx", "round"], kind="mergesort")
         g = pp.groupby("full_name").agg(team=("team", "last"), season=("season", "last"), games=("match_id", "nunique"),
                                         minutes=("est_seconds", "sum"), note=("match_note", "mean"), gk=("is_gk", "max")).reset_index()
         for r in g.itertuples():
@@ -1352,13 +1548,21 @@ def _ord(n: int) -> str:
     return "1re" if n == 1 else f"{n}e"
 
 
-def _ensure_run(season: str, cutoff: int, n: int, force: bool = False) -> str:
+def _run_fresh(rid: str) -> bool:
+    d = OUT / rid
+    try:
+        return (d / "summary_storytelling.json").exists() and (d / "data_fp.txt").read_text() == data_fingerprint()
+    except Exception:
+        return False
+
+
+def _ensure_run(season: str, cutoff: int, n: int, force: bool = False, inproc: bool = False, slot_held: bool = False) -> str:
+    n = int(max(1, min(n, MAX_SIMS)))
     rid = _run_id(season, cutoff, n)
-    js = OUT / rid / "summary_storytelling.json"
-    if force or not js.exists() or js.stat().st_mtime < _stamp():
+    if force or not _run_fresh(rid):
         print(f"[cache] simulation {season} · journée {cutoff} · {n:,} simulations…".replace(",", " "), flush=True)
         t0 = time.time()
-        _simulate(season, cutoff, n)
+        _simulate(season, cutoff, n, inproc=inproc, slot_held=slot_held)
         print(f"[cache]   terminée en {time.time() - t0:.0f} s", flush=True)
     return rid
 
@@ -1533,14 +1737,17 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
     if next_round is None and prev_round is None:
         return None
     teams = sorted(set(mS["home_team"]) | set(mS["away_team"]))
-    rid_next = _ensure_run(S, K, n) if next_round else None
-    rid_prev = _ensure_run(S, K - 1, n) if prev_round else None
+    rid_next = _run_id(S, K, min(n, MAX_SIMS)) if next_round else None
+    rid_prev = _run_id(S, K - 1, min(n, MAX_SIMS)) if prev_round else None
+    for rid_ in (rid_next, rid_prev):
+        if rid_ and not _run_fresh(rid_):
+            raise RuntimeError(f"simulation {rid_} manquante ou périmée")
 
     pf = player_frame()
-    pfp = pf[pf["played_match"]].copy() if pf is not None else pd.DataFrame()
+    pfp = played_rows() if pf is not None else pd.DataFrame()
     s_idx = int(mS["season_idx"].iloc[0])
     if len(pfp):
-        pfp["key"] = pfp["season_idx"] * 1000 + pfp["round"]
+        pfp = pfp.assign(key=pfp["season_idx"].astype(np.int32) * 1000 + pfp["round"].astype(np.int32))
     gk_of = pfp.groupby("full_name")["is_gk"].max().to_dict() if len(pfp) else {}
     rec = {r["id"]: r for g in compute_records("all")["groups"] for r in g["records"]}
     tmetrics = {t["team"]: t for t in api_teams({"seasons": [S]})["teams"]}
@@ -1794,14 +2001,55 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
 
 
 # ---- Cache JSON : bundles prêts à afficher ---------------------------------
-_build_lock = threading.Lock()
 _gz_memo: dict = {}
 
 
 def _write_json(path: Path, obj) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(_jsonable(obj), ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     tmp.replace(path)  # écriture atomique : le navigateur ne lit jamais un fichier à moitié écrit
+
+
+def _b64(a: np.ndarray) -> str:
+    import base64
+    return base64.b64encode(np.ascontiguousarray(a).tobytes()).decode("ascii")
+
+
+def build_cond(rid: str) -> dict | None:
+    """Données compactes du simulateur conditionnel (« et si… ? ») : le navigateur calcule tout lui-même,
+    sans solliciter le serveur. Classements et points de chaque simulation + issue (1/N/2) de chaque match restant
+    (2 bits par match)."""
+    d = OUT / rid
+    npz = d / "sim_outcomes.npz"
+    if not npz.exists():
+        return None
+    run = _load_run(d)
+    z_ = np.load(npz, allow_pickle=False)
+    if not np.array_equal(z_["simulation"], run["sims"]):
+        return None
+    ts = read_table(d, "team_summary").to_dict("records")
+    code = np.where(z_["hg"] > z_["ag"], 0, np.where(z_["hg"] == z_["ag"], 1, 2)).astype(np.uint8)   # (S, matchs restants)
+    flat = code.reshape(-1)
+    flat = np.concatenate([flat, np.zeros((-len(flat)) % 4, np.uint8)]).reshape(-1, 4)
+    packed = (flat[:, 0] | (flat[:, 1] << 2) | (flat[:, 2] << 4) | (flat[:, 3] << 6)).astype(np.uint8)
+    S_, T_ = run["rk"].shape
+    return {"version": 1, "run": rid, "S": int(S_), "T": int(T_), "Mu": int(code.shape[1]), "teams": run["teams"], "zones": _zones(run["json"], ts),
+            "match_ids": [str(x) for x in z_["match_id"]], "ranks": _b64(run["rk"].astype(np.uint8)),
+            "pts": _b64(np.clip(run["pts"], 0, 255).astype(np.uint8)), "outcomes": _b64(packed)}
+
+
+def write_run_bundle(rid: str, runs: list | None = None, meta_: dict | None = None, built: str | None = None) -> dict:
+    """Écrit les fichiers statiques d'un run : <rid>.json (tout l'onglet Monte Carlo) et <rid>.cond.json."""
+    d = OUT / rid
+    b = {"version": 1, "run": rid, "built": built or time.strftime("%Y-%m-%d %H:%M:%S"), "data_fp": data_fingerprint(),
+         "sim": api_sim(rid), "upcoming": json.loads((d / "upcoming_scores.json").read_text(encoding="utf-8")), "runs": runs or []}
+    cond = build_cond(rid)
+    b["sim"]["cond_file"] = f"{rid}.cond.json" if cond else None
+    if cond:
+        _write_json(CACHE / f"{rid}.cond.json", cond)
+    _write_json(CACHE / f"{rid}.json", b)
+    return b
 
 
 def cache_specs(seasons: list[str]) -> list[tuple[str, int]]:
@@ -1812,63 +2060,129 @@ def cache_specs(seasons: list[str]) -> list[tuple[str, int]]:
     return specs
 
 
+def _cache_status(state: str, message: str = "") -> None:
+    try:
+        _write_json(CACHE / "status.json", {"state": state, "message": message, "ts": time.time()})
+    except Exception:
+        pass
+
+
 def cache_fresh() -> bool:
-    """Vrai si les bundles existent et ont été générés à partir des CSV actuels."""
+    """Vrai si les bundles existent et correspondent au contenu actuel des CSV."""
     try:
         st = json.loads((CACHE / "stamp.json").read_text(encoding="utf-8"))
-        return (CACHE / "default.json").is_file() and st.get("data_stamp") == _stamp()
+        return (CACHE / "default.json").is_file() and st.get("data_fp") == data_fingerprint()
     except Exception:
         return False
 
 
 def build_cache(n: int = CACHE_SIMS, force: bool = False) -> list[str]:
-    """Génère (si besoin) les simulations puis un bundle JSON par run : tout ce que l'onglet Monte Carlo
-    demandait en 2 appels API (classement, forces, absences, heatmap, matchs à venir) tient dans 1 fichier statique."""
-    with _build_lock:
-        m, box, seasons = load_data()
-        stamp = _stamp()
-        CACHE.mkdir(parents=True, exist_ok=True)
-        runs, rids = [], []
-        for season, cutoff in cache_specs(seasons):
-            rid = _ensure_run(season, cutoff, n, force)
-            rids.append(rid)
-            runs.append({"id": rid, "season": season, "cutoff": cutoff, "n": n, "file": f"{rid}.json", "conditional": True})
-        built = time.strftime("%Y-%m-%d %H:%M:%S")
-        bundles = []
-        for rid in rids:
-            d = OUT / rid
-            bundles.append({"version": 1, "run": rid, "built": built, "data_stamp": stamp, "sim": api_sim(rid),
-                            "upcoming": json.loads((d / "upcoming_scores.json").read_text(encoding="utf-8")), "runs": runs})
-        for b in bundles[1:]:
-            _write_json(CACHE / f"{b['run']}.json", b)
-        _write_json(CACHE / f"{bundles[0]['run']}.json", bundles[0])
-        # fiche journaliste (J-précédente / J+suivante) : un échec ici ne doit pas empêcher le reste du cache
-        try:
-            press = build_press(n)
-            if press:
-                _write_json(CACHE / "press.json", press)
-        except Exception as e:  # noqa
-            (CACHE / "press.json").unlink(missing_ok=True)
-            print(f"[cache] fiche journaliste non générée : {e}", flush=True)
-        # default.json = 1er bundle + méta (saisons, journées) : c'est le seul fichier lu au démarrage du site
-        _write_json(CACHE / "default.json", {**bundles[0], "meta": meta()})
-        _write_json(CACHE / "stamp.json", {"data_stamp": stamp, "built": built, "n": n, "runs": runs})
-        for f in CACHE.glob("*.json"):
-            print(f"[cache]   {f.name} : {f.stat().st_size / 1024:.0f} Ko", flush=True)
+    """Génère les simulations puis un bundle JSON par run.
+    Deux phases pour borner la mémoire : (1) les simulations, une par une, avec seulement les matchs en mémoire ;
+    (2) une fois TOUTES terminées, chargement des feuilles de match pour les bundles et la fiche journaliste."""
+    n = int(min(n, MAX_SIMS if MAX_SIMS else n))
+    CACHE.mkdir(parents=True, exist_ok=True)
+    lock = None
+    try:
+        import fcntl
+        lock = open(CACHE / ".build.lock", "w")
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print("[cache] une génération est déjà en cours : abandon.", flush=True)
+        return []
+    except Exception:
+        pass
+    try:
+        with _sim_slot(hold_until_exit=True):   # une seule chose lourde à la fois : les simulations du site patientent jusqu'à la fin
+            _cache_status("building", "Préparation des simulations…")
+            m, seasons = load_matches()
+            S = seasons[-1]
+            mS = m[m["season"] == S]
+            K = int(mS[mS["played"]]["round"].max()) if mS["played"].any() else 0
+            wanted = list(cache_specs(seasons))
+            if ((mS["round"] == K + 1) & ~mS["played"]).any():
+                wanted.append((S, K))            # fiche journaliste : J+suivante
+            if K >= 1:
+                wanted.append((S, K - 1))        # fiche journaliste : J-précédente
+            wanted = list(dict.fromkeys(wanted))
+            # phase 1 : simulations
+            for i, (season, cutoff) in enumerate(wanted, 1):
+                _cache_status("building", f"Simulation {i}/{len(wanted)} ({season}, journée {cutoff})…")
+                _ensure_run(season, cutoff, n, force, inproc=True, slot_held=True)
+                sim.trim_memory()
+            # phase 2 : bundles + fiche journaliste (toujours sous le créneau : aucune simulation du site en parallèle)
+            _cache_status("building", "Écriture des fichiers JSON…")
+            load_data()
+            fp, built = data_fingerprint(), time.strftime("%Y-%m-%d %H:%M:%S")
+            specs = cache_specs(seasons)
+            runs = [{"id": _run_id(s, c, n), "season": s, "cutoff": c, "n": n, "file": f"{_run_id(s, c, n)}.json", "conditional": True} for s, c in specs]
+            rids = [r["id"] for r in runs]
+            for r in runs[1:]:
+                write_run_bundle(r["id"], runs, built=built)
+            first = write_run_bundle(rids[0], runs, built=built)
+            try:   # un échec ici ne doit pas empêcher le reste du cache
+                press = build_press(n)
+                if press:
+                    _write_json(CACHE / "press.json", press)
+            except Exception as e:  # noqa
+                (CACHE / "press.json").unlink(missing_ok=True)
+                print(f"[cache] fiche journaliste non générée : {e}", flush=True)
+            _write_json(CACHE / "default.json", {**first, "meta": meta()})
+            _write_json(CACHE / "stamp.json", {"data_fp": fp, "built": built, "n": n, "runs": runs})
+            for f in sorted(CACHE.glob("*.json")):
+                print(f"[cache]   {f.name} : {f.stat().st_size / 1024:.0f} Ko", flush=True)
+        _cache_status("ready", built)
         return rids
+    except Exception as e:  # noqa
+        _cache_status("error", str(e))
+        raise
+    finally:
+        sim.trim_memory()
+        if lock:
+            lock.close()
 
 
-def build_cache_async(force: bool = False) -> None:
-    if os.environ.get("NO_AUTO_CACHE") == "1":
-        return
-
-    def work():
+def spawn_cache_builder() -> None:
+    """Lance la génération dans un PROCESSUS À PART : sa mémoire est entièrement rendue à la fin."""
+    def preexec():
         try:
-            build_cache(force=force)
-            print("[cache] prêt : le site s'ouvrira directement sur l'onglet Monte Carlo.", flush=True)
-        except Exception as e:  # noqa
-            print(f"[cache] échec de la génération : {e}", flush=True)
-    threading.Thread(target=work, daemon=True).start()
+            os.nice(10)
+        except Exception:
+            pass
+    try:
+        subprocess.Popen([sys.executable, str(HERE / "server.py"), "--build-cache"], cwd=HERE, preexec_fn=preexec if os.name == "posix" else None)
+    except Exception as e:  # noqa
+        print(f"[cache] impossible de lancer la génération : {e}", flush=True)
+
+
+def api_cache_status() -> dict:
+    """Minuscule (aucune donnée chargée) : permet au navigateur de savoir quand un cache plus récent est prêt."""
+    st = {}
+    try:
+        st = json.loads((CACHE / "status.json").read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    built = None
+    try:
+        built = json.loads((CACHE / "stamp.json").read_text(encoding="utf-8")).get("built")
+    except Exception:
+        pass
+    fresh = cache_fresh()
+    state = "ready" if fresh else st.get("state", "missing")
+    if state == "building" and time.time() - st.get("ts", 0) > 3600:
+        state = "missing"
+    return {"fresh": fresh, "state": state, "built": built if fresh else None, "message": st.get("message", ""), "auto": AUTO_BUILD_CACHE}
+
+
+_last_trim = [0.0]
+
+
+def _maybe_trim() -> None:
+    """Rend la mémoire inutilisée au système après une requête lourde (au plus toutes les 5 s)."""
+    now = time.time()
+    if now - _last_trim[0] > 5:
+        _last_trim[0] = now
+        sim.trim_memory()
 
 
 class H(BaseHTTPRequestHandler):
@@ -1886,7 +2200,7 @@ class H(BaseHTTPRequestHandler):
 
     def send_cached_json(self, name: str):
         """Sert un bundle statique : ETag (304 si inchangé) + gzip."""
-        if not re.fullmatch(r"[0-9A-Za-z_]+\.json", name) or name == "stamp.json":
+        if not re.fullmatch(r"[0-9A-Za-z_]+(\.cond)?\.json", name) or name in ("stamp.json", "status.json"):
             return self.send({"error": "not found"}, 404)
         if name in ("default.json", "press.json") and not cache_fresh():
             return self.send({"error": "cache absent ou périmé"}, 404)
@@ -1914,13 +2228,15 @@ class H(BaseHTTPRequestHandler):
             if not parts:
                 return self.send((HERE / "index.html").read_bytes(), ctype="text/html")
             if len(parts) == 2 and parts[0] == "cache": return self.send_cached_json(parts[1])
+            if parts[:2] == ["api", "cache_status"]: return self.send(api_cache_status())
             if parts[:2] == ["api", "meta"]: return self.send(meta())
             if parts[:2] == ["api", "history"]:
                 load_data()
                 with _lock:
-                    if "history" not in _cache:
-                        _cache["history"] = build_history()
-                    hist = _cache["history"]
+                    if "history_bytes" not in _cache:
+                        _cache["history_bytes"] = json.dumps(_jsonable(build_history()), ensure_ascii=False).encode("utf-8")
+                        sim.trim_memory()
+                    hist = _cache["history_bytes"]
                 return self.send(hist)
             if parts[:2] == ["api", "club"]:
                 return self.send(api_club_detail(parse_qs(u.query)))
@@ -1952,6 +2268,9 @@ class H(BaseHTTPRequestHandler):
             self.send({"error": str(e)}, 400)
         except Exception as e:  # noqa
             self.send({"error": str(e)}, 500)
+        finally:
+            if parts[:1] == ["api"] and parts[:2] not in (["api", "cache_status"], ["api", "jobs"]):
+                _maybe_trim()
 
     def do_POST(self):
         parts = [x for x in urlparse(self.path).path.split("/") if x]
@@ -1972,7 +2291,7 @@ class H(BaseHTTPRequestHandler):
             return self.send({"error": "not found"}, 404)
         try:
             season, cutoff = str(body["season"]), max(0, int(body.get("cutoff_round", 0)))
-            n = int(np.clip(int(body.get("n_simulations", 5000)), 200, 50000))
+            n = int(np.clip(int(body.get("n_simulations", 5000)), 200, max(MAX_SIMS, 200)))
         except Exception:
             return self.send({"error": "Paramètres invalides"}, 400)
         jid = uuid.uuid4().hex[:8]
@@ -1993,13 +2312,21 @@ if __name__ == "__main__":
     if args.build_cache:
         build_cache(n=args.sims, force=args.force)
         sys.exit(0)
-    print(f"Données : {DATA}\nSorties : {OUT}\n→ http://localhost:{PORT}")
+    print(f"Données : {DATA}\nSorties : {OUT}\nCache   : {CACHE}\n→ http://localhost:{PORT}")
+    lim = mem_limit_mb()
+    print(f"[mémoire] plafond détecté : {'%.0f Mo' % lim if lim else 'aucun'} · une simulation à la fois · {MAX_SIMS} simulations max")
     if cache_fresh():
         print("[cache] bundles JSON à jour : le site s'ouvre directement sur l'onglet Monte Carlo.")
+    elif AUTO_BUILD_CACHE:
+        print("[cache] absent ou périmé : génération dans un processus séparé (AUTO_BUILD_CACHE=1). Le site fonctionne en attendant.")
+        spawn_cache_builder()
     else:
-        print("[cache] bundles JSON absents ou périmés : génération en arrière-plan (le site fonctionne en attendant, en mode API).")
-        build_cache_async()
+        print("[cache] absent ou périmé : aucune génération automatique (elle consomme ~250 Mo).\n"
+              "        → en local : python server.py --build-cache  puis versionnez le dossier ./cache\n"
+              "        → ou définissez AUTO_BUILD_CACHE=1 si l'instance a assez de mémoire.")
+    srv = ThreadingHTTPServer(("", PORT), H)
+    srv.daemon_threads = True
     try:
-        ThreadingHTTPServer(("", PORT), H).serve_forever()
+        srv.serve_forever()
     except KeyboardInterrupt:
         print("\nArrêt du serveur.")

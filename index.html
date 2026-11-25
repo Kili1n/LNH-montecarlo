@@ -346,7 +346,7 @@ svg text{font-family:Inter,sans-serif}
 <label>Saison<select id="fSeason"></select></label>
 <label>Journée de départ (cutoff)<input type="number" id="fCut" min="0" value="0"></label>
 <label>Simulations<select id="fN"><option>1000</option><option>2000</option><option selected>5000</option><option>10000</option><option>20000</option></select></label>
-<label style="flex-direction:row;align-items:center;gap:6px" title="Le simulateur conditionnel fonctionne dans tous les cas, avec ou sans ce fichier"><input type="checkbox" id="fKeep"> Garder aussi sim_matches.parquet (volumineux)</label>
+
 <button class="go" id="fGo" type="submit" style="margin-left:auto">Lancer la simulation</button></div>
 <div class="prog" id="prog"><i></i></div><div class="log" id="log"></div>
 <div class="row" style="margin:14px 0 0"><label>Résultats déjà calculés<select id="runSel"></select></label></div>
@@ -371,8 +371,8 @@ const tip=$('#tip');function tipOn(e,h){tip.innerHTML=h;tip.style.display='block
 const opts=(el,arr,sel)=>el.innerHTML=arr.map(([v,t])=>`<option value="${esc(v)}"${v==sel?' selected':''}>${esc(t)}</option>`).join('');
 const heat=(v,col)=>`<span class="cell num" style="background:color-mix(in srgb,${col} ${Math.round(v*100)}%,transparent);color:${v>.55?'#fff':'inherit'}">${pc(v)}</span>`;
 let H=null,M=null,SIM=null,UP=[];
-const STATUS={mc:'',hist:''};
-const setStatus=()=>{$('#status').textContent=[STATUS.mc,STATUS.hist].filter(Boolean).join(' · ')||'Chargement…'};
+const STATUS={mc:'',hist:'',bg:''};
+const setStatus=()=>{$('#status').textContent=[STATUS.mc,STATUS.hist,STATUS.bg].filter(Boolean).join(' · ')||'Chargement…'};
 let SEL={start:0,end:0};
 let PL_MODE='total';
 let EXP={dataset:'matches',sort:'date',dir:'desc',page:1,timer:null};
@@ -1129,6 +1129,7 @@ async function initFromBundle(){
   CACHED=b.runs||[];RUNS=[...CACHED];
   setupMCForm(b.meta);renderRunSel();
   showRun(b.sim,b.upcoming,b.run);
+  SHOWN_BUILT=b.built;
   STATUS.mc=`Simulation chargée depuis le cache JSON (${b.built})`;setStatus();
 }
 async function ensureRuns(){if(!RUNS_LOADED){try{await refreshRuns(false)}catch(e){}}}
@@ -1152,16 +1153,21 @@ function renderRunSel(){
   if(SIM&&SIM.id)$('#runSel').value=SIM.id;
   $('#runSel').onchange=()=>$('#runSel').value&&loadRun($('#runSel').value);
 }
+const mergeRuns=api=>{
+  const byId=Object.fromEntries(CACHED.map(c=>[c.id,c])),seen=new Set(),out=[];
+  for(const r of api){seen.add(r.id);out.push({...byId[r.id],...r,file:r.file||byId[r.id]?.file})}
+  for(const c of CACHED)if(!seen.has(c.id))out.push({...c});   // disque éphémère : un run du cache peut manquer côté serveur
+  return out;
+};
 async function refreshRuns(load){
-  const byId=Object.fromEntries(CACHED.map(c=>[c.id,c]));
-  RUNS=(await api('/api/runs')).map(r=>({...r,file:byId[r.id]?.file}));RUNS_LOADED=true;
+  RUNS=mergeRuns(await api('/api/runs'));RUNS_LOADED=true;
   renderRunSel();
   if(load&&RUNS.length)loadRun(RUNS[0].id);
   else syncNotice();
   return RUNS;
 }
 $('#simForm').onsubmit=async e=>{e.preventDefault();const b=$('#fGo');b.disabled=true;$('#prog').style.display='block';$('#log').textContent='Démarrage…';
-try{const {job}=await api('/api/simulate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({season:$('#fSeason').value,cutoff_round:+$('#fCut').value,n_simulations:+$('#fN').value,keep_matches:$('#fKeep').checked})});
+try{const {job}=await api('/api/simulate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({season:$('#fSeason').value,cutoff_round:+$('#fCut').value,n_simulations:+$('#fN').value})});
 const t=setInterval(async()=>{try{const j=await api('/api/jobs/'+job);$('#log').textContent=(j.log||[]).slice(-1)[0]||'Simulation en cours…';
 if(j.status==='done'){clearInterval(t);b.disabled=false;$('#prog').style.display='none';$('#log').textContent='Terminé.';await refreshRuns(false);$('#runSel').value=j.run;loadRun(j.run)}
 if(j.status==='error'){clearInterval(t);b.disabled=false;$('#prog').style.display='none';$('#log').innerHTML='<span class="err">Échec : '+esc((j.log||[]).slice(-3).join(' | '))+'</span>'}}catch(x){clearInterval(t);b.disabled=false;$('#prog').style.display='none';$('#log').innerHTML='<span class="err">'+esc(x.message)+'</span>'}},1200)}
@@ -1185,6 +1191,7 @@ async function loadRun(id){
     const run=RUNS.find(r=>r.id===id)||CACHED.find(r=>r.id===id);
     let sim=null,up=null;
     if(run&&run.file){try{const b=await api('/cache/'+run.file);sim=b.sim;up=b.upcoming}catch(e){}}   // 1 fichier statique
+    if(sim&&!sim.cond_file&&run&&run.cond_file)sim.cond_file=run.cond_file;
     if(!sim)[sim,up]=await Promise.all([api('/api/sim/'+id),api('/api/sim/'+id+'/upcoming')]);      // sinon 2 appels API
     showRun(sim,up,id);
   }catch(e){SIM=null;$('#mcBody').innerHTML='<div class="empty err" style="margin-top:40px">'+esc(e.message)+'</div>';syncNotice()}
@@ -1333,10 +1340,46 @@ function drawLocks(){
   $('#lockSuggest').querySelectorAll('button').forEach(b=>b.onclick=()=>addLock(b.dataset.lk));
   $('#lockAdd').disabled=LOCKS.length>=3;$('#lockRun').disabled=!LOCKS.length;
 }
+// Données du simulateur conditionnel : classements de chaque simulation + issue de chaque match restant (fichier statique).
+let CD=null;
+async function loadCondData(){
+  if(!SIM||!SIM.cond_file)return null;
+  if(CD&&CD.run===SIM.id)return CD;
+  const j=await api('/cache/'+SIM.cond_file),dec=b=>Uint8Array.from(atob(b),c=>c.charCodeAt(0));
+  CD={run:j.run,S:j.S,T:j.T,Mu:j.Mu,teams:j.teams,zones:j.zones,idx:Object.fromEntries(j.match_ids.map((m,i)=>[m,i])),R:dec(j.ranks),P:dec(j.pts),O:dec(j.outcomes)};
+  CD.base=condStats(CD,null);
+  return CD;
+}
+const outCode=(cd,s,j)=>{const k=s*cd.Mu+j;return (cd.O[k>>2]>>((k&3)*2))&3};   // 0 = domicile, 1 = nul, 2 = extérieur
+function condStats(cd,mask){
+  const {S,T,R,P,zones:z}=cd,p1=new Float64Array(T),pod=new Float64Array(T),top=new Float64Array(T),rel=new Float64Array(T),mr=new Float64Array(T),ep=new Float64Array(T),rc=new Float64Array(T*T);let n=0;
+  for(let s=0;s<S;s++){
+    if(mask&&!mask[s])continue;n++;const o=s*T;
+    for(let t=0;t<T;t++){const r=R[o+t];mr[t]+=r;ep[t]+=P[o+t];if(r===1)p1[t]++;if(r<=z.podium)pod[t]++;if(r<=z.top_k)top[t]++;if(r>T-z.n_relegated)rel[t]++;rc[t*T+r-1]++}
+  }
+  const d=n||1,f=a=>a.map(v=>v/d);
+  return {n,p1:f(p1),podium:f(pod),top:f(top),rel:f(rel),mean_rank:f(mr),exp_pts:f(ep),rank:f(rc)};
+}
+function condCompute(cd,locks){
+  const base=cd.base||(cd.base=condStats(cd,null)),mask=new Uint8Array(cd.S).fill(1);
+  const echo=locks.map(l=>{const m=UP.find(u=>u.match_id===l.match_id);return {match_id:l.match_id,result:l.result,home:m.home,away:m.away,round:m.round,p:outcomeP(m,l.result)}});
+  for(const l of locks){
+    const j=cd.idx[l.match_id],code={'1':0,N:1,'2':2}[l.result];
+    if(j==null)throw new Error('Match absent des simulations');
+    for(let s=0;s<cd.S;s++)if(mask[s]&&outCode(cd,s,j)!==code)mask[s]=0;
+  }
+  const c=condStats(cd,mask),out={n_total:cd.S,n_match:c.n,share:c.n/cd.S,locks:echo,zones:cd.zones,teams:[]};
+  if(!c.n){out.warning='Aucune simulation ne réunit ces issues : combinaison trop improbable pour ce nombre de simulations.';return out}
+  if(c.n<100)out.warning=`Seulement ${c.n} simulations respectent ces issues : les écarts sont à prendre avec prudence. Relancez avec davantage de simulations pour affiner.`;
+  const pick=(st,i)=>({p1:st.p1[i],podium:st.podium[i],top:st.top[i],rel:st.rel[i],mean_rank:st.mean_rank[i],exp_pts:st.exp_pts[i]});
+  cd.teams.forEach((t,i)=>out.teams.push({team:t,base:pick(base,i),cond:pick(c,i),rank_probs:Array.from({length:cd.T},(_,r)=>c.rank[i*cd.T+r])}));
+  return out;
+}
 async function runCond(){
   const out=$('#lockOut'),btn=$('#lockRun');btn.disabled=true;out.innerHTML='<div class="empty">Calcul en cours…</div>';
   try{
-    COND=await api('/api/sim/'+SIM.id+'/conditional',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({locks:LOCKS.map(l=>({match_id:l.match_id,result:l.result}))})});
+    let cd=null;try{cd=await loadCondData()}catch(e){cd=null}   // calcul local si le fichier est là, sinon repli sur le serveur
+    COND=cd?condCompute(cd,LOCKS):await api('/api/sim/'+SIM.id+'/conditional',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({locks:LOCKS.map(l=>({match_id:l.match_id,result:l.result}))})});
     drawCond();drawHeat();
   }catch(e){COND=null;out.innerHTML=`<div class="empty err">${esc(e.message)}</div>`;drawHeat()}
   btn.disabled=!LOCKS.length;
@@ -1713,6 +1756,58 @@ $('#pressCopy').onclick=async()=>{
   b.textContent='Copié ✓';setTimeout(()=>b.textContent=old,1800);
 };
 
+// ---------- Mise à jour silencieuse en arrière-plan ----------
+// Le cache s'affiche tout de suite et RESTE affiché ; pendant ce temps le navigateur prépare le reste (historique, fiche journaliste)
+// et vérifie s'il existe un cache plus récent. S'il y en a un, il le remplace sans rien demander, en conservant l'état de la page.
+let SHOWN_BUILT=null;const BG={timer:null,polls:0};
+function swapBundle(b){
+  const keep={club:$('#clubSel')?.value,sc:$('#scSel')?.value,upClub:UPCLUB,upRound:UPROUND,y:window.scrollY,sameRun:!!(SIM&&SIM.id===b.run),
+    locks:SIM&&SIM.id===b.run?LOCKS.map(l=>({...l})):[],heat:HEATMODE,calc:{sel:$('#calcSel')?.value,h:$('#cH')?.value,a:$('#cA')?.value}};
+  CACHED=b.runs&&b.runs.length?b.runs:CACHED;RUNS=mergeRuns(RUNS);
+  if(b.meta){M=b.meta}
+  renderRunSel();
+  showRun(b.sim,b.upcoming,b.run);
+  SHOWN_BUILT=b.built;
+  // restauration de l'état de l'utilisateur
+  if(keep.club&&$('#clubSel')&&[...$('#clubSel').options].some(o=>o.value===keep.club)){$('#clubSel').value=keep.club;$('#clubSel').onchange()}
+  if(keep.sc&&$('#scSel')){$('#scSel').value=keep.sc;$('#scSel').onchange()}
+  if($('#upClub')&&(keep.upClub||keep.upRound)){$('#upRound').value=keep.upRound||'';$('#upClub').value=keep.upClub||'';$('#upClub').onchange()}
+  if($('#calcSel')&&keep.calc.sel!=null&&keep.calc.sel<UP.length){$('#calcSel').value=keep.calc.sel;if(keep.calc.h||keep.calc.a){$('#cH').value=keep.calc.h;$('#cA').value=keep.calc.a}calc(!(keep.calc.h||keep.calc.a))}
+  if(keep.sameRun&&keep.locks.length&&$('#lockRows')){
+    LOCKS=keep.locks.filter(l=>UP.some(u=>u.match_id===l.match_id));drawLocks();
+    if(LOCKS.length)runCond().then(()=>{if(keep.heat==='cond'&&COND&&COND.teams.length){HEATMODE='cond';drawHeat()}});
+  }
+  window.scrollTo(0,keep.y);
+  STATUS.mc=`Simulation du cache JSON (${b.built})`;STATUS.bg='à jour';setStatus();setTimeout(()=>{STATUS.bg='';setStatus()},4000);
+}
+async function refreshFromCache(){
+  const cur=SIM&&SIM.id?(RUNS.find(r=>r.id===SIM.id)||CACHED.find(r=>r.id===SIM.id)):null;
+  let b=null;
+  for(const f of [cur&&cur.file,'default.json'].filter(Boolean)){
+    try{b=await api('/cache/'+f);if(b&&b.sim&&b.upcoming)break;b=null}catch(e){b=null}
+  }
+  if(!b||b.built===SHOWN_BUILT)return;
+  swapBundle(b);
+  api('/cache/press.json').then(d=>{PRESS=d;initPressState();if(!$('#v-press').hidden)renderPress()}).catch(()=>{});
+}
+async function pollCache(){
+  clearTimeout(BG.timer);
+  let st;try{st=await api('/api/cache_status')}catch(e){return}
+  try{if(st.fresh&&st.built&&st.built!==SHOWN_BUILT)await refreshFromCache()}catch(e){console.info('Mise à jour du cache impossible :',e.message)}
+  if(st.state==='building'&&BG.polls++<360){STATUS.bg='mise à jour en cours…';setStatus();BG.timer=setTimeout(pollCache,10000)}
+  else if(STATUS.bg==='mise à jour en cours…'){STATUS.bg='';setStatus()}
+}
+function prefetchPress(){
+  if(PRESS||PRESS_P)return;
+  api('/cache/press.json').then(d=>{if(!PRESS){PRESS=d;initPressState();if(!$('#v-press').hidden)renderPress()}}).catch(()=>{});
+}
+function startBackground(){
+  const idle=f=>('requestIdleCallback' in window)?requestIdleCallback(f,{timeout:2500}):setTimeout(f,900);
+  idle(()=>{ensureHist().catch(()=>{})});      // l'onglet Historique sera prêt quand l'utilisateur y ira
+  setTimeout(prefetchPress,1200);               // idem pour la fiche journaliste
+  setTimeout(pollCache,600);                    // un cache plus récent est-il prêt (ou en cours de génération) ?
+}
+
 // ---------- Démarrage ----------
 // 1) Bundle JSON présent : le site s'ouvre directement sur Monte Carlo avec une simulation déjà affichée (1 requête).
 // 2) Sinon : mode API historique (Historique d'abord, comme avant).
@@ -1725,6 +1820,7 @@ $('#pressCopy').onclick=async()=>{
     if(fromCache){showTab(hashTab||'mc')}
     else{await ensureHist();await initMC();showTab(hashTab||'hist')}
   }catch(e){$('#status').innerHTML='<span class="err">'+esc(e.message)+'</span>';showTab('hist')}
+  startBackground();
 })();
 </script>
 </body>

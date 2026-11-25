@@ -31,6 +31,18 @@ except ImportError:
 
 logger = logging.getLogger("handball_dc_sim")
 
+
+def trim_memory() -> None:
+    """Rend au système la mémoire libérée par Python/NumPy (glibc ne la restitue pas toujours seule).
+    Sans effet hors Linux. Utile sur les hébergements à mémoire plafonnée."""
+    import gc
+    gc.collect()
+    try:
+        import ctypes
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except Exception:
+        pass
+
 REQUIRED_MATCH_COLS = [
     "match_id", "season", "round", "date", "time",
     "home_team", "away_team", "home_ft_goals", "away_ft_goals",
@@ -857,10 +869,9 @@ def load_player_tables(
         "br", "tc", "pp", "2p", "bp", "dp", "a", "2min", "d",
     ]
     for c in num_cols:
-        if c in box.columns:
-            box[c] = pd.to_numeric(box[c], errors="coerce").fillna(0.0)
-        else:
-            box[c] = 0.0
+        col = pd.to_numeric(box[c], errors="coerce").fillna(0.0) if c in box.columns else 0.0
+        # compteurs de match (≤ 3600) : int16 suffit et divise la mémoire par 4
+        box[c] = np.clip(np.rint(col), -32000, 32000).astype(np.int16)
     box = box.drop(columns=["lnh_score"], errors="ignore")  # ancienne évaluation officielle : pas toujours présente, non utilisée
     box["match_id"] = box["match_id"].astype(str)
     box = box.drop_duplicates(subset=["season", "match_id", "team", "last_name", "first_name"], keep="last")
@@ -898,21 +909,20 @@ def compute_player_ratings(box: pd.DataFrame, matches: pd.DataFrame) -> pd.DataF
     if box is None or box.empty:
         return box
 
-    b = box.copy()
-    # 1. Contexte du match (buts encaissés par l'équipe et résultat)
-    m_sub = matches[["match_id", "home_team", "away_team", "home_ft_goals", "away_ft_goals", "played"]].drop_duplicates("match_id")
-    b = b.merge(m_sub, on="match_id", how="left")
-    b["played"] = b["played"].fillna(False).astype(bool)
-
-    is_home = (b["team"] == b["home_team"]).to_numpy()
-    hg = pd.to_numeric(b["home_ft_goals"], errors="coerce").to_numpy(dtype=float)
-    ag = pd.to_numeric(b["away_ft_goals"], errors="coerce").to_numpy(dtype=float)
+    b = box   # modifié en place : pas de copie de la feuille de match
+    # 1. Contexte du match (buts encaissés par l'équipe et résultat), par correspondance sur match_id
+    mi = matches.drop_duplicates("match_id").set_index("match_id")
+    mid = b["match_id"]
+    is_home = (b["team"] == mid.map(mi["home_team"])).to_numpy()
+    hg = pd.to_numeric(mid.map(mi["home_ft_goals"]), errors="coerce").to_numpy(dtype=float)
+    ag = pd.to_numeric(mid.map(mi["away_ft_goals"]), errors="coerce").to_numpy(dtype=float)
+    match_played = mid.map(mi["played"]).fillna(False).astype(bool).to_numpy()
     gf_team = np.where(is_home, hg, ag)
     ga_team = np.where(is_home, ag, hg)
     league_avg_ga = float(np.nanmean(ga_team)) if np.isfinite(ga_team).any() else 29.5
 
     win_bonus = np.where(
-        b["played"].to_numpy(),
+        match_played,
         np.where(gf_team > ga_team, 0.45, np.where(gf_team == ga_team, 0.15, 0.0)),
         0.0,
     )
@@ -963,20 +973,22 @@ def compute_player_ratings(box: pd.DataFrame, matches: pd.DataFrame) -> pd.DataF
     off_gk = 1.60 * b["goals"] + 1.25 * b["a"] - 1.25 * b["bp"]
     def_gk = 1.35 * open_saves - 0.52 * open_ga + 2.20 * b["saves_7m"] - 0.15 * ga_7m + 1.40 * b["br"] + disc_pen
 
-    b["impact_off"] = np.where(is_gk, off_gk, off_field)
-    b["impact_def"] = np.where(is_gk, def_gk, def_field)
-    raw_impact = b["impact_off"] + b["impact_def"] + win_bonus
+    impact_off = np.where(is_gk, off_gk, off_field)
+    impact_def = np.where(is_gk, def_gk, def_field)
+    b["impact_off"] = impact_off.astype(np.float32)
+    b["impact_def"] = impact_def.astype(np.float32)
+    raw_impact = impact_off + impact_def + win_bonus
     played = b["played_match"].to_numpy(dtype=bool)
 
-    b["impact_score"] = np.where(played, raw_impact, 0.0)
+    b["impact_score"] = np.where(played, raw_impact, 0.0).astype(np.float32)
     note_raw = 1.0 + 9.0 / (1.0 + np.exp(-(raw_impact - 2.0) / 5.2))
-    b["match_note"] = np.where(played, np.clip(note_raw, 1.0, 10.0), np.nan)
+    b["match_note"] = np.where(played, np.clip(note_raw, 1.0, 10.0), np.nan).astype(np.float32)
 
     # Note défensive /10 : centre et pente propres à chaque rôle (les gardiens cumulent beaucoup plus de points défensifs)
     centre = np.where(is_gk, 7.0, 1.5)
     pente = np.where(is_gk, 4.0, 2.2)
-    def_note_raw = 1.0 + 9.0 / (1.0 + np.exp(-(b["impact_def"] - centre) / pente))
-    b["def_note"] = np.where(played, np.clip(def_note_raw, 1.0, 10.0), np.nan)
+    def_note_raw = 1.0 + 9.0 / (1.0 + np.exp(-(impact_def - centre) / pente))
+    b["def_note"] = np.where(played, np.clip(def_note_raw, 1.0, 10.0), np.nan).astype(np.float32)
 
     # 4. Estimation du temps de jeu (proxy) uniquement quand seconds_played est absent
     team_faced = b.groupby(["match_id", "team"])["shots_faced"].transform("sum").clip(lower=1.0)
@@ -994,10 +1006,8 @@ def compute_player_ratings(box: pd.DataFrame, matches: pd.DataFrame) -> pd.DataF
     field_est_sec = np.clip(21600.0 * (usage / team_usage), 300.0, 3600.0)  # 6 joueurs * 3600s = 21600s
 
     proxy_sec = np.where(played, np.where(is_gk, gk_est_sec, field_est_sec), 0.0)
-    b["est_seconds"] = np.where(match_clock, b["seconds_played"], proxy_sec)
-
-    drop_tmp = [c for c in ["home_team", "away_team", "home_ft_goals", "away_ft_goals", "played"] if c not in box.columns]
-    return b.drop(columns=drop_tmp)
+    b["est_seconds"] = np.where(match_clock, b["seconds_played"], proxy_sec).astype(np.float32)
+    return b
 
 
 def add_player_ratings(box: Optional[pd.DataFrame], matches: pd.DataFrame) -> Optional[pd.DataFrame]:
@@ -1921,6 +1931,9 @@ class SimulationStore:
         written["sim_standings"] = st_path
 
         # 4. Détail match par match de toutes les simulations (streaming par lots)
+        if include_matches and self.off_rtg_home.size == 0:
+            logger.warning("Détails par match non conservés pendant la simulation : sim_matches non exporté.")
+            include_matches = False
         if include_matches:
             if HAS_PARQUET:
                 mx_path = d / "sim_matches.parquet"
@@ -1982,7 +1995,10 @@ def simulate_season(
     cutoff_round: int = 0,
     seed: Optional[int] = None,
     season: str = "",
+    keep_match_details: bool = True,
 ) -> SimulationStore:
+    """keep_match_details=False : ne conserve pas les 4 tableaux offRTG/defRTG par match (≈ 30 Mo pour 10 000
+    simulations), qui ne servent qu'à l'export sim_matches."""
     rng = np.random.default_rng(seed)
     S, M, T = n_simulations, len(fx), len(dc.teams)
     H, A, R = fx["h_idx"].to_numpy(), fx["a_idx"].to_numpy(), fx["round"].to_numpy()
@@ -1999,10 +2015,11 @@ def simulate_season(
     ag_all = np.zeros((S, M), dtype=np.int16)
     exp_m = np.zeros((S, M), dtype=np.float32)
     exp_t = np.zeros((S, M), dtype=np.float32)
-    off_h_all = np.zeros((S, M), dtype=np.float32)
-    def_h_all = np.zeros((S, M), dtype=np.float32)
-    off_a_all = np.zeros((S, M), dtype=np.float32)
-    def_a_all = np.zeros((S, M), dtype=np.float32)
+    detail_shape = (S, M) if keep_match_details else (0, 0)
+    off_h_all = np.zeros(detail_shape, dtype=np.float32)
+    def_h_all = np.zeros(detail_shape, dtype=np.float32)
+    off_a_all = np.zeros(detail_shape, dtype=np.float32)
+    def_a_all = np.zeros(detail_shape, dtype=np.float32)
 
     noise_scale = np.where(dc.is_promoted, p.rating_noise_sd * p.promoted_noise_mult, p.rating_noise_sd)
     noise_done = p.rating_noise_sd <= 0
@@ -2016,10 +2033,11 @@ def simulate_season(
         h, a = int(H[i]), int(A[i])
         lh, la = predict_dc(state, h, a, AOH[i], AOA[i], ADH[i], ADA[i], RD[i], dc, p)
 
-        off_h_all[:, i] = np.exp(dc.mu_eff + state.alpha[:, h])
-        def_h_all[:, i] = np.exp(dc.mu_eff + state.beta[:, h])
-        off_a_all[:, i] = np.exp(dc.mu_eff + state.alpha[:, a])
-        def_a_all[:, i] = np.exp(dc.mu_eff + state.beta[:, a])
+        if keep_match_details:
+            off_h_all[:, i] = np.exp(dc.mu_eff + state.alpha[:, h])
+            def_h_all[:, i] = np.exp(dc.mu_eff + state.beta[:, h])
+            off_a_all[:, i] = np.exp(dc.mu_eff + state.alpha[:, a])
+            def_a_all[:, i] = np.exp(dc.mu_eff + state.beta[:, a])
         exp_m[:, i] = lh - la
         exp_t[:, i] = lh + la
 
@@ -2039,10 +2057,13 @@ def simulate_season(
     oh_a = np.zeros((M, T), dtype=np.float32)
     oh_h[np.arange(M), H] = 1.0
     oh_a[np.arange(M), A] = 1.0
-    draw = (hg_all == ag_all).astype(np.float32)
-    pts_h = PTS_WIN * (hg_all > ag_all).astype(np.float32) + PTS_DRAW * draw
-    pts_a = PTS_WIN * (ag_all > hg_all).astype(np.float32) + PTS_DRAW * draw
-    points = np.rint(pts_h @ oh_h + pts_a @ oh_a).astype(np.int16)
+    points = np.empty((S, T), dtype=np.int16)
+    for s0 in range(0, S, 1000):   # par blocs de 1 000 simulations : pas de gros tableaux temporaires
+        hb, ab = hg_all[s0:s0 + 1000], ag_all[s0:s0 + 1000]
+        draw = (hb == ab).astype(np.float32)
+        pts_h = PTS_WIN * (hb > ab).astype(np.float32) + PTS_DRAW * draw
+        pts_a = PTS_WIN * (ab > hb).astype(np.float32) + PTS_DRAW * draw
+        points[s0:s0 + 1000] = np.rint(pts_h @ oh_h + pts_a @ oh_a).astype(np.int16)
 
     ranks = np.empty((S, T), dtype=np.int16)
     positions = np.arange(1, T + 1)
@@ -2159,6 +2180,7 @@ def run_pipeline(
     n_relegated: int = 2,
     top_k: int = 4,
     pred_by: str = "mean_rank",
+    keep_match_details: bool = True,
     _preloaded_all: Optional[tuple[pd.DataFrame, list[str], Optional[pd.DataFrame], dict[str, str]]] = None,
 ) -> dict:
     p0 = params or ModelParams()
@@ -2182,6 +2204,7 @@ def run_pipeline(
             season = alt
 
     box = add_player_ratings(box, all_matches)
+    trim_memory()
 
     matches = all_matches[all_matches["season"] == season].copy()
     if matches.empty:
@@ -2216,7 +2239,8 @@ def run_pipeline(
     _, _, preds = run_history(fx, dc, p, cutoff_round)
     real = compute_standings(fx, teams, p.reapply_h2h)
 
-    store = simulate_season(fx, dc, p, n_simulations, cutoff_round, seed, season)
+    trim_memory()
+    store = simulate_season(fx, dc, p, n_simulations, cutoff_round, seed, season, keep_match_details=keep_match_details)
     agg, rank_probs = aggregate_simulation(store, min(n_relegated, len(teams) - 1), 3, top_k, pred_by)
     comp = build_comparison(real, agg, rank_probs, teams, fx)
 
@@ -2275,7 +2299,7 @@ def run_multi_season_backtest(
         out = run_pipeline(
             match_csv, boxscore_csv, players_csv,
             season=s, n_simulations=n_simulations, cutoff_round=cutoff_round,
-            seed=seed + s_idx, params=p0,
+            seed=seed + s_idx, params=p0, keep_match_details=False,
             _preloaded_all=(all_matches, seasons, box, aliases_applied),
         )
         bm = out["backtest_metrics"]
@@ -2332,7 +2356,7 @@ def _print_report(out: dict, cutoff_round: int) -> None:
             print(f"{k:>18s} : {v:.3f}")
 
 
-def main() -> None:
+def main(argv: Optional[list[str]] = None) -> None:
     ap = argparse.ArgumentParser(description="Simulateur LNH Starligue Dixon & Coles (Export Datastorytelling)")
     ap.add_argument("--data-dir", default=".", help="Dossier contenant les sous-dossiers d'années ou les CSV")
     ap.add_argument("--output-dir", default="output", help="Dossier d'export par défaut (défaut: ./output)")
@@ -2352,7 +2376,7 @@ def main() -> None:
                     help="Surcharge un ModelParams, ex. --param dc_xi=0.75 (répétable)")
     ap.add_argument("--backtest-seasons", action="store_true",
                     help="Lance un backtest walk-forward sur toutes les saisons historiques")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
     d = Path(args.data_dir)
@@ -2384,6 +2408,7 @@ def main() -> None:
         None if args.no_players else d,
         args.season, args.n_simulations, args.cutoff_round, args.seed, params,
         args.fill_missing, args.n_relegated, args.top_k, args.pred_by,
+        keep_match_details=not args.no_export_matches,
     )
     _print_report(out, args.cutoff_round)
 
