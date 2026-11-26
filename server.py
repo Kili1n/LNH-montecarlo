@@ -2229,6 +2229,8 @@ class H(BaseHTTPRequestHandler):
         try:
             if not parts:
                 return self.send((HERE / "index.html").read_bytes(), ctype="text/html")
+            if parts in (["mentions-legales"], ["legal.html"]):
+                return self.send((HERE / "legal.html").read_bytes(), ctype="text/html")
             if len(parts) == 2 and parts[0] == "cache": return self.send_cached_json(parts[1])
             if parts[:2] == ["api", "cache_status"]: return self.send(api_cache_status())
             if parts[:2] == ["api", "meta"]: return self.send(meta())
