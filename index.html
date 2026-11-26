@@ -3,7 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>La Starligue en chiffres — historique et matchs à venir simulés</title>
+<title>Fokal Press - Simulation et stats de la Starligue de handball</title>
+<meta name="description" content="Probabilités de titre, podium et relégation de chaque club, simulations de fin de saison, scores probables et 20 ans de statistiques de la Starligue. Fiche journaliste imprimable avant chaque journée.">
+<meta name="author" content="Kilian Lentz">
+<meta name="theme-color" content="#F5F6F8">
+<link rel="canonical" href="https://lnh.fokalpress.fr/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://lnh.fokalpress.fr/">
+<meta property="og:title" content="Fokal Press - Simulation et stats de la Starligue de handball">
+<meta property="og:description" content="Probabilités de titre, podium et relégation de chaque club, simulations de fin de saison, scores probables et 20 ans de statistiques de la Starligue. Fiche journaliste imprimable avant chaque journée.">
+<meta property="og:locale" content="fr_FR">
+<meta name="twitter:card" content="summary">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z' fill='%23F25C2A'/%3E%3Cpath transform='translate(0, -2)' d='M14.8333 9H13.6667L12.9375 8.25H11.0625L10.3333 9H9.16667C8.525 9 8 9.525 8 10.1667V13.6667C8 14.3083 8.525 14.8333 9.16667 14.8333H14.8333C15.475 14.8333 16 14.3083 16 13.6667V10.1667C16 9.525 15.475 9 14.8333 9ZM12 13.9583C10.8708 13.9583 9.95833 13.0458 9.95833 11.9167C9.95833 10.7875 10.8708 9.875 12 9.875C13.1292 9.875 14.0417 10.7875 14.0417 11.9167C14.0417 13.0458 13.1292 13.9583 12 13.9583Z' fill='white'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,700;1,6..72,500&display=swap" rel="stylesheet">
@@ -18,6 +28,7 @@ h2{font-size:clamp(26px,3.4vw,38px);line-height:1.12}h3{font-size:22px}
 header.top{position:sticky;top:0;z-index:20;background:rgba(245,246,248,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--rule)}
 .bar{max-width:1100px;margin:auto;padding:10px 20px 0;display:flex;gap:24px;align-items:baseline;flex-wrap:wrap}
 .brand{font:700 18px Newsreader,serif}.status{font-size:12px;color:var(--mute);margin-left:auto}
+.fk{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--ink);font:700 14px Inter,sans-serif;padding-right:14px;margin-right:2px;border-right:1px solid var(--rule)}.fk-t span{font-weight:400;opacity:.8}.fk:hover{color:var(--ball)}@media(max-width:640px){.fk-t{display:none}.fk{padding-right:10px}}
 .season-bar{max-width:1100px;margin:8px auto 0;padding:8px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid var(--rule);font-size:12.5px}
 .tl-wrap{flex:1;min-width:260px;overflow-x:auto;padding:2px 0}
 .tl-track{position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;min-width:540px;height:30px;background:#E9ECF2;border-radius:7px;user-select:none;touch-action:none;cursor:pointer}
@@ -246,7 +257,7 @@ svg text{font-family:Inter,sans-serif}
 </head>
 <body>
 <header class="top">
-  <div class="bar"><span class="brand">La Starligue en chiffres</span>
+  <div class="bar"><a class="fk" href="https://www.fokalpress.fr" target="_blank" rel="noopener" title="Fokal Press"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="#F25C2A"/><path transform="translate(0, -2)" d="M14.8333 9H13.6667L12.9375 8.25H11.0625L10.3333 9H9.16667C8.525 9 8 9.525 8 10.1667V13.6667C8 14.3083 8.525 14.8333 9.16667 14.8333H14.8333C15.475 14.8333 16 14.3083 16 13.6667V10.1667C16 9.525 15.475 9 14.8333 9ZM12 13.9583C10.8708 13.9583 9.95833 13.0458 9.95833 11.9167C9.95833 10.7875 10.8708 9.875 12 9.875C13.1292 9.875 14.0417 10.7875 14.0417 11.9167C14.0417 13.0458 13.1292 13.9583 12 13.9583Z" fill="white"/></svg><span class="fk-t">Fokal<span>Press</span></span></a><span class="brand">La Starligue en chiffres</span>
     <div class="search" id="searchBox" role="search"><input type="search" id="gSearch" role="combobox" aria-expanded="false" aria-controls="gResults" aria-autocomplete="list" autocomplete="off" aria-label="Recherche globale : joueur, club, saison, section" placeholder="Joueur, club, saison, section…  ( / )"><div class="sr" id="gResults" role="listbox" hidden></div></div>
     <span class="status" id="status">Chargement…</span></div>
   <div class="season-bar" id="seasonBar" hidden>
