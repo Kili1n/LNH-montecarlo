@@ -27,7 +27,7 @@ h2{font-size:clamp(26px,3.4vw,38px);line-height:1.12}h3{font-size:22px}
 :focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 header.top{position:sticky;top:0;z-index:20;background:rgba(245,246,248,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--rule)}
 .bar{max-width:1100px;margin:auto;padding:10px 20px 0;display:flex;gap:24px;align-items:baseline;flex-wrap:wrap}
-.brand{font:700 18px Newsreader,serif}.status{font-size:12px;color:var(--mute);margin-left:auto}
+.brand{font:700 18px Newsreader,serif}.status{font-size:12px;color:var(--mute);margin-left:auto;flex:1 1 0;min-width:120px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fk{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--ink);font:700 14px Inter,sans-serif;padding-right:14px;margin-right:2px;border-right:1px solid var(--rule)}.fk-t span{font-weight:400;opacity:.8}.fk:hover{color:var(--ball)}@media(max-width:640px){.fk-t{display:none}.fk{padding-right:10px}}
 .season-bar{max-width:1100px;margin:8px auto 0;padding:8px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid var(--rule);font-size:12.5px}
 .tl-wrap{flex:1;min-width:260px;overflow-x:auto;padding:2px 0}
@@ -243,6 +243,7 @@ svg text{font-family:Inter,sans-serif}
 
 @media(max-width:760px){
   .search{order:3;flex-basis:100%;max-width:none}
+  .status{white-space:normal;text-align:left}
   .afg{grid-template-columns:1fr}.tpan.r{text-align:left}.tpan.r .fch{justify-content:flex-start}
   .bf,.duel{grid-template-columns:1fr 90px 1fr}
   .lock-row{grid-template-columns:1fr}
@@ -390,7 +391,7 @@ const opts=(el,arr,sel)=>el.innerHTML=arr.map(([v,t])=>`<option value="${esc(v)}
 const heat=(v,col)=>`<span class="cell num" style="background:color-mix(in srgb,${col} ${Math.round(v*100)}%,transparent);color:${v>.55?'#fff':'inherit'}">${pc(v)}</span>`;
 let H=null,M=null,SIM=null,UP=[];
 const STATUS={mc:'',hist:'',bg:''};
-const setStatus=()=>{$('#status').textContent=[STATUS.mc,STATUS.hist,STATUS.bg].filter(Boolean).join(' · ')||'Chargement…'};
+const setStatus=()=>{const t=[STATUS.mc,STATUS.hist,STATUS.bg].filter(Boolean).join(' · ')||'Chargement…';$('#status').textContent=t;$('#status').title=t};
 let SEL={start:0,end:0};
 let PL_MODE='total';
 let EXP={dataset:'matches',sort:'date',dir:'desc',page:1,timer:null};
