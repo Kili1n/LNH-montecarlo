@@ -2578,11 +2578,15 @@ class H(BaseHTTPRequestHandler):
 
     def send(self, obj, code=200, ctype="application/json", headers: dict | None = None):
         b = obj if isinstance(obj, bytes) else json.dumps(_jsonable(obj), ensure_ascii=False).encode()
+        headers = dict(headers or {})
+        if len(b) > 32768 and "Content-Encoding" not in headers and "gzip" in self.headers.get("Accept-Encoding", ""):
+            b = gzip.compress(b, 5)       # /api/history pèse 2,3 Mo brut pour 0,23 Mo compressé : sur Render Free, c'est le plus gros transfert de la page
+            headers["Content-Encoding"] = "gzip"; headers["Vary"] = "Accept-Encoding"
         self.send_response(code); self.send_header("Content-Type", ctype + "; charset=utf-8")
         self.send_header("Content-Length", str(len(b)))
-        if "Cache-Control" not in (headers or {}):
+        if "Cache-Control" not in headers:
             self.send_header("Cache-Control", "no-store")
-        for k, v in (headers or {}).items():
+        for k, v in headers.items():
             self.send_header(k, v)
         self.end_headers(); self.wfile.write(b)
 
