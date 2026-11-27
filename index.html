@@ -319,7 +319,7 @@ svg text{font-family:Inter,sans-serif}
 <section id="sec-ht"><h2>Mi-temps vs score final : les rois de la remontada</h2><p class="lede">Capacité à renverser un match après avoir été mené à la pause, tenue du score et domination en seconde période.</p>
 <div class="grid2" id="htCards"></div></section>
 
-<section id="sec-players"><h2>Les joueurs qui font la différence</h2><p class="lede">Classements généraux et spécialistes par secteur de jeu, avec la note LNH sur 10 et la nouvelle note défensive. Cliquez sur un joueur pour ouvrir sa fiche, ses records et comparer son radar à celui d’un autre joueur.</p>
+<section id="sec-players"><h2>Les joueurs qui font la différence</h2><p class="lede">Classements généraux et spécialistes par secteur de jeu, avec la note sur 10 et la nouvelle note défensive. Cliquez sur un joueur pour ouvrir sa fiche, ses records et comparer son radar à celui d’un autre joueur.</p>
 <div class="row">
   <div class="seg-btn" role="group" aria-label="Mode d'affichage joueurs" id="plModeGroup">
     <button type="button" data-plmode="total" aria-pressed="true">Total</button>
@@ -552,7 +552,7 @@ const SC_METRICS=[
 {k:'bp_m',l:'Balles perdues par match',d:1,b:'low'},
 {k:'yc_m',l:'Avertissements (cartons jaunes) par match',d:2,b:'low'},
 {k:'two_min_m',l:'Exclusions de 2 min par match',d:1,b:'low'},
-{k:'note',l:'Note LNH moyenne',d:2,b:'high'},
+{k:'note',l:'Note /10 moyenne',d:2,b:'high'},
 {k:'def_note',l:'Note défensive LNH moyenne',d:2,b:'high'},
 {k:'j',l:'Matchs joués',d:0}
 ];
@@ -697,7 +697,7 @@ function players(){
   const card=(title,arr,sortFn,mainFn,subFn)=>`<div class="card"><h3 style="margin-bottom:6px">${title}</h3>${arr.length?sortAndSlicePlayers(arr,sortFn).map((p,i)=>`<div class="rank clickable" data-player="${esc(p.name)}"><b class="num">${i+1}</b><div><b>${esc(p.name)}</b><br><small>${esc(p.team)} · ${p.games} m. (${Math.round(p.minutes||0)} min)</small></div><div style="text-align:right"><b class="num">${mainFn(p)}</b><br><i>${subFn(p)}</i></div></div>`).join(''):'<div class="empty">Aucune feuille de match pour cette période.</div>'}</div>`;
 
   $('#players').innerHTML=
-    card('Note LNH (/10)', d.mvp,
+    card('Note /10', d.mvp,
       p => PL_MODE === 'total' ? p.impact : (PL_MODE === 'match' ? p.note : scalePlayerVal(p, p.impact)),
       p => PL_MODE === 'total'
         ? fmt(p.impact, 0) + ' pts'
@@ -791,7 +791,7 @@ async function openClubModal(team){
     }
 
     const rosterCard=d.roster.length?`<div class="card"><h4 style="margin:0 0 8px;font-size:15px">Effectif utilisé sur la période (cliquer sur un joueur)</h4>
-      <div class="scroll"><table class="tbl num"><tr><th>Joueur</th><th>Poste</th><th>M.</th><th>Min/m.</th><th>Buts / Arrêts</th><th>Note LNH</th></tr>
+      <div class="scroll"><table class="tbl num"><tr><th>Joueur</th><th>Poste</th><th>M.</th><th>Min/m.</th><th>Buts / Arrêts</th><th>Note /10</th></tr>
       ${d.roster.map(p=>`<tr><td><button type="button" class="link-btn" data-pl="${esc(p.name)}"><b>${esc(p.name)}</b></button></td><td>${p.gk?'Gardien':'Champ'}</td><td>${p.games}</td><td>${fmt(p.min_m,1)}</td><td>${p.gk?`${p.saves}/${p.faced}`:`${p.goals}/${p.shots}`}</td><td><b>${p.note!=null?fmt(p.note,2):'–'}</b></td></tr>`).join('')}
       </table></div></div>`:'';
 
@@ -876,7 +876,7 @@ async function openPlayerModal(name){
     const st=d.stats,tilde=st.est_clock?'~':'';
     $('#modalSub').textContent=`${d.is_gk?'Gardien':'Joueur de champ'} · ${d.teams.join(', ')} · ${periodLabel()}`;
 
-    const lnhTiles=`<div><b class="num">${fmt(st.note,2)} / 10</b><span>Note LNH${d.is_gk?'':` · défense ${fmt(st.def_note,2)}`}</span></div>`;
+    const lnhTiles=`<div><b class="num">${fmt(st.note,2)} / 10</b><span>Note moyenne${d.is_gk?'':` · défense ${fmt(st.def_note,2)}`} · meilleur match ${st.note_max!=null?fmt(st.note_max,2):'–'}</span></div>`;
     const kpis=d.is_gk?`<div class="kpi-mini">
       <div><b class="num">${st.games}</b><span>Matchs (${tilde}${fmt(st.min_m,1)} min/m.)</span></div>
       <div><b class="num">${fmt(st.save_pct,1)} %</b><span>${st.saves} arrêts / ${st.faced} tirs</span></div>
@@ -896,11 +896,11 @@ async function openPlayerModal(name){
       <div id="radarBox"></div></div>`;
 
     const bestCard=`<div class="card"><h4 style="margin:0 0 8px;font-size:15px">Meilleurs matchs sur la période</h4>
-      ${d.best_games.map(g=>`<div class="rank" style="grid-template-columns:1fr auto"><div><b>${d.is_gk?`${g.saves}/${g.faced} arrêts`:`${g.goals}/${g.shots} buts`}</b> vs ${esc(g.opponent)} ${g.score?`(${g.score})`:''}<br><small>${esc(g.date)} · ${esc(g.season)} · ${esc(g.team)}</small></div><div style="text-align:right"><b class="num">${g.note!=null?fmt(g.note,2):'–'}</b><br><i>note LNH</i></div></div>`).join('')}
+      ${d.best_games.map(g=>`<div class="rank" style="grid-template-columns:1fr auto"><div><b>${d.is_gk?`${g.saves}/${g.faced} arrêts`:`${g.goals}/${g.shots} buts`}</b> vs ${esc(g.opponent)} ${g.score?`(${g.score})`:''}<br><small>${esc(g.date)} · ${esc(g.season)} · ${esc(g.team)}</small></div><div style="text-align:right"><b class="num">${g.note!=null?fmt(g.note,2):'–'}</b><br><i>note /10</i>${g.lnh_score!=null?`<br><small>score LNH ${fmt(g.lnh_score,1)}</small>`:''}</div></div>`).join('')}
     </div>`;
 
     const histCard=d.seasons_history.length?`<div class="card"><h4 style="margin:0 0 8px;font-size:15px">Parcours saison par saison</h4>
-      <div class="scroll"><table class="tbl num"><tr><th>Saison</th><th>Club</th><th>Matchs</th><th>Min/m.</th><th>${d.is_gk?'Arrêts':'Buts'}</th><th>Réussite</th><th>Note LNH</th></tr>
+      <div class="scroll"><table class="tbl num"><tr><th>Saison</th><th>Club</th><th>Matchs</th><th>Min/m.</th><th>${d.is_gk?'Arrêts':'Buts'}</th><th>Réussite</th><th>Note /10</th></tr>
       ${d.seasons_history.map(r=>`<tr><td>${esc(r.season)}</td><td><button type="button" class="link-btn" data-cl="${esc(r.team)}">${esc(r.team)}</button></td><td>${r.games}</td><td>${fmt(r.min_m,1)}</td><td>${d.is_gk?r.saves:r.goals}</td><td>${fmt(d.is_gk?r.save_pct:r.pct,1)} %</td><td><b>${r.note!=null?fmt(r.note,2):'–'}</b></td></tr>`).join('')}
       </table></div></div>`:'';
 
@@ -1056,7 +1056,7 @@ const EXP_COLS={
   ],
   players:[
     ['player','Joueur','player'],['team','Club','team'],['goals_shots','Buts/Tirs','goals'],
-    ['saves_faced','Arrêts','saves'],['note','Note LNH','note'],['minutes','Temps','seconds_played'],
+    ['saves_faced','Arrêts','saves'],['note','Note /10','note'],['lnh_score','Score LNH','lnh_score'],['minutes','Temps','seconds_played'],
     ['ast','Passes D.','ast'],['br','B. récup.','br'],['bp','B. perd.','bp'],['yc','Avert.','yc'],['2min','2 min','2min'],['rc','Rouge','rc'],
     ['opponent','Adversaire','opponent'],['date','Date','date'],['season','Saison','season'],['round','J.','round']
   ]

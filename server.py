@@ -210,7 +210,7 @@ def load_data():
 
 
 _PLAYED_COLS = ["match_id", "full_name", "team", "opponent", "date", "score", "season", "season_idx", "round", "is_gk", "goals", "shots",
-                "goals_7m", "shots_7m", "saves", "shots_faced", "saves_7m", "shots_faced_7m", "ast", "ast_ok", "yc", "rc", "br", "tc", "bp", "2min", "match_note",
+                "goals_7m", "shots_7m", "saves", "shots_faced", "saves_7m", "shots_faced_7m", "ast", "ast_ok", "yc", "rc", "br", "tc", "bp", "2min", "match_note", "lnh_score",
                 "def_note", "impact_def", "est_seconds"]
 
 
@@ -773,7 +773,8 @@ def compute_records(seasons_raw: str = "all") -> dict:
                 p_top("saves", "Plus d'arrêts", "arrêts", lambda r: f"{int(r.saves)}/{int(r.shots_faced)} {base(r)}", mask=gk_mask),
                 p_top("saves_7m", "Plus d'arrêts sur 7 m", "arrêts à 7 m", lambda r: f"{int(r.saves_7m)}/{int(r.shots_faced_7m)} {base(r)}", mask=gk_mask),
                 p_top("save_ratio", "Meilleur % d'arrêts (15 tirs minimum)", "% d'arrêts", lambda r: f"{int(r.saves)}/{int(r.shots_faced)} {base(r)}", d=1, mask=gk_mask),
-                p_top("match_note", "Meilleure note LNH sur un match", "/ 10", lambda r: f"{base(r)}", d=2),
+                p_top("match_note", "Meilleure note /10 sur un match (modèle du site)", "/ 10", lambda r: f"{base(r)}" + (f" · score LNH officiel {r.lnh_score:.1f}".replace(".", ",") if r.lnh_score > 0 else ""), d=2),
+                p_top("lnh_score", "Meilleur score LNH officiel sur un match (depuis 2023/24)", "pts", base, d=1),
             ]})
 
             # ---- 5. Joueurs : saison & série --------------------------------
@@ -798,7 +799,7 @@ def compute_records(seasons_raw: str = "all") -> dict:
                 s_top("yc", "Plus d'avertissements sur une saison", "avertissements", sd, mask=lambda z: ~z["gk"].astype(bool)),
                 s_top("saves", "Plus d'arrêts sur une saison", "arrêts", sd, mask=lambda z: z["gk"].astype(bool)),
                 s_top("def_act", "Plus de BR + TC sur une saison", "actions défensives", sd, mask=lambda z: ~z["gk"].astype(bool)),
-                s_top("note", f"Meilleure note LNH moyenne ({min_g} matchs min.)", "/ 10", sd, d=2, mask=lambda z: z["games"] >= min_g),
+                s_top("note", f"Meilleure note /10 moyenne ({min_g} matchs min.)", "/ 10", sd, d=2, mask=lambda z: z["games"] >= min_g),
             ]
             # série de matchs consécutifs avec au moins un but (joueurs de champ)
             fld = pp[~pp["is_gk"].astype(bool)].sort_values(["full_name", "season_idx", "round", "date"], kind="mergesort")
@@ -852,8 +853,8 @@ def player_records(name: str, is_gk: bool) -> dict:
                 bests[col] = src.groupby("full_name")[col].max()
             return bests[col]
 
-    specs = ([("saves", "Arrêts", 0), ("saves_7m", "Arrêts sur 7 m", 0), ("save_ratio", "% d'arrêts (≥ 15 tirs)", 1), ("match_note", "Note LNH", 2)] if is_gk
-             else [("goals", "Buts", 0), ("goals_7m", "Buts à 7 m", 0), ("ast", "Passes décisives", 0), ("br", "Balles récupérées", 0), ("tc", "Contres", 0), ("match_note", "Note LNH", 2)])
+    specs = ([("saves", "Arrêts", 0), ("saves_7m", "Arrêts sur 7 m", 0), ("save_ratio", "% d'arrêts (≥ 15 tirs)", 1), ("match_note", "Note /10", 2)] if is_gk
+             else [("goals", "Buts", 0), ("goals_7m", "Buts à 7 m", 0), ("ast", "Passes décisives", 0), ("br", "Balles récupérées", 0), ("tc", "Contres", 0), ("match_note", "Note /10", 2)])
     src_mine = mine.assign(save_ratio=np.where(mine["shots_faced"] >= 15, 100 * mine["saves"] / mine["shots_faced"].clip(lower=1), np.nan))
     best = []
     for col, label, d in specs:
@@ -871,8 +872,8 @@ def player_records(name: str, is_gk: bool) -> dict:
                                               saves=("saves", "sum"), def_act=("br", "sum"), tc=("tc", "sum"), note=("match_note", "mean")).reset_index()
     ps["def_act"] = ps["def_act"] + ps["tc"]
     season_best = []
-    cols = ([("saves", "Arrêts sur une saison", 0), ("note", "Meilleure note LNH moyenne", 2)] if is_gk
-            else [("goals", "Buts sur une saison", 0), ("ast", "Passes décisives sur une saison", 0), ("def_act", "BR + TC sur une saison", 0), ("note", "Meilleure note LNH moyenne", 2)])
+    cols = ([("saves", "Arrêts sur une saison", 0), ("note", "Meilleure note /10 moyenne", 2)] if is_gk
+            else [("goals", "Buts sur une saison", 0), ("ast", "Passes décisives sur une saison", 0), ("def_act", "BR + TC sur une saison", 0), ("note", "Meilleure note /10 moyenne", 2)])
     for col, label, d in cols:
         s = ps[ps["games"] >= (5 if col == "note" else 1)]
         if s.empty or float(s[col].max()) <= 0:
@@ -967,7 +968,8 @@ def api_player_detail(qs: dict) -> dict:
         "saves_7m": saves_7m, "faced_7m": faced_7m,
         "save_pct_7m": round(100.0 * saves_7m / max(faced_7m, 1), 1) if faced_7m > 0 else 0.0,
         "br": br, "tc": tc, "ast": ast, "ast_min": round(ast_min, 1), "yc": yc, "rc": rc, "bp": bp_lost, "two_min": two_min,
-        "note": round(note, 2), "def_note": round(def_note, 2), "impact_def": round(impact_def, 1),
+        "note": round(note, 2), "note_max": (round(float(bp["match_note"].max()), 2) if bp["match_note"].notna().any() else None),
+        "def_note": round(def_note, 2), "impact_def": round(impact_def, 1),
     }
 
     # Radar normalisé (50 = moyenne de la ligue sur la période pour le même rôle)
@@ -994,7 +996,7 @@ def api_player_detail(qs: dict) -> dict:
             ax("% Arrêts", _norm(stats["save_pct"], lg_sv_pct), f"{stats['save_pct']} %", f"{lg_sv_pct:.1f} %", "save_pct"),
             ax("% Arrêts 7m", _norm(stats["save_pct_7m"], lg_7m_pct), f"{stats['save_pct_7m']} %", f"{lg_7m_pct:.1f} %", "save_pct_7m"),
             ax("Arrêts / 60m", _norm(60.0 * saves / p_min, lg_sv_60), f"{60.0 * saves / p_min:.1f}", f"{lg_sv_60:.1f}", "saves_60"),
-            ax("Note LNH", _norm(note, lg_note), f"{note:.2f} / 10", f"{lg_note:.2f} / 10", "note"),
+            ax("Note /10", _norm(note, lg_note), f"{note:.2f} / 10", f"{lg_note:.2f} / 10", "note"),
             ax("Temps / match", _norm(min_m, lg_min_g), f"{min_m:.1f} min", f"{lg_min_g:.1f} min", "min_m"),
         ]
     else:
@@ -1009,7 +1011,7 @@ def api_player_detail(qs: dict) -> dict:
             (ax("Passes D. / 60m", _norm(60.0 * ast / ast_min, lg_ast_60), f"{60.0 * ast / ast_min:.1f}", f"{lg_ast_60:.1f}", "ast_60") if ast_min >= 60
              else ax("Passes D. / 60m", 0, "n.d. (relevées depuis 2023/24)", f"{lg_ast_60:.1f}", "ast_60")),
             ax("Défense / 60m", _norm(60.0 * (br + tc) / p_min, lg_def_60), f"{60.0 * (br + tc) / p_min:.1f}", f"{lg_def_60:.1f}", "def_60"),
-            ax("Note LNH", _norm(note, lg_note), f"{note:.2f} / 10", f"{lg_note:.2f} / 10", "note"),
+            ax("Note /10", _norm(note, lg_note), f"{note:.2f} / 10", f"{lg_note:.2f} / 10", "note"),
             ax("Note défensive LNH", _norm(def_note, lg_def_note), f"{def_note:.2f} / 10", f"{lg_def_note:.2f} / 10", "def_note"),
         ]
 
@@ -1034,6 +1036,7 @@ def api_player_detail(qs: dict) -> dict:
         "opponent": str(r.opponent) if pd.notna(r.opponent) else "", "score": str(r.score),
         "goals": int(r.goals), "shots": int(r.shots), "saves": int(r.saves), "faced": int(r.shots_faced),
         "note": round(float(r.match_note), 2) if pd.notna(r.match_note) else None,
+        "lnh_score": round(float(r.lnh_score), 1) if float(r.lnh_score) > 0 else None,   # score LNH officiel (depuis 2023/24)
     } for r in bp_m.head(5).itertuples()]
 
     return {
@@ -1051,7 +1054,7 @@ def _prepare_explorer_df(dataset: str) -> pd.DataFrame:
             return pd.DataFrame()
         b = pf[pf["played_match"]].copy()
         b["player"] = b["full_name"]
-        for col in ["goals", "shots", "saves", "shots_faced", "est_seconds", "ast", "yc", "rc", "br", "bp", "two_min", "match_note"]:
+        for col in ["goals", "shots", "saves", "shots_faced", "est_seconds", "ast", "yc", "rc", "br", "bp", "two_min", "match_note", "lnh_score"]:
             b[col] = pd.to_numeric(b[col], errors="coerce")
             if col != "match_note":
                 b[col] = b[col].fillna(0)
@@ -1120,7 +1123,7 @@ def api_explorer(qs: dict) -> dict:
     if dataset == "players":
         sort_map = {
             "player": "player", "team": "team", "goals": "goals", "saves": "saves",
-            "note": "match_note", "seconds_played": "est_seconds",
+            "note": "match_note", "lnh_score": "lnh_score", "seconds_played": "est_seconds",
             "ast": "ast", "yc": "yc", "rc": "rc", "br": "br", "bp": "bp", "2min": "two_min",
             "opponent": "opponent", "date": "date", "season": "season", "round": "round",
         }
@@ -1155,6 +1158,7 @@ def api_explorer(qs: dict) -> dict:
             "br": int(r.br),
             "bp": int(r.bp),
             "2min": int(r.two_min),
+            "lnh_score": (round(float(r.lnh_score), 1) if r.lnh_score > 0 else "–"),
             "opponent": r.opponent or "",
             "date": r.date,
             "season": r.season,
@@ -1560,7 +1564,7 @@ STAT_LABEL = {"goals": "buts", "ast": "passes décisives", "saves": "arrêts", "
 ZONE_KEYS = {"p1": "title", "podium": "podium", "top": "top", "rel": "rel"}
 PROFILE = [("pts_m", "Points par match", True), ("gf_m", "Buts marqués par match", True), ("ga_m", "Buts encaissés par match", False),
            ("win_pct", "% de victoires", True), ("shoot_pct", "% de réussite aux tirs", True), ("save_pct", "% d’arrêts des gardiens", True),
-           ("note", "Note LNH moyenne", True), ("def_note", "Note défensive LNH moyenne", True), ("two_min_m", "Exclusions de 2 min par match", False)]
+           ("note", "Note /10 moyenne", True), ("def_note", "Note défensive /10 moyenne", True), ("two_min_m", "Exclusions de 2 min par match", False)]
 
 
 def _pl(n, one: str, many: str | None = None) -> str:
