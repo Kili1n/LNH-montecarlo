@@ -75,6 +75,9 @@ def _team_lookup_key(name: str) -> str:
 
 # Clé normalisée -> Nom canonique retenu dans tout le pipeline
 DEFAULT_TEAM_ALIASES: dict[str, str] = {
+    # Villefranche-sur-Saône (2007/08) : la LNH écrit « ILLEFRANCHE SUR SAÔNE » (V manquant) pour la moitié des matchs -> 2 clubs fantômes
+    "illefranche sur saone": "Villefranche sur Saône",
+    "villefranche sur saone": "Villefranche sur Saône",
     # Paris Saint-Germain Handball
     "psg": "PSG",
     "psg handball": "PSG",

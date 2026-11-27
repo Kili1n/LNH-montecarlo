@@ -19,7 +19,6 @@ import contextlib
 import datetime as dt
 import io
 import json
-import shutil
 import sys
 import traceback
 from pathlib import Path

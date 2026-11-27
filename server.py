@@ -483,7 +483,7 @@ def api_club_detail(qs: dict) -> dict:
             "res": res,
         })
 
-    # Effectif sur la période (note LNH /10 et note défensive)
+    # Effectif sur la période (note /10 et note défensive)
     roster = []
     if box is not None and not box.empty:
         b_club = _filter_seasons_df(box[(box["team"] == team) & box["played_match"]], seasons_raw)
@@ -1130,7 +1130,7 @@ def api_player_detail(qs: dict) -> dict:
         "note": round(float(r.note), 2) if pd.notna(r.note) else None,
     } for r in sg.itertuples()]
 
-    # Top 5 matchs individuels sur la période (classés par note LNH)
+    # Top 5 matchs individuels sur la période (classés par note /10)
     bp_m = bp.sort_values(["match_note", "goals", "saves"], ascending=False)
     best_games = [{
         "match_id": str(r.match_id), "date": str(r.date), "season": str(r.season), "team": str(r.team),

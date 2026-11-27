@@ -229,3 +229,4 @@ data/data_csv_OLD/
 # Rapports de la mise à jour hebdomadaire (générés par tools/update_weekly.py et le workflow)
 update_report.md
 issue_body.md
+.claude/
