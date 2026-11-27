@@ -486,7 +486,7 @@ function playersForPeriod(key){
     const acc=new Map();
     for(const s of selectedSeasons()){
       for(const p of (H.players[s]?.[prop]||[])){
-        const id=p.name+'||'+p.team;
+        const id=p.name;
         const cur=acc.get(id)||{
           name:p.name,team:p.team,games:0,minutes:0,goals:0,shots:0,
           goals_7m:0,shots_7m:0,saves:0,faced:0,saves_7m:0,faced_7m:0,

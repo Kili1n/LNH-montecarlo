@@ -324,7 +324,10 @@ def top_players(box: pd.DataFrame | None, season: str | None) -> dict:
     b = b[b["played_match"]]
     if b.empty:
         return empty
-    g = b.groupby(["full_name", "team"]).agg(
+    # Un joueur = un nom : ceux qui ont changé de club ne sont plus coupés en deux lignes (le club affiché est le plus récent).
+    b = b.sort_values(["season_idx", "round"], kind="mergesort")
+    g = b.groupby("full_name").agg(
+        team=("team", "last"),
         games=("match_id", "nunique"),
         seconds=("est_seconds", "sum"),
         real_clock_share=("has_real_clock", "mean"),
@@ -1314,6 +1317,9 @@ def api_export_csv(qs: dict) -> tuple[bytes, str]:
     if full:
         m, box, _ = load_data()
         raw = box if dataset == "players" else m
+        if dataset == "players":
+            raw = raw.drop(columns=[c for c in ("a", "d", "ast_ok", "def_ok") if c in raw.columns])   # yc / rc remplacent « a » / « d »
+            raw = raw.assign(ast=raw["ast"].where(box["ast_ok"]))                                     # passes décisives : vide quand non relevées
         return raw.to_csv(index=False).encode("utf-8-sig"), fname
     drop_tmp = [c for c in ["score", "ht_score", "total_goals", "player"] if c in df.columns]
     clean = df.drop(columns=drop_tmp)
