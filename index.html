@@ -234,6 +234,7 @@ svg text{font-family:Inter,sans-serif}
 .bf .rk{color:var(--mute);font-size:11.5px}
 .duel{display:grid;grid-template-columns:1fr 130px 1fr;gap:10px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--rule);align-items:baseline}
 .duel .m{text-align:center;color:var(--mute);font-size:12px}.duel .l{text-align:right}
+.how{margin-top:22px;background:var(--card);border:1px solid var(--rule);border-radius:8px;padding:0 18px}.how summary{cursor:pointer;padding:14px 0;font-weight:600}.how[open] summary{border-bottom:1px solid var(--rule);margin-bottom:12px}.how h4{margin:16px 0 6px;font-size:14px}.how p,.how li{font-size:13.5px;color:var(--mute);margin:4px 0}.how b{color:var(--ink)}.how table{border-collapse:collapse;font-size:13px;margin:6px 0 10px}.how td,.how th{border:1px solid var(--rule);padding:4px 10px;text-align:left}.how th{background:var(--paper)}.how .formula{font-family:ui-monospace,Consolas,monospace;background:var(--paper);padding:8px 12px;border-radius:6px;font-size:12.5px;overflow-x:auto}
 .site-foot{max-width:1100px;margin:0 auto;padding:28px 20px 40px;border-top:1px solid var(--rule);color:var(--mute);font-size:13px;display:flex;flex-wrap:wrap;gap:8px 22px;justify-content:space-between;align-items:center}.site-foot a{color:var(--mute);text-decoration:none;margin-right:16px}.site-foot a:hover{color:var(--blue)}
 @media print{
   header.top,.site-foot,.press-ctl,.strip,.modal-bg,.tip,#boot{display:none!important}
@@ -328,7 +329,34 @@ svg text{font-family:Inter,sans-serif}
   </div>
 </div>
 <div class="grid3" id="players"></div>
-<div class="grid3" id="specialists" style="margin-top:16px"></div></section>
+<div class="grid3" id="specialists" style="margin-top:16px"></div>
+<details class="how" id="howNote"><summary>Comment est calculée la note ?</summary>
+<p>La note /10 est calculée par le site pour <b>chaque joueur et chaque match</b> à partir des statistiques de la feuille de match. On additionne des <b>points d’impact</b>, puis on les convertit en note entre 1 et 10.</p>
+<div class="formula">note = 1 + 9 / (1 + e<sup>−(impact − 2) / 5,2</sup>)  &nbsp;·&nbsp; impact = attaque + défense + bonus de résultat</div>
+<h4>Joueurs de champ : pondérations</h4>
+<table><tr><th>Attaque</th><th>Points</th><th>Défense et discipline</th><th>Points</th></tr>
+<tr><td>But de jeu</td><td>+1,50</td><td>Ballon récupéré</td><td>+2,00</td></tr>
+<tr><td>Tir de jeu manqué</td><td>−0,65</td><td>Tir adverse contré</td><td>+1,80</td></tr>
+<tr><td>But à 7 m</td><td>+1,10</td><td>Contexte d’équipe*</td><td>−1,2 à +1,5</td></tr>
+<tr><td>7 m manqué</td><td>−0,90</td><td>Exclusion de 2 min</td><td>−0,85</td></tr>
+<tr><td>7 m provoqué</td><td>+0,95</td><td>Disqualification</td><td>−2,50</td></tr>
+<tr><td>2 min provoquée</td><td>+1,10</td><td>Avertissement</td><td>−0,30</td></tr>
+<tr><td>Passe décisive</td><td>+0,40</td><td>Victoire / nul (bonus)</td><td>+0,45 / +0,15</td></tr>
+<tr><td>Balle perdue</td><td>−1,25</td><td></td><td></td></tr></table>
+<p>* Plus l’équipe encaisse peu de buts par rapport à la moyenne de la ligue, plus ce terme est positif.</p>
+<h4>Gardiens</h4>
+<p>Arrêt de jeu +1,35 · but encaissé de jeu −0,52 · arrêt sur 7 m +2,20 · 7 m encaissé −0,15 · ballon récupéré +1,40 · but marqué +1,60 · passe décisive +0,40 · balle perdue −1,25, plus la même discipline et le même bonus de résultat.</p>
+<h4>Note défensive</h4>
+<p>C’est la même conversion appliquée aux seuls points défensifs : <span class="formula">1 + 9 / (1 + e<sup>−(défense − c) / s</sup>)</span> avec <b>c = 0,2 et s = 2,2</b> pour un joueur de champ, <b>c = 0,8 et s = 4,0</b> pour un gardien. Un joueur sans aucune action défensive obtient environ 5,3 ; deux récupérations donnent environ 8,6.</p>
+<h4>Limites à connaître</h4>
+<ul>
+<li><b>Les récupérations, contres, 7 m et 2 min provoqués ne sont relevés par la LNH que depuis 2023/24.</b> Avant, la note défensive d’un joueur de champ ne reflète que le contexte de son équipe et sa discipline.</li>
+<li><b>Les passes décisives</b> sont absentes avant 2013, partielles jusqu’en 2022/23 (≈ 6 par match contre ≈ 45 depuis 2023/24) : elles sont remises à l’échelle de chaque saison pour la note, et les classements de passes ne portent que sur 2023/24 et après.</li>
+<li><b>Les avertissements</b> sont très peu relevés depuis 2023/24 : les classements de discipline les sous-estiment.</li>
+<li>Les pondérations sont choisies à la main, pas ajustées statistiquement sur les résultats. La note décrit une performance statistique et ne mesure ni le placement, ni le travail sans ballon.</li>
+<li>Une note de match est calculée sur le match entier ; sur plusieurs matchs, le site affiche la moyenne. Un « ~ » devant les minutes indique un temps de jeu estimé faute de chronomètre dans la feuille de match.</li>
+</ul></details>
+</section>
 
 <section id="records"><h2>Les records de la Starligue</h2><p class="lede">Les plus grosses performances et les séries les plus longues de la période sélectionnée. Ouvrez un record pour voir le classement complet, cliquez sur un nom pour ouvrir sa fiche.</p>
 <div class="row"><div class="seg-btn wrap" id="recTabs" role="group" aria-label="Catégories de records"></div></div>
