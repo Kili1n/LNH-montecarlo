@@ -1476,6 +1476,8 @@ function condStats(cd,mask){
   return {n,p1:f(p1),podium:f(pod),top:f(top),rel:f(rel),mean_rank:f(mr),exp_pts:f(ep),rank:f(rc)};
 }
 function condCompute(cd,locks){
+  if(locks.length<1||locks.length>3)throw new Error('Verrouillez entre 1 et 3 matchs.');   // mêmes règles que le serveur
+  if(new Set(locks.map(l=>l.match_id)).size!==locks.length)throw new Error('Un même match ne peut être verrouillé qu’une seule fois.');
   const base=cd.base||(cd.base=condStats(cd,null)),mask=new Uint8Array(cd.S).fill(1);
   const echo=locks.map(l=>{const m=UP.find(u=>u.match_id===l.match_id);return {match_id:l.match_id,result:l.result,home:m.home,away:m.away,round:m.round,p:outcomeP(m,l.result)}});
   for(const l of locks){
