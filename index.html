@@ -464,19 +464,6 @@ function periodKey(){if(isFullRange())return 'all';if(SEL.start===SEL.end)return
 function periodLabel(){if(!H)return 'Toutes les saisons';const N=H.seasons.length,s0=SEL.start,s1=SEL.end;return isFullRange()?`Toutes les saisons (${H.seasons[0]} → ${H.seasons[N-1]})`:s0===s1?`Saison ${H.seasons[s0]}`:`${H.seasons[s0]} → ${H.seasons[s1]}`}
 function seasonsQueryParam(){if(!H)return 'all';return isFullRange()?'all':selectedSeasons().join(',')}
 
-function teamsForPeriod(key){
-  if(key!=='__range__')return H.teams[key]||[];
-  const acc=new Map();
-  for(const s of selectedSeasons()){
-    for(const t of (H.teams[s]||[])){
-      const cur=acc.get(t.team)||{team:t.team,j:0,gf:0,ga:0,pts:0};
-      cur.j+=t.j;cur.gf+=t.gf_m*t.j;cur.ga+=t.ga_m*t.j;cur.pts+=t.pts;
-      acc.set(t.team,cur);
-    }
-  }
-  return [...acc.values()].map(t=>({...t,gf_m:t.gf/Math.max(t.j,1),ga_m:t.ga/Math.max(t.j,1)}));
-}
-
 function halftimeForPeriod(key){
   if(!H.halftime)return [];
   if(key!=='__range__')return H.halftime[key]||[];
@@ -1699,7 +1686,6 @@ const isoD=d=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(d==null?'':d));ret
 const fmtD=(d,o)=>{const i=isoD(d);if(!i)return '';const t=new Date(i+'T12:00:00');return isNaN(t)?'':t.toLocaleDateString('fr-FR',o)};
 const frDate=d=>fmtD(d,{weekday:'long',day:'numeric',month:'long'});
 const frDay=d=>fmtD(d,{day:'numeric',month:'long'});
-const dotSep=x=>x?' · '+x:'';
 // La base ne remonte pas à l'origine de la Starligue : on précise toujours « depuis 20XX » pour ne pas laisser croire à des totaux de carrière.
 const sinceTxt=()=>'depuis '+(((PRESS&&PRESS.since)||'').replace('depuis ','')||((typeof H!=='undefined'&&H&&H.seasons&&H.seasons[0])?String(H.seasons[0]).slice(0,4):'2007'));
 const ZTXT=(z,k)=>({title:'le titre',podium:'le podium',top:`le top ${k}`,rel:'le maintien'})[z]||'';

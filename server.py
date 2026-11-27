@@ -2409,7 +2409,7 @@ def build_cond(rid: str) -> dict | None:
             "pts": _b64(np.clip(run["pts"], 0, 255).astype(np.uint8)), "outcomes": _b64(packed)}
 
 
-def write_run_bundle(rid: str, runs: list | None = None, meta_: dict | None = None, built: str | None = None) -> dict:
+def write_run_bundle(rid: str, runs: list | None = None, built: str | None = None) -> dict:
     """Écrit les fichiers statiques d'un run : <rid>.json (tout l'onglet Monte Carlo) et <rid>.cond.json."""
     d = OUT / rid
     b = {"version": 1, "run": rid, "built": built or time.strftime("%Y-%m-%d %H:%M:%S"), "data_fp": data_fingerprint(),
