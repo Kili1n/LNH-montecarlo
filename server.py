@@ -1444,6 +1444,17 @@ def _simulate(season: str, cutoff: int, n: int, keep_matches: bool = False, on_l
     return run_id
 
 
+def _release_heavy_caches() -> None:
+    """Rend la mémoire des feuilles de match (~140 Mo) avant de lancer une simulation manuelle : sur un hébergement à 512 Mo, serveur + sous-processus
+    de simulation ne doivent pas se cumuler. Les données se rechargent à la demande (première requête de l'historique suivante)."""
+    with _lock:
+        for k in ("stamp", "m", "box", "seasons", "played_rows", "pl_bests", "match_sheets", "team_cal"):
+            _cache.pop(k, None)
+        for k in [k for k in _cache if isinstance(k, tuple)]:
+            _cache.pop(k, None)
+    sim.trim_memory()
+
+
 def cancel_job(jid: str) -> dict:
     """Annule une simulation lancée depuis le site : sortie de la file d'attente, ou arrêt du processus en cours (mémoire rendue)."""
     job, ctl = JOBS.get(jid), _JOB_CTL.get(jid)
@@ -1476,6 +1487,7 @@ def run_job(jid: str, season: str, cutoff: int, n: int, keep_matches: bool):
         job["log"] = job["log"][-60:]
         if line.startswith("Simulation en cours"):
             job["status"] = "running"
+            _release_heavy_caches()
     try:
         rid = _simulate(season, cutoff, n, keep_matches, on_line, ctl=ctl)
         job["status"] = "finalizing"   # la simulation est finie (créneau libéré) : seule l'écriture des JSON reste à faire
