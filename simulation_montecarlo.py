@@ -975,7 +975,9 @@ def compute_player_ratings(box: pd.DataFrame, matches: pd.DataFrame) -> pd.DataF
     w_coll = np.where(match_has_adv, 1.0, 1.65)
     disc_pen = -0.85 * b["2min"] - 2.50 * b["d"] - 0.30 * b["a"]   # a = avertissement (carton jaune)
 
-    def_field = 1.65 * b["br"] + 1.35 * b["tc"] + w_coll * team_def_delta + disc_pen
+    # Poids relevés (2,0 / 1,8 au lieu de 1,65 / 1,35) : récupérations et contres sont rares (≈ 0,5 et 0,13 par match et par joueur)
+    # et expliquent déjà ≈ 70 % de la variance de la note défensive ; le tc, plus rare, pèse un peu plus.
+    def_field = 2.0 * b["br"] + 1.8 * b["tc"] + w_coll * team_def_delta + disc_pen
 
     # Gardiens
     open_saves = np.maximum(0.0, b["saves"] - b["saves_7m"])
@@ -998,7 +1000,9 @@ def compute_player_ratings(box: pd.DataFrame, matches: pd.DataFrame) -> pd.DataF
     b["match_note"] = np.where(played, np.clip(note_raw, 1.0, 10.0), np.nan).astype(np.float32)
 
     # Note défensive /10 : centre et pente propres à chaque rôle (les gardiens cumulent beaucoup plus de points défensifs)
-    centre = np.where(is_gk, 7.0, 1.5)
+    # Centres recalés sur la médiane de chaque rôle (2023/24+) : un joueur sans action défensive ≈ 5,3/10 (4,0 auparavant),
+    # un gardien médian ≈ 5,5/10 (le meilleur gardien n'était qu'à 4,4/10 avec l'ancien centre de 7,0).
+    centre = np.where(is_gk, 0.8, 0.2)
     pente = np.where(is_gk, 4.0, 2.2)
     def_note_raw = 1.0 + 9.0 / (1.0 + np.exp(-(impact_def - centre) / pente))
     b["def_note"] = np.where(played, np.clip(def_note_raw, 1.0, 10.0), np.nan).astype(np.float32)
