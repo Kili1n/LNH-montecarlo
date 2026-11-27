@@ -470,6 +470,7 @@ def api_club_detail(qs: dict) -> dict:
         ga = int(r.away_ft_goals if is_h else r.home_ft_goals)
         res = "V" if gf > ga else ("N" if gf == ga else "D")
         recent.append({
+            "match_id": str(r.match_id),
             "date": str(r.date),
             "round": int(r.round),
             "season": str(r.season),
@@ -1129,7 +1130,7 @@ def api_player_detail(qs: dict) -> dict:
     # Top 5 matchs individuels sur la période (classés par note LNH)
     bp_m = bp.sort_values(["match_note", "goals", "saves"], ascending=False)
     best_games = [{
-        "date": str(r.date), "season": str(r.season), "team": str(r.team),
+        "match_id": str(r.match_id), "date": str(r.date), "season": str(r.season), "team": str(r.team),
         "opponent": str(r.opponent) if pd.notna(r.opponent) else "", "score": str(r.score),
         "goals": int(r.goals), "shots": int(r.shots), "saves": int(r.saves), "faced": int(r.shots_faced),
         "note": round(float(r.match_note), 2) if pd.notna(r.match_note) else None,
@@ -1242,6 +1243,7 @@ def api_explorer(qs: dict) -> dict:
 
     if dataset == "players":
         rows = [{
+            "match_id": str(r.match_id),
             "player": r.player,
             "team": r.team,
             "goals_shots": f"{int(r.goals)}/{int(r.shots)}",
@@ -1261,6 +1263,7 @@ def api_explorer(qs: dict) -> dict:
         } for r in sub.itertuples()]
     else:
         rows = [{
+            "match_id": str(r.match_id),
             "date": r.date,
             "home_team": r.home_team,
             "score": r.score,
@@ -1729,6 +1732,8 @@ def _stake_lines(rank: int, pts: int, by_rank: list[int], z: dict) -> list[str]:
     lines = []
     if rank == 1:
         lines.append(f"Leader, {_plural_pts(pts - by_rank[1])} d’avance sur le 2e" if T > 1 else "Leader")
+    elif pts == by_rank[0]:
+        lines.append("À égalité de points avec le leader (derrière à la différence de buts)")
     else:
         lines.append(f"À {_plural_pts(by_rank[0] - pts)} du leader")
     for cut, name in ((z["podium"], "du podium"), (z["top_k"], f"du top {z['top_k']}")):
@@ -1762,7 +1767,7 @@ def _rank_after(table: pd.DataFrame, home: str, away: str, outcome: str) -> dict
 
 def _form(tm: pd.DataFrame, team: str, n: int = 5) -> list[dict]:
     t = tm[tm["team"] == team].tail(n)
-    return [{"res": r.res, "opp": r.opp, "home": bool(r.home), "score": f"{int(r.gf)}–{int(r.ga)}", "round": int(r.round)} for r in t.itertuples()]
+    return [{"res": r.res, "opp": r.opp, "home": bool(r.home), "score": f"{int(r.gf)}–{int(r.ga)}", "round": int(r.round), "match_id": str(r.match_id)} for r in t.itertuples()]
 
 
 def _h2h(m_played: pd.DataFrame, a: str, b: str, exclude_mid: str | None = None) -> dict:
@@ -1775,7 +1780,7 @@ def _h2h(m_played: pd.DataFrame, a: str, b: str, exclude_mid: str | None = None)
     rows = []
     for r in d.itertuples():
         ga, gb = (r.home_ft_goals, r.away_ft_goals) if r.home_team == a else (r.away_ft_goals, r.home_ft_goals)
-        rows.append({"date": _iso_date(r.date), "season": str(r.season), "round": int(r.round), "home": r.home_team, "away": r.away_team,
+        rows.append({"match_id": str(r.match_id), "date": _iso_date(r.date), "season": str(r.season), "round": int(r.round), "home": r.home_team, "away": r.away_team,
                      "score": f"{int(r.home_ft_goals)}–{int(r.away_ft_goals)}", "a_goals": int(ga), "b_goals": int(gb),
                      "winner": a if ga > gb else b if gb > ga else None, "a_home": r.home_team == a})
     wa = sum(1 for x in rows if x["winner"] == a); wb = sum(1 for x in rows if x["winner"] == b); dr = len(rows) - wa - wb
@@ -2132,6 +2137,139 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
     return out
 
 
+# ---- Fiche d'un match passé (modale) -------------------------------------------
+def api_match(qs: dict) -> dict:
+    """Résumé « façon fiche journaliste » d'un match déjà joué + feuille de match.
+    Pas de probabilités (elles viennent de simulations lancées pour la saison en cours seulement) : classement avant/après,
+    forme, face-à-face, caps franchis, records établis et statistiques de chaque joueur."""
+    mid = str((qs.get("id") or [""])[0]).strip()
+    with _lock:
+        mc = _cache.setdefault("match_sheets", {})
+        if mid in mc:
+            return mc[mid]
+    m, box, seasons = load_data()
+    row = m[m["match_id"].astype(str) == mid]
+    if row.empty:
+        raise ValueError("Match introuvable")
+    r = row.iloc[0]
+    if not bool(r["played"]):
+        raise ValueError("Ce match n'a pas encore été joué")
+    S, rnd, h, a = str(r["season"]), int(r["round"]), str(r["home_team"]), str(r["away_team"])
+    d0 = _iso_date(r["date"])
+    mS = m[m["season"] == S]
+    teams = sorted(set(mS["home_team"]) | set(mS["away_team"]))
+    z = {"title": 1, "podium": 3, "top_k": 4, "n_relegated": 2}
+    SINCE = _since()
+
+    def before_mask(df: pd.DataFrame) -> pd.Series:
+        dd = df["date"].map(_iso_date)
+        if d0:
+            return df["played"] & (((dd != "") & (dd < d0)) | ((dd == d0) & (df["round"] < rnd)))
+        return df["played"] & (df["round"] < rnd)
+
+    this = mS[mS["match_id"].astype(str) == mid]
+    bS = mS[before_mask(mS) & (mS["match_id"].astype(str) != mid)]
+    aS = pd.concat([bS, this])
+    tab_b, tab_a = _table(bS, teams), _table(aS, teams)
+    by_rank = tab_b["pts"].tolist()
+    tinfo = {}
+    for t in (h, a):
+        rb, ra = tab_b[tab_b["t"] == t].iloc[0], tab_a[tab_a["t"] == t].iloc[0]
+        tinfo[t] = {"rank": int(rb["rank"]), "pts": int(rb["pts"]), "j": int(rb["j"]), "gd": int(rb["gd"]), "gf": int(rb["gf"]), "ga": int(rb["ga"]),
+                    "lines": _stake_lines(int(rb["rank"]), int(rb["pts"]), by_rank, z),
+                    "after": {"rank": int(ra["rank"]), "pts": int(ra["pts"]), "j": int(ra["j"]), "gd": int(ra["gd"])}}
+    tb, ta = _team_match_table(bS) if len(bS) else pd.DataFrame(columns=["team", "res", "home", "opp", "gf", "ga", "round", "match_id"]), _team_match_table(aS)
+
+    allm = m[m["played"]]
+    prior = allm[before_mask(allm) & (allm["match_id"].astype(str) != mid)]
+    sheet = {"match_id": mid, "season": S, "round": rnd, "date": d0, "time": (str(r["time"])[:5] if "time" in m.columns and pd.notna(r["time"]) else ""),
+             "venue": (str(r["venue"]) if "venue" in m.columns and pd.notna(r["venue"]) and str(r["venue"]).strip() else ""),
+             "home": h, "away": a, "status": "played", "teams": tinfo,
+             "form": {h: _form(tb, h), a: _form(tb, a)}, "profile": [], "duels": {},
+             "result": {"hg": int(r["home_ft_goals"]), "ag": int(r["away_ft_goals"]),
+                        "ht": ([int(r["home_ht_goals"]), int(r["away_ht_goals"])] if pd.notna(r.get("home_ht_goals")) and pd.notna(r.get("away_ht_goals")) else None)},
+             "h2h": _h2h(prior, h, a), "since": SINCE, "milestones": [], "records": [], "performers": {}, "box": {h: [], a: []}}
+
+    # ---- feuille de match + temps forts -----------------------------------------
+    pr = played_rows()
+    mine = pr[pr["match_id"].astype(str) == mid] if len(pr) else pr
+    mine = mine.rename(columns={"2min": "two_min"})
+    names_by_team = {t: set(mine[mine["team"] == t]["full_name"]) for t in (h, a)}
+    if len(mine):
+        for t in (h, a):
+            for x in mine[mine["team"] == t].sort_values(["is_gk", "est_seconds"], ascending=[True, False]).itertuples():
+                sheet["box"][t].append({
+                    "name": str(x.full_name), "gk": bool(x.is_gk), "min": int(x.est_seconds) // 60,
+                    "goals": int(x.goals), "shots": int(x.shots), "g7": int(x.goals_7m), "s7": int(x.shots_7m),
+                    "saves": int(x.saves), "faced": int(x.shots_faced), "s7_saves": int(x.saves_7m), "s7_faced": int(x.shots_faced_7m),
+                    "ast": (int(x.ast) if bool(x.ast_ok) else None), "br": int(x.br), "tc": int(x.tc), "bp": int(x.bp),
+                    "yc": int(x.yc), "two": int(x.two_min),
+                    "rc": int(x.rc),
+                    "note": round(float(x.match_note), 2) if pd.notna(x.match_note) else None})
+        for t in (h, a):
+            d = mine[mine["team"] == t]
+            if d.empty:
+                continue
+            o = {}
+            b = d.sort_values(["match_note", "goals"], ascending=False).iloc[0]
+            o["best"] = {"name": b.full_name, "note": round(float(b.match_note), 2) if pd.notna(b.match_note) else None, "goals": int(b.goals), "shots": int(b.shots), "saves": int(b.saves), "gk": bool(b.is_gk)}
+            f = d[~d["is_gk"].astype(bool)]
+            if len(f) and f["goals"].max() > 0:
+                x = f.sort_values("goals", ascending=False).iloc[0]
+                o["scorer"] = {"name": x.full_name, "goals": int(x.goals), "shots": int(x.shots)}
+            g = d[d["is_gk"].astype(bool)]
+            if len(g):
+                x = g.sort_values("shots_faced", ascending=False).iloc[0]
+                o["keeper"] = {"name": x.full_name, "saves": int(x.saves), "faced": int(x.shots_faced), "pct": round(100 * x.saves / max(x.shots_faced, 1), 1)}
+            sheet["performers"][t] = o
+
+        # caps franchis (totaux en Starligue avant / après ce match)
+        allnames = set().union(*names_by_team.values())
+        pdates = pr["date"].map(_iso_date)
+        hist = pr[pr["full_name"].isin(allnames) & (pr["match_id"].astype(str) != mid) & ((pdates < d0) if d0 else (pr["season_idx"] * 1000 + pr["round"] < int(r["season_idx"]) * 1000 + rnd))]
+        before_t = hist.groupby("full_name").agg(goals=("goals", "sum"), ast=("ast", "sum"), saves=("saves", "sum"), games=("match_id", "size"))
+        for t in (h, a):
+            for x in mine[mine["team"] == t].itertuples():
+                nm = x.full_name
+                b0 = before_t.loc[nm] if nm in before_t.index else None
+                gain = {"goals": int(x.goals), "ast": int(x.ast) if bool(x.ast_ok) else 0, "saves": int(x.saves), "games": 1}
+                for stat in (("saves", "games") if bool(x.is_gk) else ("goals", "ast", "games")):
+                    if stat == "ast" and not bool(x.ast_ok):
+                        continue
+                    v0 = int(b0[stat]) if b0 is not None else 0
+                    v1 = v0 + gain[stat]
+                    for thr in MILESTONES[stat]:
+                        if v0 < thr <= v1:
+                            since = f"depuis {DP_RELIABLE_FROM[:4]}" if stat == "ast" else SINCE
+                            sheet["milestones"].append({"name": nm, "team": t, "stat": stat, "target": thr, "total": v1,
+                                                        "text": f"{nm} ({t}) passe la barre des {thr} {STAT_LABEL[stat]} en Starligue {since} ({v1} au total)"})
+
+    # ---- records établis ou égalés lors de ce match -----------------------------------
+    rec = {x["id"]: x for g_ in compute_records("all")["groups"] for x in g_["records"]}
+    allp = set().union(*names_by_team.values()) if names_by_team else set()
+    items = []
+    for rid_, rr in rec.items():
+        for i, t in enumerate(rr["top"]):
+            if not d0 or t["date"] != d0:
+                continue
+            ok_ = (t["kind"] == "team" and t["holder"] in (h, a)) or (t["kind"] == "match" and t["holder"] == f"{h} – {a}") or \
+                  (t["kind"] == "player" and t["team"] in (h, a) and t["holder"] in allp)
+            if ok_:
+                since = f"depuis {DP_RELIABLE_FROM[:4]}" if str(rid_).endswith("_ast") else SINCE
+                items.append({"kind": "record", "rank": i + 1, "text": f"{'RECORD EN STARLIGUE' if i == 0 else 'N°' + str(i + 1) + ' en Starligue'} ({since}) · {rr['label']} : {t['holder']}, {t['display']} {rr['unit']} ({t['detail']})"})
+    items.sort(key=lambda x: x["rank"])
+    for t in (h, a):
+        cs = _streaks_now(ta, t)
+        if cs["win"] >= 4:
+            r0 = (rec.get("win_streak", {}).get("top") or [None])[0]
+            items.append({"kind": "streak", "rank": 99, "text": f"{t} signe sa {_ord(cs['win'])} victoire de suite" + (f" (record en Starligue {SINCE} : {int(r0['value'])})" if r0 else "")})
+    sheet["records"] = items[:8]
+
+    with _lock:
+        mc[mid] = sheet
+    return sheet
+
+
 # ---- Cache JSON : bundles prêts à afficher ---------------------------------
 _gz_memo: dict = {}
 
@@ -2372,6 +2510,8 @@ class H(BaseHTTPRequestHandler):
                         sim.trim_memory()
                     hist = _cache["history_bytes"]
                 return self.send(hist)
+            if parts[:2] == ["api", "match"]:
+                return self.send(api_match(parse_qs(u.query)))
             if parts[:2] == ["api", "club"]:
                 return self.send(api_club_detail(parse_qs(u.query)))
             if parts[:2] == ["api", "player"]:

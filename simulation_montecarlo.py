@@ -381,6 +381,37 @@ def _find_csvs(source: str | Path, default_name: str) -> list[Path]:
     return sorted(base_dir.glob(f"*/{target_name}"))
 
 
+_ID_FIX_MEMO: dict = {}
+
+
+def match_id_fixes(source: str | Path) -> dict[tuple[str, str], str]:
+    """{(saison, match_id d'origine): identifiant unique}.
+    Les 182 matchs de 2014/15 réutilisent les codes de 2012/13 (« 001D1M13 »…) : avec un identifiant seul, les feuilles de match de
+    2014/15 étaient rattachées à 2012/13 (doublons en 2012/13, 2014/15 quasi vide). On suffixe donc « @AAAA » les identifiants déjà
+    rencontrés dans une saison antérieure ; les deux chargeurs (matchs et feuilles de match) appliquent la même correction."""
+    p = Path(source)
+    if not p.is_dir():
+        return {}
+    key = str(p.resolve())
+    if key in _ID_FIX_MEMO:
+        return _ID_FIX_MEMO[key]
+    seen: set[str] = set()
+    fix: dict[tuple[str, str], str] = {}
+    for f in _find_csvs(p, "match.csv"):
+        part = pd.read_csv(f, usecols=lambda c: c in ("match_id", "season"), dtype=str)
+        season = part["season"].fillna(f.parent.name) if "season" in part.columns else pd.Series(f.parent.name, index=part.index)
+        ids = part["match_id"].astype(str)
+        fresh = set()
+        for sn, mid in zip(season.astype(str), ids):
+            if mid in seen:
+                fix[(sn, mid)] = f"{mid}@{sn[:4]}"
+            else:
+                fresh.add(mid)
+        seen |= fresh
+    _ID_FIX_MEMO[key] = fix
+    return fix
+
+
 def load_all_matches(
     csv_path: str | Path,
     boxscore_df: Optional[pd.DataFrame] = None,
@@ -421,6 +452,9 @@ def load_all_matches(
 
     df["match_id"] = df["match_id"].astype(str)
     df["season"] = df["season"].astype(str)
+    _fx = match_id_fixes(csv_path)
+    if _fx:
+        df["match_id"] = [_fx.get((sn, mid), mid) for sn, mid in zip(df["season"], df["match_id"])]
     df = df.drop_duplicates(subset=["season", "match_id"], keep="last").reset_index(drop=True)
 
     for col in ("home_ft_goals", "away_ft_goals", "round"):
@@ -862,6 +896,9 @@ def load_player_tables(
                      for f in box_files], ignore_index=True)
     if "team" in box.columns:
         box["team"] = normalize_team_series(box["team"], amap)
+    _fx = match_id_fixes(boxscore_csv)
+    if _fx and {"match_id", "season"} <= set(box.columns):
+        box["match_id"] = [_fx.get((str(sn), str(mid)), mid) for sn, mid in zip(box["season"], box["match_id"].astype(str))]
 
     num_cols = [
         "seconds_played", "goals", "shots", "goals_7m", "shots_7m",

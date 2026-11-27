@@ -225,6 +225,12 @@ svg text{font-family:Inter,sans-serif}
 .stk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:16px}
 .stk-grid h5{margin:0 0 6px;font-size:15px}
 .stk-ul{margin:0 0 10px;padding-left:18px;font-size:13.5px}.stk-ul li{margin:2px 0}
+[data-mid]{cursor:pointer}.link-btn[data-mid]:hover b{color:var(--blue);text-decoration:underline}
+.box-tbl{font-size:12.5px}.box-tbl th{white-space:nowrap}.box-tbl th:nth-child(2),.box-tbl td:nth-child(2){text-align:right}.box-tbl td:first-child{white-space:nowrap}
+.box-tbl tr.gk td{background:#F7F9FD}.box-tbl .nt{font-weight:700}
+.mm-back{margin:0 0 4px;color:var(--blue);font-weight:600}
+.mm-score{text-align:center}.mm-score .bigscore{font:700 40px/1 Newsreader,serif}
+tr[data-mid]:hover td{background:var(--tint)}
 .rec-li{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin:0 0 8px;border:1px solid var(--rule);border-left:4px solid var(--blue);border-radius:6px;background:#fff;font-size:14px;line-height:1.45}
 .rec-li.top{border-left-color:var(--ball);background:#FFF6EE}.rec-li.top .rec-t{font-weight:600}
 .rec-li .badge{flex:none;margin-top:1px}.rec-li .badge.vue{background:#fff;border:1px solid var(--blue)}
@@ -781,14 +787,53 @@ $('#plModeGroup').querySelectorAll('button').forEach(btn=>{
   };
 });
 
+// ---------- Fiche d'un match passé (modale) ----------
+// Résumé façon fiche journaliste (classement avant/après, forme, face-à-face, caps, records) + feuille de match.
+// Sans probabilités : elles viennent de simulations lancées uniquement pour la saison en cours.
+function matchBoxTable(s,t){
+  const rows=(s.box||{})[t]||[];
+  if(!rows.length)return `<h5 style="margin:14px 0 4px;font-size:15px">${esc(t)}</h5><div class="muted" style="font-size:13px">Pas de feuille de match détaillée pour ce match.</div>`;
+  const f=(a,b)=>b>0?`${a}/${b}`:'–';
+  const tr=p=>`<tr class="${p.gk?'gk':''}"><td><button type="button" class="link-btn" data-pl="${esc(p.name)}"><b>${esc(p.name)}</b></button>${p.gk?' <small class="muted">G</small>':''}</td><td>${p.min}'</td><td>${p.gk&&!p.shots?'–':`${p.goals}/${p.shots}`}</td><td>${f(p.g7,p.s7)}</td><td>${p.gk||p.faced?f(p.saves,p.faced):'–'}</td><td>${p.ast==null?'–':p.ast}</td><td>${p.br}</td><td>${p.tc}</td><td>${p.bp}</td><td>${p.yc}</td><td>${p.two}</td><td>${p.rc}</td><td class="nt">${p.note!=null?fmt(p.note,2):'–'}</td></tr>`;
+  return `<h5 style="margin:14px 0 4px;font-size:15px">${esc(t)}</h5><div class="scroll"><table class="tbl num box-tbl"><tr><th>Joueur</th><th>Min</th><th title="Buts / tirs">Buts</th><th title="Jets de 7 m : marqués / tentés">7 m</th><th title="Arrêts / tirs subis">Arrêts</th><th title="Passes décisives (relevées depuis 2023/24)">PD</th><th title="Ballons récupérés">BR</th><th title="Tirs contrés">TC</th><th title="Balles perdues">BP</th><th title="Avertissements">Av.</th><th title="Exclusions de 2 minutes">2'</th><th title="Disqualifications">Rg</th><th>Note /10</th></tr>${rows.map(tr).join('')}</table></div>`;
+}
+function matchSummary(s){
+  const r=s.result,t=s.teams;
+  const lines=tm=>`<div><h5 style="margin:0 0 4px;font-size:15px">${esc(tm)}</h5><ul class="stk-ul">${(t[tm].lines||[]).map(l=>`<li>${esc(l)}</li>`).join('')}</ul></div>`;
+  return `<div class="sh-sec" style="margin-top:0"><h4>Le match</h4><p class="sub">Classement, forme et hommes forts de chaque équipe, puis ce qui s’est passé.</p>
+  <div class="afg">${teamPanel(s,s.home,false)}<div class="mm-score"><div class="bigscore num">${r.hg} – ${r.ag}</div><div class="cent"><small>${r.ht?`Mi-temps : ${r.ht[0]}–${r.ht[1]}`:''}</small></div>${s.venue?`<div class="cent"><small>${esc(s.venue)}</small></div>`:''}</div>${teamPanel(s,s.away,true)}</div>
+  <h5 style="margin:18px 0 6px;font-size:15px">L’enjeu au classement, avant le match</h5><div class="stk-grid">${lines(s.home)}${lines(s.away)}</div></div>`;
+}
+async function openMatchModal(id){
+  const modal=$('#detailModal'),body=$('#modalBody');
+  const back=modal.classList.contains('open')?MODAL_CTX:null;
+  $('#modalSub').textContent='Fiche match';$('#modalTitle').textContent='Chargement…';
+  body.innerHTML='<div class="empty">Chargement de la fiche du match…</div>';
+  modal.classList.add('open');
+  try{
+    const s=await api('/api/match?id='+encodeURIComponent(id));
+    MODAL_CTX=()=>openMatchModal(id);
+    $('#modalTitle').textContent=`${s.home} ${s.result.hg}–${s.result.ag} ${s.away}`;
+    $('#modalSub').textContent=`Journée ${s.round} · saison ${s.season}${frDate(s.date)?' · '+frDate(s.date):''}`;
+    body.innerHTML=(back?'<button type="button" class="link-btn mm-back" id="mmBack">← Retour</button>':'')+matchSummary(s)+capsSection(s)+faceSection(s)
+      +`<div class="sh-sec"><h4>Feuille de match</h4><p class="sub">Statistiques et note /10 de chaque joueur (voir « Comment est calculée la note ? »).</p>${matchBoxTable(s,s.home)}${matchBoxTable(s,s.away)}</div>`;
+    const bk=$('#mmBack');if(bk)bk.onclick=()=>{MODAL_CTX=null;back()};
+    body.querySelectorAll('button[data-pl]').forEach(b=>b.onclick=()=>openPlayerModal(b.dataset.pl));
+    body.querySelectorAll('button[data-cl]').forEach(b=>b.onclick=()=>openClubModal(b.dataset.cl));
+    body.scrollTop=0;
+  }catch(e){body.innerHTML=`<div class="empty err">${esc(e.message)}</div>`}
+}
+document.addEventListener('click',e=>{const el=e.target.closest('[data-mid]');if(el&&el.dataset.mid){e.preventDefault();openMatchModal(el.dataset.mid)}});
+
 // ---------- Fiches détaillées Club & Joueur (Modal) ----------
-function closeModal(){$('#detailModal').classList.remove('open')}
+let MODAL_CTX=null;   // comment rouvrir la fiche affichée (bouton « Retour » de la fiche match)
+function closeModal(){$('#detailModal').classList.remove('open');MODAL_CTX=null}
 $('#modalClose').onclick=closeModal;
 $('#detailModal').onclick=e=>{if(e.target===$('#detailModal'))closeModal()};
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#detailModal').classList.contains('open'))closeModal()});
 
 async function openClubModal(team){
-  const modal=$('#detailModal'),body=$('#modalBody');
+  const modal=$('#detailModal'),body=$('#modalBody');MODAL_CTX=()=>openClubModal(team);
   $('#modalSub').textContent=`Fiche Club · ${periodLabel()}`;
   $('#modalTitle').textContent=team;
   body.innerHTML='<div class="empty">Chargement de la fiche du club…</div>';
@@ -811,7 +856,7 @@ async function openClubModal(team){
     </div>`;
 
     const recentCard=`<div class="card"><h4 style="margin:0 0 8px;font-size:15px">5 derniers matchs de la période</h4>
-      ${d.recent.length?`<div class="form-dots">${d.recent.map(m=>`<span class="dot-res dot-${m.res}" title="${esc(m.date)} · J${m.round}"><i>${m.res}</i>${m.is_home?'vs':'@'} ${esc(m.opponent)} (${m.score})</span>`).join('')}</div>`:'<div style="color:var(--mute);font-size:13px">Aucun match joué.</div>'}
+      ${d.recent.length?`<div class="form-dots">${d.recent.map(m=>`<span class="dot-res dot-${m.res}"${m.match_id?` data-mid="${esc(m.match_id)}"`:''} title="${esc(m.date)} · J${m.round} · cliquer pour la fiche du match"><i>${m.res}</i>${m.is_home?'vs':'@'} ${esc(m.opponent)} (${m.score})</span>`).join('')}</div>`:'<div style="color:var(--mute);font-size:13px">Aucun match joué.</div>'}
     </div>`;
 
     // Mini graphique historique des rangs du club
@@ -902,7 +947,7 @@ async function loadCompare(name){
 }
 
 async function openPlayerModal(name){
-  const modal=$('#detailModal'),body=$('#modalBody');
+  const modal=$('#detailModal'),body=$('#modalBody');MODAL_CTX=()=>openPlayerModal(name);
   $('#modalSub').textContent=`Fiche Joueur · ${periodLabel()}`;
   $('#modalTitle').textContent=name;
   body.innerHTML='<div class="empty">Chargement de la fiche du joueur…</div>';
@@ -933,7 +978,7 @@ async function openPlayerModal(name){
       <div id="radarBox"></div></div>`;
 
     const bestCard=`<div class="card"><h4 style="margin:0 0 8px;font-size:15px">Meilleurs matchs sur la période</h4>
-      ${d.best_games.map(g=>`<div class="rank" style="grid-template-columns:1fr auto"><div><b>${d.is_gk?`${g.saves}/${g.faced} arrêts`:`${g.goals}/${g.shots} buts`}</b> vs ${esc(g.opponent)} ${g.score?`(${g.score})`:''}<br><small>${esc(g.date)} · ${esc(g.season)} · ${esc(g.team)}</small></div><div style="text-align:right"><b class="num">${g.note!=null?fmt(g.note,2):'–'}</b><br><i>note /10</i></div></div>`).join('')}
+      ${d.best_games.map(g=>`<div class="rank"${g.match_id?` data-mid="${esc(g.match_id)}" title="Ouvrir la fiche du match"`:''} style="grid-template-columns:1fr auto"><div><b>${d.is_gk?`${g.saves}/${g.faced} arrêts`:`${g.goals}/${g.shots} buts`}</b> vs ${esc(g.opponent)} ${g.score?`(${g.score})`:''}<br><small>${esc(g.date)} · ${esc(g.season)} · ${esc(g.team)}</small></div><div style="text-align:right"><b class="num">${g.note!=null?fmt(g.note,2):'–'}</b><br><i>note /10</i></div></div>`).join('')}
     </div>`;
 
     const histCard=d.seasons_history.length?`<div class="card"><h4 style="margin:0 0 8px;font-size:15px">Parcours saison par saison</h4>
@@ -1129,6 +1174,8 @@ async function refreshExplorer(resetPage=false){
     const renderCell=(r,k)=>{
       if(k==='player')return `<button type="button" class="link-btn" data-pl="${esc(r[k])}"><b>${esc(r[k])}</b></button>`;
       if(k==='home_team'||k==='away_team'||k==='team'||k==='opponent')return r[k]?`<button type="button" class="link-btn" data-cl="${esc(r[k])}">${esc(r[k])}</button>`:'';
+      if(k==='score'&&r.match_id&&r[k]!=='À venir')return `<button type="button" class="link-btn" data-mid="${esc(r.match_id)}" title="Ouvrir la fiche du match"><b>${esc(r[k])}</b></button>`;
+      if(k==='date'&&r.match_id&&r.date&&r.score!=='À venir')return `<button type="button" class="link-btn" data-mid="${esc(r.match_id)}" title="Ouvrir la fiche du match">${esc(r[k])}</button>`;
       if(k==='score'||k==='note')return `<b>${esc(r[k])}</b>`;
       return esc(r[k]);
     };
@@ -1693,7 +1740,7 @@ function probaBar(p){
   if(!p||p.p1==null)return '';
   return `<div class="pbar" title="Domicile ${pc(p.p1,1)} · nul ${pc(p.pN,1)} · extérieur ${pc(p.p2,1)}"><span style="flex:${p.p1};background:#1747C9">${p.p1>.12?pc(p.p1):''}</span><span style="flex:${p.pN};background:#8A91A1">${p.pN>.1?pc(p.pN):''}</span><span style="flex:${p.p2};background:#F25C2A">${p.p2>.12?pc(p.p2):''}</span></div>`;
 }
-const formChips=l=>`<div class="fch">${(l||[]).map(x=>`<span class="f${x.res}" title="J${x.round} · ${x.home?'à domicile vs':'à l’extérieur @'} ${esc(x.opp)} ${esc(x.score)}">${{W:'V',D:'N',L:'D'}[x.res]}</span>`).join('')||'<small class="muted">Début de saison</small>'}</div>`;
+const formChips=l=>`<div class="fch">${(l||[]).map(x=>`<span class="f${x.res}"${x.match_id?` data-mid="${esc(x.match_id)}"`:''} title="J${x.round} · ${x.home?'à domicile vs':'à l’extérieur @'} ${esc(x.opp)} ${esc(x.score)}">${{W:'V',D:'N',L:'D'}[x.res]}</span>`).join('')||'<small class="muted">Début de saison</small>'}</div>`;
 function teamPanel(s,team,right){
   const t=s.teams[team],d=s.duels[team]||{},pf=(s.performers||{})[team]||{};
   const rk=s.status==='played'&&t.after?`${t.j?frOrd(t.rank):'Départ'} → ${frOrd(t.after.rank)}`:rankTxt(t);
@@ -1763,6 +1810,7 @@ function recItem(x){
   if(m){t=t.slice(m[0].length);top=x.rank===1||/^RECORD/.test(m[1]);badge=`<span class="badge gold">${top?'RECORD':'N°'+(x.rank||'')}</span>`}
   else if(x.kind==='record')badge='<span class="badge gold">Record</span>';
   else if(/détient actuellement le record/.test(t)){top=true;badge='<span class="badge gold">RECORD</span>'}
+  else if(x.kind==='streak'&&!/\(record/.test(t))badge='<span class="badge vue">Série</span>';
   else badge='<span class="badge vue">Record en vue</span>';
   const html=esc(t).replace(/\(record (?:de la base|en Starligue)[^)]*\)/,r=>`<mark>${r}</mark>`);
   return `<div class="rec-li${top?' top':''}">${badge}<div class="rec-t">${html}</div></div>`;
@@ -1786,7 +1834,7 @@ function faceSection(s){
     ${x.biggest&&x.biggest.winner?`<li>Plus large victoire : <b>${esc(x.biggest.winner)}</b> ${esc(x.biggest.score)} (${esc(x.biggest.season)})</li>`:''}
     ${x.streak?`<li>${esc(x.streak.team)} sur ${x.streak.n} victoires de suite dans ce duel</li>`:''}
     <li>${esc(h)} à domicile dans ce duel : ${x.a_home.w} V · ${x.a_home.d} N · ${x.a_home.n-x.a_home.w-x.a_home.d} D</li></ul>
-    <div class="scroll"><table class="tbl num lastm"><tr><th style="text-align:left">Dernières rencontres : domicile</th><th>Score</th><th style="text-align:left">Extérieur</th><th>Saison</th><th>J.</th></tr>${x.last.map(r=>`<tr><td class="tm" style="text-align:left">${esc(r.home)}</td><td style="text-align:center"><b>${esc(r.score)}</b></td><td class="tm" style="text-align:left">${esc(r.away)}</td><td>${esc(r.season)}</td><td>${r.round}</td></tr>`).join('')}</table></div>`;
+    <div class="scroll"><table class="tbl num lastm"><tr><th style="text-align:left">Dernières rencontres : domicile</th><th>Score</th><th style="text-align:left">Extérieur</th><th>Saison</th><th>J.</th></tr>${x.last.map(r=>`<tr${r.match_id?` data-mid="${esc(r.match_id)}"`:''}><td class="tm" style="text-align:left">${esc(r.home)}</td><td style="text-align:center"><b>${esc(r.score)}</b></td><td class="tm" style="text-align:left">${esc(r.away)}</td><td>${esc(r.season)}</td><td>${r.round}</td></tr>`).join('')}</table></div>`;
   }
   const prof=(s.profile||[]).map(p=>{
     const mx=Math.max(Math.abs(p.home),Math.abs(p.away),.0001),bh=p.higher_better?p.home>p.away:p.home<p.away,ba=p.higher_better?p.away>p.home:p.away<p.home;
@@ -1794,8 +1842,8 @@ function faceSection(s){
   const dh=s.duels[h]||{},da=s.duels[a]||{};
   const duel=(label,f)=>{const l=f(dh),r=f(da);return l||r?`<div class="duel"><div class="l">${l||'–'}</div><div class="m">${label}</div><div>${r||'–'}</div></div>`:''};
   const duels=duel('Buteurs',d=>d.scorer?`<b>${esc(d.scorer.name)}</b> ${d.scorer.goals} buts`:'')+duel('Passeurs',d=>d.playmaker?`<b>${esc(d.playmaker.name)}</b> ${d.playmaker.ast} PD`:'')+duel('Gardiens',d=>d.keeper?`<b>${esc(d.keeper.name)}</b> ${fmt(d.keeper.pct,0)} %`:'')+duel('Meilleure note',d=>d.star?`<b>${esc(d.star.name)}</b> ${fmt(d.star.note,2)}`:'');
-  return `<div class="sh-sec"><h4>Face-à-face</h4><p class="sub">L’historique des confrontations en Starligue ${sinceTxt()}, puis le profil comparé de la saison${s.status==='played'?' (avant cette journée)':''}.</p>
-  <div class="stk-grid"><div>${h2}</div><div><h5 style="margin:0 0 6px;font-size:15px">Profil comparé <small class="muted">(rang sur ${(s.profile[0]||{}).of||'–'} clubs)</small></h5>${prof}${duels?`<h5 style="margin:16px 0 4px;font-size:15px">Duels de joueurs</h5>${duels}`:''}</div></div></div>`;
+  return `<div class="sh-sec"><h4>Face-à-face</h4><p class="sub">L’historique des confrontations en Starligue ${sinceTxt()}, ${(s.profile||[]).length?`, puis le profil comparé de la saison${s.status==='played'?' (avant cette journée)':''}`:''}.</p>
+  <div class="stk-grid"><div>${h2}</div><div>${prof?`<h5 style="margin:0 0 6px;font-size:15px">Profil comparé <small class="muted">(rang sur ${(s.profile[0]||{}).of||'–'} clubs)</small></h5>${prof}`:''}${duels?`<h5 style="margin:16px 0 4px;font-size:15px">Duels de joueurs</h5>${duels}`:''}</div></div></div>`;
 }
 function pressText(s){
   const R=curRound(),z=R.zones,L=[];
