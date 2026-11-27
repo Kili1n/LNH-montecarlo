@@ -449,7 +449,7 @@ function halftimeForPeriod(key){
 }
 
 function playersForPeriod(key){
-  const empty={mvp:[],scorers:[],keepers:[],seven_m:[],defense:[],discipline:[]};
+  const empty={mvp:[],scorers:[],keepers:[],seven_m:[],defense:[],assists:[],discipline:[]};
   if(!H.players)return empty;
   if(key!=='__range__')return H.players[key]||H.players.all||empty;
   const mergeList=(prop,sortKey)=>{
@@ -460,10 +460,10 @@ function playersForPeriod(key){
         const cur=acc.get(id)||{
           name:p.name,team:p.team,games:0,minutes:0,goals:0,shots:0,
           goals_7m:0,shots_7m:0,saves:0,faced:0,saves_7m:0,faced_7m:0,
-          br:0,tc:0,def_act:0,a:0,bp:0,two_min:0,impact:0,impact_def:0,
+          br:0,tc:0,def_act:0,ast:0,yc:0,rc:0,sanctions:0,bp:0,two_min:0,impact:0,impact_def:0,
           note_sum:0,def_sum:0,est_games:0,gk:p.gk||0
         };
-        for(const f of ['games','minutes','goals','shots','goals_7m','shots_7m','saves','faced','saves_7m','faced_7m','br','tc','def_act','a','bp','two_min','impact','impact_def']){
+        for(const f of ['games','minutes','goals','shots','goals_7m','shots_7m','saves','faced','saves_7m','faced_7m','br','tc','def_act','ast','yc','rc','sanctions','bp','two_min','impact','impact_def']){
           cur[f]+=(p[f]||0);
         }
         cur.note_sum+=(p.note||5.0)*(p.games||0);
@@ -488,7 +488,8 @@ function playersForPeriod(key){
     keepers:mergeList('keepers','save_pct'),
     seven_m:mergeList('seven_m','goals_7m'),
     defense:mergeList('defense','def_act'),
-    discipline:mergeList('discipline','a'),
+    assists:mergeList('assists','ast'),
+    discipline:mergeList('discipline','sanctions'),
   };
 }
 
@@ -545,10 +546,11 @@ const SC_METRICS=[
 {k:'shoot_pct',l:'% de réussite aux tirs',d:1,b:'high',u:' %'},
 {k:'pct_7m',l:'% de réussite aux 7 m',d:1,b:'high',u:' %'},
 {k:'save_pct',l:'% d’arrêts des gardiens',d:1,b:'high',u:' %'},
-{k:'ast_m',l:'Passes décisives par match',d:1,b:'high'},
+{k:'ast_m',l:'Passes décisives par match (depuis 2023/24)',d:1,b:'high'},
 {k:'br_m',l:'Balles récupérées par match',d:1,b:'high'},
 {k:'tc_m',l:'Contres par match',d:1,b:'high'},
 {k:'bp_m',l:'Balles perdues par match',d:1,b:'low'},
+{k:'yc_m',l:'Avertissements (cartons jaunes) par match',d:2,b:'low'},
 {k:'two_min_m',l:'Exclusions de 2 min par match',d:1,b:'low'},
 {k:'note',l:'Note LNH moyenne',d:2,b:'high'},
 {k:'def_note',l:'Note défensive LNH moyenne',d:2,b:'high'},
@@ -607,8 +609,8 @@ function drawScatter(){
   const T=SC.data.filter(t=>t[SC.x]!=null&&t[SC.y]!=null);
   if(T.length<2){svg.innerHTML=`<text x="450" y="260" text-anchor="middle" fill="#5B6475">Pas assez de données pour ces axes sur la période sélectionnée.</text>`;$('#scNote').textContent='';return}
   const xs=T.map(t=>t[SC.x]),ys=T.map(t=>t[SC.y]);
-  const span=v=>{const lo=Math.min(...v),hi=Math.max(...v),pad=(hi-lo||1)*.12;return[lo-pad,hi+pad]};
-  const [xl,xh]=span(xs),[yl,yh]=span(ys);
+  const span=(v,m)=>{const lo=Math.min(...v),hi=Math.max(...v),pad=(hi-lo||1)*.12;let l=lo-pad,h=hi+pad;if(m&&m.u===' %'){l=Math.max(0,l);h=Math.min(100,h)}return[l,h]};
+  const [xl,xh]=span(xs,mx),[yl,yh]=span(ys,my);
   // Les axes « moins = mieux » sont inversés : le meilleur est toujours à droite / en haut.
   const X=v=>mx.b==='low'?p.l+(xh-v)/(xh-xl)*iw:p.l+(v-xl)/(xh-xl)*iw;
   const Y=v=>my.b==='low'?p.t+(v-yl)/(yh-yl)*ih:p.t+(yh-v)/(yh-yl)*ih;
@@ -720,10 +722,14 @@ function players(){
       p=>PL_MODE==='match'?p.def_note:scalePlayerVal(p,p.impact_def),
       p=>PL_MODE==='total'?fmt(p.impact_def,0)+' pts':PL_MODE==='match'?fmt(p.def_note,2)+' / 10':fmt(scalePlayerVal(p,p.impact_def),2)+suffix,
       p=>`Note déf. ${fmt(p.def_note,2)}/10 · ${p.br} récup. · ${p.tc} contrés`)+
-    card('Passes décisives & Propreté',d.discipline,
-      p=>scalePlayerVal(p,p.a),
-      p=>PL_MODE==='total'?`${p.a} PD`:fmt(scalePlayerVal(p,p.a),2)+' PD'+suffix,
-      p=>`${p.bp} balles perd. · ${p.two_min}×2 min`);
+    card('Passes décisives (depuis 2023/24)',d.assists,
+      p=>scalePlayerVal(p,p.ast),
+      p=>PL_MODE==='total'?`${p.ast} PD`:fmt(scalePlayerVal(p,p.ast),2)+' PD'+suffix,
+      p=>`${p.games} matchs · ${p.goals} buts · ${p.bp} balles perd.`)+
+    card('Discipline',d.discipline,
+      p=>scalePlayerVal(p,p.sanctions),
+      p=>PL_MODE==='total'?`${p.sanctions} sanctions`:fmt(scalePlayerVal(p,p.sanctions),2)+' sanct.'+suffix,
+      p=>`${p.yc} avertissements · ${p.two_min}×2 min · ${p.rc} rouge${p.rc>1?'s':''}`);
 
   for(const box of [$('#players'),$('#specialists')]){
     box.querySelectorAll('.rank[data-player]').forEach(el=>el.onclick=()=>openPlayerModal(el.dataset.player));
@@ -880,7 +886,7 @@ async function openPlayerModal(name){
       <div><b class="num">${st.games}</b><span>Matchs (${tilde}${fmt(st.min_m,1)} min/m.)</span></div>
       <div><b class="num">${st.goals} (${fmt(st.pct,0)} %)</b><span>Buts (${st.goals}/${st.shots} tirs)</span></div>
       <div><b class="num">${st.goals_7m}/${st.shots_7m}</b><span>Jets de 7 mètres</span></div>
-      <div><b class="num">${st.a} PD · ${st.br+st.tc} Déf.</b><span>${st.br} BR · ${st.tc} TC · ${st.bp} BP · ${st.two_min}×2m</span></div>
+      <div><b class="num">${st.ast_min>0?st.ast+' PD':'PD n.d.'} · ${st.br+st.tc} Déf.</b><span>${st.br} BR · ${st.tc} TC · ${st.bp} BP · ${st.yc} avert. · ${st.two_min}×2m${st.rc?' · '+st.rc+' rouge'+(st.rc>1?'s':''):''}</span></div>
       ${lnhTiles}
     </div>`;
 
@@ -1051,7 +1057,7 @@ const EXP_COLS={
   players:[
     ['player','Joueur','player'],['team','Club','team'],['goals_shots','Buts/Tirs','goals'],
     ['saves_faced','Arrêts','saves'],['note','Note LNH','note'],['minutes','Temps','seconds_played'],
-    ['a','Passes D.','a'],['br','B. récup.','br'],['bp','B. perd.','bp'],['2min','2 min','2min'],
+    ['ast','Passes D.','ast'],['br','B. récup.','br'],['bp','B. perd.','bp'],['yc','Avert.','yc'],['2min','2 min','2min'],['rc','Rouge','rc'],
     ['opponent','Adversaire','opponent'],['date','Date','date'],['season','Saison','season'],['round','J.','round']
   ]
 };
@@ -1732,7 +1738,7 @@ function faceSection(s){
     return `<div class="bf"><div class="l"><span class="rk">${frOrd(p.rank_home)}/${p.of}</span><b class="num">${fmt(p.home,p.key.endsWith('pct')?1:2)}</b><i class="${bh?'win':''}" style="width:${Math.round(p.home/mx*90)}px"></i></div><div class="m">${esc(p.label)}</div><div class="r"><i class="${ba?'win':''}" style="width:${Math.round(p.away/mx*90)}px"></i><b class="num">${fmt(p.away,p.key.endsWith('pct')?1:2)}</b><span class="rk">${frOrd(p.rank_away)}/${p.of}</span></div></div>`}).join('');
   const dh=s.duels[h]||{},da=s.duels[a]||{};
   const duel=(label,f)=>{const l=f(dh),r=f(da);return l||r?`<div class="duel"><div class="l">${l||'–'}</div><div class="m">${label}</div><div>${r||'–'}</div></div>`:''};
-  const duels=duel('Buteurs',d=>d.scorer?`<b>${esc(d.scorer.name)}</b> ${d.scorer.goals} buts`:'')+duel('Passeurs',d=>d.playmaker?`<b>${esc(d.playmaker.name)}</b> ${d.playmaker.a} PD`:'')+duel('Gardiens',d=>d.keeper?`<b>${esc(d.keeper.name)}</b> ${fmt(d.keeper.pct,0)} %`:'')+duel('Meilleure note',d=>d.star?`<b>${esc(d.star.name)}</b> ${fmt(d.star.note,2)}`:'');
+  const duels=duel('Buteurs',d=>d.scorer?`<b>${esc(d.scorer.name)}</b> ${d.scorer.goals} buts`:'')+duel('Passeurs',d=>d.playmaker?`<b>${esc(d.playmaker.name)}</b> ${d.playmaker.ast} PD`:'')+duel('Gardiens',d=>d.keeper?`<b>${esc(d.keeper.name)}</b> ${fmt(d.keeper.pct,0)} %`:'')+duel('Meilleure note',d=>d.star?`<b>${esc(d.star.name)}</b> ${fmt(d.star.note,2)}`:'');
   return `<div class="sh-sec"><h4>Face-à-face</h4><p class="sub">L’historique des confrontations dans la base, puis le profil comparé de la saison${s.status==='played'?' (avant cette journée)':''}.</p>
   <div class="stk-grid"><div>${h2}</div><div><h5 style="margin:0 0 6px;font-size:15px">Profil comparé <small class="muted">(rang sur ${(s.profile[0]||{}).of||'–'} clubs)</small></h5>${prof}${duels?`<h5 style="margin:16px 0 4px;font-size:15px">Duels de joueurs</h5>${duels}`:''}</div></div></div>`;
 }

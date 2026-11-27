@@ -157,6 +157,12 @@ def load_matches():
         return m, seasons
 
 
+# Feuilles de match LNH : « DP » = Dernière Passe (passe décisive), « A » = Avertissement (carton jaune), « D » = Disqualification.
+# La LNH ne relève les passes décisives de façon complète qu'à partir de 2023/24 (≈ 45 par match contre ≈ 6 avant, 0 avant 2013) :
+# les classements de passes ne portent donc que sur ces saisons, pour ne pas comparer l'incomparable.
+DP_RELIABLE_FROM = "2023/2024"
+
+
 def _add_match_context(box: pd.DataFrame, m: pd.DataFrame) -> None:
     """Ajoute à la feuille de match (EN PLACE, sans copie) la date, la journée, l'adversaire et le score."""
     mi = m.drop_duplicates("match_id").set_index("match_id")
@@ -173,6 +179,10 @@ def _add_match_context(box: pd.DataFrame, m: pd.DataFrame) -> None:
     box["round"] = pd.to_numeric(mid.map(mi["round"]), errors="coerce").fillna(0).astype(np.int16)
     box["season_idx"] = pd.to_numeric(mid.map(mi["season_idx"]), errors="coerce").fillna(-1).astype(np.int16)
     box["two_min"] = box["2min"]
+    box["ast_ok"] = (box["season"].astype(str) >= DP_RELIABLE_FROM).to_numpy()   # passes décisives fiables sur cette saison ?
+    box["ast"] = np.where(box["ast_ok"], box["dp"], 0).astype(np.int32)         # passes décisives (DP)
+    box["yc"] = box["a"]                                                        # avertissements (cartons jaunes)
+    box["rc"] = box["d"]                                                        # disqualifications (cartons rouges)
 
 
 def load_data():
@@ -200,7 +210,7 @@ def load_data():
 
 
 _PLAYED_COLS = ["match_id", "full_name", "team", "opponent", "date", "score", "season", "season_idx", "round", "is_gk", "goals", "shots",
-                "goals_7m", "shots_7m", "saves", "shots_faced", "saves_7m", "shots_faced_7m", "a", "br", "tc", "bp", "2min", "match_note",
+                "goals_7m", "shots_7m", "saves", "shots_faced", "saves_7m", "shots_faced_7m", "ast", "ast_ok", "yc", "rc", "br", "tc", "bp", "2min", "match_note",
                 "def_note", "impact_def", "est_seconds"]
 
 
@@ -284,7 +294,7 @@ def halftime_stats(df: pd.DataFrame) -> list[dict]:
 
 
 def top_players(box: pd.DataFrame | None, season: str | None) -> dict:
-    empty = {"mvp": [], "scorers": [], "keepers": [], "seven_m": [], "defense": [], "discipline": []}
+    empty = {"mvp": [], "scorers": [], "keepers": [], "seven_m": [], "defense": [], "assists": [], "discipline": []}
     if box is None:
         return empty
     b = box if season is None else box[box["season"] == season]
@@ -305,7 +315,9 @@ def top_players(box: pd.DataFrame | None, season: str | None) -> dict:
         faced_7m=("shots_faced_7m", "sum"),
         br=("br", "sum"),
         tc=("tc", "sum"),
-        a=("a", "sum"),
+        ast=("ast", "sum"),
+        yc=("yc", "sum"),
+        rc=("rc", "sum"),
         bp=("bp", "sum"),
         two_min=("2min", "sum"),
         impact=("impact_score", "sum"),
@@ -326,12 +338,12 @@ def top_players(box: pd.DataFrame | None, season: str | None) -> dict:
     g["save_pct"] = np.where(g.faced > 0, 100 * g.saves / g.faced.clip(lower=1), 0).round(1)
     g["pct_7m"] = np.where(g.shots_7m > 0, 100 * g.goals_7m / g.shots_7m.clip(lower=1), 0).round(1)
     g["def_act"] = g["br"] + g["tc"]
-    g["clean_idx"] = g["goals"] + g["a"] - g["bp"]
+    g["sanctions"] = g["yc"] + g["two_min"] + g["rc"]   # discipline : avertissements + 2 minutes + disqualifications
 
     cols = [
         "name", "team", "games", "minutes", "goals", "shots", "pct",
         "goals_7m", "shots_7m", "pct_7m", "saves", "faced", "save_pct",
-        "saves_7m", "faced_7m", "br", "tc", "def_act", "a", "bp", "two_min",
+        "saves_7m", "faced_7m", "br", "tc", "def_act", "ast", "yc", "rc", "sanctions", "bp", "two_min",
         "impact", "note", "def_note", "impact_def", "est_clock", "gk",
     ]
     rec = lambda d: d[cols].to_dict("records")
@@ -352,7 +364,8 @@ def top_players(box: pd.DataFrame | None, season: str | None) -> dict:
         "seven_m": rec(g[g.shots_7m >= min_7m].sort_values(["goals_7m", "pct_7m"], ascending=False).head(40)),
         # nouvelle métrique défensive : points d'impact défensif (récupérations, contres, bloc collectif, discipline)
         "defense": rec(def_pool.sort_values(["impact_def", "def_note"], ascending=False).head(40)),
-        "discipline": rec(g[~g.gk].sort_values(["a", "clean_idx"], ascending=False).head(40)),
+        "assists": rec(g[(~g.gk) & (g["ast"] > 0)].sort_values(["ast", "games"], ascending=[False, True]).head(40)),   # saisons où la DP est relevée
+        "discipline": rec(g[~g.gk].sort_values(["sanctions", "yc", "two_min"], ascending=False).head(40)),
     }
 
 
@@ -571,15 +584,16 @@ def api_teams(qs: dict) -> dict:
             tg = pb.groupby("team").agg(
                 bx_games=("match_id", "nunique"), goals=("goals", "sum"), shots=("shots", "sum"),
                 g7=("goals_7m", "sum"), s7=("shots_7m", "sum"), saves=("saves", "sum"), faced=("shots_faced", "sum"),
-                a=("a", "sum"), bp=("bp", "sum"), br=("br", "sum"), tc=("tc", "sum"), two=("2min", "sum"),
+                ast=("ast", "sum"), yc=("yc", "sum"), bp=("bp", "sum"), br=("br", "sum"), tc=("tc", "sum"), two=("2min", "sum"),
             )
+            ast_games = pb[pb["ast_ok"]].groupby("team")["match_id"].nunique().reindex(tg.index)   # passes décisives : saisons fiables seulement
             core = pb[pb["est_seconds"] >= 600]
             notes = core.groupby("team").agg(note=("match_note", "mean"), def_note=("def_note", "mean"))
             ex = pd.DataFrame({
                 "shoot_pct": 100 * tg.goals / tg.shots.clip(lower=1),
                 "pct_7m": np.where(tg.s7 > 0, 100 * tg.g7 / tg.s7.clip(lower=1), np.nan),
                 "save_pct": np.where(tg.faced > 0, 100 * tg.saves / tg.faced.clip(lower=1), np.nan),
-                "ast_m": tg.a / tg.bx_games, "bp_m": tg.bp / tg.bx_games,
+                "ast_m": tg.ast / ast_games.where(ast_games > 0), "yc_m": tg.yc / tg.bx_games, "bp_m": tg.bp / tg.bx_games,
                 "br_m": tg.br / tg.bx_games, "tc_m": tg.tc / tg.bx_games,
                 "two_min_m": tg.two / tg.bx_games,
             }, index=tg.index).join(notes).reset_index().rename(columns={"index": "team"})
@@ -752,7 +766,8 @@ def compute_records(seasons_raw: str = "all") -> dict:
             groups.append({"id": "players_match", "title": "Joueurs : un seul match", "blurb": "Meilleure performance de chaque joueur (un nom n'apparaît qu'une fois par classement).", "records": [
                 p_top("goals", "Plus de buts", "buts", lambda r: f"{int(r.goals)}/{int(r.shots)} aux tirs {base(r)}", mask=lambda z: ~z["is_gk"].astype(bool)),
                 p_top("goals_7m", "Plus de jets de 7 m marqués", "buts à 7 m", lambda r: f"{int(r.goals_7m)}/{int(r.shots_7m)} {base(r)}"),
-                p_top("a", "Plus de passes décisives", "passes", base),
+                p_top("ast", "Plus de passes décisives", "passes", base),
+                p_top("yc", "Plus d'avertissements (cartons jaunes)", "avertissements", base),
                 p_top("br", "Plus de balles récupérées", "BR", base),
                 p_top("tc", "Plus de contres", "TC", base),
                 p_top("saves", "Plus d'arrêts", "arrêts", lambda r: f"{int(r.saves)}/{int(r.shots_faced)} {base(r)}", mask=gk_mask),
@@ -763,7 +778,7 @@ def compute_records(seasons_raw: str = "all") -> dict:
 
             # ---- 5. Joueurs : saison & série --------------------------------
             ps = pp.groupby(["full_name", "team", "season"]).agg(
-                games=("match_id", "nunique"), goals=("goals", "sum"), g7=("goals_7m", "sum"), a=("a", "sum"),
+                games=("match_id", "nunique"), goals=("goals", "sum"), g7=("goals_7m", "sum"), ast=("ast", "sum"), yc=("yc", "sum"),
                 saves=("saves", "sum"), faced=("shots_faced", "sum"), br=("br", "sum"), tc=("tc", "sum"),
                 note=("match_note", "mean"), impact_def=("impact_def", "sum"), gk=("is_gk", "max")).reset_index()
             ps["def_act"] = ps["br"] + ps["tc"]
@@ -779,7 +794,8 @@ def compute_records(seasons_raw: str = "all") -> dict:
             recs = [
                 s_top("goals", "Plus de buts sur une saison", "buts", sd, mask=lambda z: ~z["gk"].astype(bool)),
                 s_top("g7", "Plus de buts à 7 m sur une saison", "buts à 7 m", sd),
-                s_top("a", "Plus de passes décisives sur une saison", "passes", sd),
+                s_top("ast", "Plus de passes décisives sur une saison", "passes", sd),
+                s_top("yc", "Plus d'avertissements sur une saison", "avertissements", sd, mask=lambda z: ~z["gk"].astype(bool)),
                 s_top("saves", "Plus d'arrêts sur une saison", "arrêts", sd, mask=lambda z: z["gk"].astype(bool)),
                 s_top("def_act", "Plus de BR + TC sur une saison", "actions défensives", sd, mask=lambda z: ~z["gk"].astype(bool)),
                 s_top("note", f"Meilleure note LNH moyenne ({min_g} matchs min.)", "/ 10", sd, d=2, mask=lambda z: z["games"] >= min_g),
@@ -797,9 +813,9 @@ def compute_records(seasons_raw: str = "all") -> dict:
                 _row(t[1], t[0], (f"{t[3]} · J{t[5]} → J{t[6]}" if t[3] == t[4] else f"{t[3]} J{t[5]} → {t[4]} J{t[6]}"),
                      team=t[2], season=t[4], date=t[7], kind="player") for t in runs[:N]]})
             cr = pp.groupby("full_name").agg(team=("team", "last"), games=("match_id", "nunique"), goals=("goals", "sum"),
-                                              a=("a", "sum"), saves=("saves", "sum"), g7=("goals_7m", "sum")).reset_index()
+                                              ast=("ast", "sum"), saves=("saves", "sum"), g7=("goals_7m", "sum")).reset_index()
             cd = lambda r: f"{int(r.games)} matchs sur la période"
-            for col, label, unit in (("goals", "Total de buts", "buts"), ("a", "Total de passes décisives", "passes"),
+            for col, label, unit in (("goals", "Total de buts", "buts"), ("ast", "Total de passes décisives", "passes"),
                                      ("saves", "Total d'arrêts", "arrêts"), ("games", "Matchs disputés", "matchs")):
                 df = cr[cr[col] > 0].sort_values([col, "games"], ascending=[False, True]).head(N)
                 recs.append({"id": f"cr_{col}", "label": label, "unit": unit, "top": [
@@ -837,7 +853,7 @@ def player_records(name: str, is_gk: bool) -> dict:
             return bests[col]
 
     specs = ([("saves", "Arrêts", 0), ("saves_7m", "Arrêts sur 7 m", 0), ("save_ratio", "% d'arrêts (≥ 15 tirs)", 1), ("match_note", "Note LNH", 2)] if is_gk
-             else [("goals", "Buts", 0), ("goals_7m", "Buts à 7 m", 0), ("a", "Passes décisives", 0), ("br", "Balles récupérées", 0), ("tc", "Contres", 0), ("match_note", "Note LNH", 2)])
+             else [("goals", "Buts", 0), ("goals_7m", "Buts à 7 m", 0), ("ast", "Passes décisives", 0), ("br", "Balles récupérées", 0), ("tc", "Contres", 0), ("match_note", "Note LNH", 2)])
     src_mine = mine.assign(save_ratio=np.where(mine["shots_faced"] >= 15, 100 * mine["saves"] / mine["shots_faced"].clip(lower=1), np.nan))
     best = []
     for col, label, d in specs:
@@ -851,12 +867,12 @@ def player_records(name: str, is_gk: bool) -> dict:
                      "detail": f"vs {r['opponent']} ({r['score']}) · J{int(r['round'])} · {r['season']}",
                      "rank": rank, "of": int(lb.notna().sum())})
 
-    ps = mine.groupby(["season", "team"]).agg(games=("match_id", "nunique"), goals=("goals", "sum"), a=("a", "sum"),
+    ps = mine.groupby(["season", "team"]).agg(games=("match_id", "nunique"), goals=("goals", "sum"), ast=("ast", "sum"),
                                               saves=("saves", "sum"), def_act=("br", "sum"), tc=("tc", "sum"), note=("match_note", "mean")).reset_index()
     ps["def_act"] = ps["def_act"] + ps["tc"]
     season_best = []
     cols = ([("saves", "Arrêts sur une saison", 0), ("note", "Meilleure note LNH moyenne", 2)] if is_gk
-            else [("goals", "Buts sur une saison", 0), ("a", "Passes décisives sur une saison", 0), ("def_act", "BR + TC sur une saison", 0), ("note", "Meilleure note LNH moyenne", 2)])
+            else [("goals", "Buts sur une saison", 0), ("ast", "Passes décisives sur une saison", 0), ("def_act", "BR + TC sur une saison", 0), ("note", "Meilleure note LNH moyenne", 2)])
     for col, label, d in cols:
         s = ps[ps["games"] >= (5 if col == "note" else 1)]
         if s.empty or float(s[col].max()) <= 0:
@@ -933,7 +949,9 @@ def api_player_detail(qs: dict) -> dict:
     goals_7m, shots_7m = int(bp["goals_7m"].sum()), int(bp["shots_7m"].sum())
     saves, faced = int(bp["saves"].sum()), int(bp["shots_faced"].sum())
     saves_7m, faced_7m = int(bp["saves_7m"].sum()), int(bp["shots_faced_7m"].sum())
-    br, tc, a = int(bp["br"].sum()), int(bp["tc"].sum()), int(bp["a"].sum())
+    br, tc = int(bp["br"].sum()), int(bp["tc"].sum())
+    ast, yc, rc = int(bp["ast"].sum()), int(bp["yc"].sum()), int(bp["rc"].sum())
+    ast_min = float(bp.loc[bp["ast_ok"], "est_seconds"].sum()) / 60.0   # minutes sur les saisons où les passes décisives sont relevées
     bp_lost, two_min = int(bp["bp"].sum()), int(bp["2min"].sum())
     note = float(bp["match_note"].mean()) if bp["match_note"].notna().any() else 5.0
     def_note = float(bp["def_note"].mean()) if bp["def_note"].notna().any() else 5.0
@@ -948,7 +966,7 @@ def api_player_detail(qs: dict) -> dict:
         "saves": saves, "faced": faced, "save_pct": round(100.0 * saves / max(faced, 1), 1) if faced > 0 else 0.0,
         "saves_7m": saves_7m, "faced_7m": faced_7m,
         "save_pct_7m": round(100.0 * saves_7m / max(faced_7m, 1), 1) if faced_7m > 0 else 0.0,
-        "br": br, "tc": tc, "a": a, "bp": bp_lost, "two_min": two_min,
+        "br": br, "tc": tc, "ast": ast, "ast_min": round(ast_min, 1), "yc": yc, "rc": rc, "bp": bp_lost, "two_min": two_min,
         "note": round(note, 2), "def_note": round(def_note, 2), "impact_def": round(impact_def, 1),
     }
 
@@ -982,12 +1000,14 @@ def api_player_detail(qs: dict) -> dict:
     else:
         lg_g_60 = 60.0 * float(lg["goals"].sum()) / lg_min
         lg_sh_pct = 100.0 * float(lg["goals"].sum()) / max(float(lg["shots"].sum()), 1.0)
-        lg_a_60 = 60.0 * float(lg["a"].sum()) / lg_min
+        lg_ast_min = max(float(lg.loc[lg["ast_ok"], "est_seconds"].sum()) / 60.0, 1.0)
+        lg_ast_60 = 60.0 * float(lg["ast"].sum()) / lg_ast_min
         lg_def_60 = 60.0 * float((lg["br"] + lg["tc"]).sum()) / lg_min
         radar = [
             ax("Buts / 60m", _norm(60.0 * goals / p_min, lg_g_60), f"{60.0 * goals / p_min:.1f}", f"{lg_g_60:.1f}", "goals_60"),
             ax("Précision tir", _norm(stats["pct"], lg_sh_pct), f"{stats['pct']} %", f"{lg_sh_pct:.1f} %", "pct"),
-            ax("Passes D. / 60m", _norm(60.0 * a / p_min, lg_a_60), f"{60.0 * a / p_min:.1f}", f"{lg_a_60:.1f}", "a_60"),
+            (ax("Passes D. / 60m", _norm(60.0 * ast / ast_min, lg_ast_60), f"{60.0 * ast / ast_min:.1f}", f"{lg_ast_60:.1f}", "ast_60") if ast_min >= 60
+             else ax("Passes D. / 60m", 0, "n.d. (relevées depuis 2023/24)", f"{lg_ast_60:.1f}", "ast_60")),
             ax("Défense / 60m", _norm(60.0 * (br + tc) / p_min, lg_def_60), f"{60.0 * (br + tc) / p_min:.1f}", f"{lg_def_60:.1f}", "def_60"),
             ax("Note LNH", _norm(note, lg_note), f"{note:.2f} / 10", f"{lg_note:.2f} / 10", "note"),
             ax("Note défensive LNH", _norm(def_note, lg_def_note), f"{def_note:.2f} / 10", f"{lg_def_note:.2f} / 10", "def_note"),
@@ -1031,7 +1051,7 @@ def _prepare_explorer_df(dataset: str) -> pd.DataFrame:
             return pd.DataFrame()
         b = pf[pf["played_match"]].copy()
         b["player"] = b["full_name"]
-        for col in ["goals", "shots", "saves", "shots_faced", "est_seconds", "a", "br", "bp", "two_min", "match_note"]:
+        for col in ["goals", "shots", "saves", "shots_faced", "est_seconds", "ast", "yc", "rc", "br", "bp", "two_min", "match_note"]:
             b[col] = pd.to_numeric(b[col], errors="coerce")
             if col != "match_note":
                 b[col] = b[col].fillna(0)
@@ -1101,7 +1121,7 @@ def api_explorer(qs: dict) -> dict:
         sort_map = {
             "player": "player", "team": "team", "goals": "goals", "saves": "saves",
             "note": "match_note", "seconds_played": "est_seconds",
-            "a": "a", "br": "br", "bp": "bp", "2min": "two_min",
+            "ast": "ast", "yc": "yc", "rc": "rc", "br": "br", "bp": "bp", "2min": "two_min",
             "opponent": "opponent", "date": "date", "season": "season", "round": "round",
         }
         col = sort_map.get(sort_key, "match_note")
@@ -1129,7 +1149,9 @@ def api_explorer(qs: dict) -> dict:
             "saves_faced": f"{int(r.saves)}/{int(r.shots_faced)}" if r.shots_faced > 0 else "–",
             "note": round(float(r.match_note), 2) if pd.notna(r.match_note) else "–",
             "minutes": ("" if r.has_real_clock else "~") + f"{int(r.est_seconds) // 60}:{int(r.est_seconds) % 60:02d}",
-            "a": int(r.a),
+            "ast": (int(r.ast) if r.ast_ok else "–"),
+            "yc": int(r.yc),
+            "rc": int(r.rc),
             "br": int(r.br),
             "bp": int(r.bp),
             "2min": int(r.two_min),
@@ -1529,12 +1551,12 @@ def api_search(qs: dict) -> dict:
 # ---- Fiche journaliste : J-précédente et J+suivante --------------------------
 MILESTONES = {
     "goals": [50, 100, 150, 200, 250, 300, 400, 500, 600, 700, 800, 900, 1000, 1250, 1500],
-    "a": [50, 100, 150, 200, 250, 300, 400, 500],
+    "ast": [50, 100, 150, 200, 250, 300, 400, 500],
     "saves": [250, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000],
     "games": [50, 100, 150, 200, 250, 300, 350, 400, 450, 500],
 }
-MILESTONE_WINDOW = {"goals": 10, "a": 8, "saves": 40, "games": 5}   # « en approche » = à moins de N unités du cap
-STAT_LABEL = {"goals": "buts", "a": "passes décisives", "saves": "arrêts", "games": "matchs"}
+MILESTONE_WINDOW = {"goals": 10, "ast": 8, "saves": 40, "games": 5}   # « en approche » = à moins de N unités du cap
+STAT_LABEL = {"goals": "buts", "ast": "passes décisives", "saves": "arrêts", "games": "matchs"}
 ZONE_KEYS = {"p1": "title", "podium": "podium", "top": "top", "rel": "rel"}
 PROFILE = [("pts_m", "Points par match", True), ("gf_m", "Buts marqués par match", True), ("ga_m", "Buts encaissés par match", False),
            ("win_pct", "% de victoires", True), ("shoot_pct", "% de réussite aux tirs", True), ("save_pct", "% d’arrêts des gardiens", True),
@@ -1758,13 +1780,13 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
     def tot(upto_key: int | None, below: bool = False) -> pd.DataFrame:
         d = pfp if upto_key is None else pfp[pfp["key"] < upto_key] if below else pfp[pfp["key"] <= upto_key]
         if d.empty:
-            return pd.DataFrame(columns=["goals", "a", "saves", "games"])
-        g = d.groupby("full_name").agg(goals=("goals", "sum"), a=("a", "sum"), saves=("saves", "sum"), games=("match_id", "size"))
+            return pd.DataFrame(columns=["goals", "ast", "saves", "games"])
+        g = d.groupby("full_name").agg(goals=("goals", "sum"), ast=("ast", "sum"), saves=("saves", "sum"), games=("match_id", "size"))
         return g
 
     # joueurs de la saison (duels)
     ps = (pfp[pfp["season"] == S].groupby(["full_name", "team"]).agg(games=("match_id", "nunique"), minutes=("est_seconds", "sum"), goals=("goals", "sum"),
-          shots=("shots", "sum"), a=("a", "sum"), saves=("saves", "sum"), faced=("shots_faced", "sum"), note=("match_note", "mean"), gk=("is_gk", "max")).reset_index()
+          shots=("shots", "sum"), ast=("ast", "sum"), saves=("saves", "sum"), faced=("shots_faced", "sum"), note=("match_note", "mean"), gk=("is_gk", "max")).reset_index()
           if len(pfp) else pd.DataFrame())
 
     def duels(team: str, team_games: int) -> dict:
@@ -1776,9 +1798,9 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
         if len(f) and f["goals"].max() > 0:
             r = f.sort_values(["goals", "games"], ascending=[False, True]).iloc[0]
             out["scorer"] = {"name": r.full_name, "goals": int(r.goals), "shots": int(r.shots), "games": int(r.games)}
-        if len(f) and f["a"].max() > 0:
-            r = f.sort_values(["a", "games"], ascending=[False, True]).iloc[0]
-            out["playmaker"] = {"name": r.full_name, "a": int(r.a), "games": int(r.games)}
+        if len(f) and f["ast"].max() > 0:
+            r = f.sort_values(["ast", "games"], ascending=[False, True]).iloc[0]
+            out["playmaker"] = {"name": r.full_name, "ast": int(r.ast), "games": int(r.games)}
         g = d[d["gk"].astype(bool)]
         if len(g):
             r = g.sort_values("minutes", ascending=False).iloc[0]
@@ -1808,7 +1830,7 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
             if nm not in totals.index:
                 continue
             r = totals.loc[nm]
-            stats = ("saves", "games") if gk_of.get(nm) else ("goals", "a", "games")
+            stats = ("saves", "games") if gk_of.get(nm) else ("goals", "ast", "games")
             for stat in stats:
                 val = int(r[stat]); nxt = next((t for t in MILESTONES[stat] if t > val), None)
                 if nxt and nxt - val <= MILESTONE_WINDOW[stat]:
@@ -1823,7 +1845,7 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
             for nm in names:
                 if nm not in after.index:
                     continue
-                for stat in (("saves", "games") if gk_of.get(nm) else ("goals", "a", "games")):
+                for stat in (("saves", "games") if gk_of.get(nm) else ("goals", "ast", "games")):
                     a_ = int(after.loc[nm, stat]); b_ = int(before.loc[nm, stat]) if nm in before.index else 0
                     for thr in MILESTONES[stat]:
                         if b_ < thr <= a_:
@@ -1859,7 +1881,7 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
             for run_, nm in sorted(runs_, reverse=True)[:2]:   # les 2 plus longues séries du club
                 items.append({"kind": "player_streak", "team": team, "text": f"{nm} ({team}) a marqué lors de ses {run_} derniers matchs (record de la base : {int(r0['value'])}, {r0['holder']})"})
             # rythme de saison vs record
-            for col, rid_, noun in (("goals", "ps_goals", "buts"), ("a", "ps_a", "passes décisives"), ("saves", "ps_saves", "arrêts")):
+            for col, rid_, noun in (("goals", "ps_goals", "buts"), ("ast", "ps_ast", "passes décisives"), ("saves", "ps_saves", "arrêts")):
                 recs = rec.get(rid_, {}).get("top")
                 if not recs or not team_played:
                     continue

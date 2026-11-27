@@ -870,8 +870,9 @@ def load_player_tables(
     ]
     for c in num_cols:
         col = pd.to_numeric(box[c], errors="coerce").fillna(0.0) if c in box.columns else 0.0
-        # compteurs de match (≤ 3600) : int16 suffit et divise la mémoire par 4
-        box[c] = np.clip(np.rint(col), -32000, 32000).astype(np.int16)
+        # int32 (et non int16) : pandas conserve ce type dans les sommes, et 100 * (buts d'une saison) dépasse 32 767
+        # (ex. 100 * 1 160 buts du PSG) -> pourcentages négatifs par débordement. Coût mémoire : ~4 Mo.
+        box[c] = np.clip(np.rint(col), -32000, 32000).astype(np.int32)
     box = box.drop(columns=["lnh_score"], errors="ignore")  # ancienne évaluation officielle : pas toujours présente, non utilisée
     box["match_id"] = box["match_id"].astype(str)
     box = box.drop_duplicates(subset=["season", "match_id", "team", "last_name", "first_name"], keep="last")
@@ -899,6 +900,18 @@ def load_player_tables(
     return box
 
 
+def dp_adjusted(b: pd.DataFrame) -> pd.Series:
+    """Passes décisives (colonne « dp » = Dernière Passe) remises à l'échelle de la saison.
+    La LNH ne les relève pas avant 2013/14 et sous une forme partielle jusqu'en 2022/23 (≈ 6 par match contre ≈ 45 depuis
+    2023/24) : sans correction, un passeur récent serait mécaniquement surévalué. Saison sans aucune « dp » : 0."""
+    if "season" not in b.columns:
+        return b["dp"].astype(np.float32)
+    per_match = b.groupby("season")["dp"].sum() / b.groupby("season")["match_id"].nunique().clip(lower=1)
+    ref = float(per_match.max()) if len(per_match) else 0.0
+    scale = (ref / per_match.where(per_match > 0)).clip(upper=8.0).fillna(0.0)
+    return (b["dp"] * b["season"].map(scale).fillna(0.0)).astype(np.float32)
+
+
 def compute_player_ratings(box: pd.DataFrame, matches: pd.DataFrame) -> pd.DataFrame:
     """Calcule, pour chaque ligne joueur-match :
       - impact_score : points d'impact bruts (attaque + défense + bonus de victoire)
@@ -910,6 +923,7 @@ def compute_player_ratings(box: pd.DataFrame, matches: pd.DataFrame) -> pd.DataF
         return box
 
     b = box   # modifié en place : pas de copie de la feuille de match
+    b["dp_adj"] = dp_adjusted(b)   # passes décisives comparables d'une saison à l'autre
     # 1. Contexte du match (buts encaissés par l'équipe et résultat), par correspondance sur match_id
     mi = matches.drop_duplicates("match_id").set_index("match_id")
     mid = b["match_id"]
@@ -951,16 +965,15 @@ def compute_player_ratings(box: pd.DataFrame, matches: pd.DataFrame) -> pd.DataF
         - 0.65 * open_miss
         + 1.10 * b["goals_7m"]
         - 0.90 * miss_7m
-        + 1.15 * b["a"]
         + 0.95 * b["pp"]
         + 1.10 * b["2p"]
-        + 0.40 * b["dp"]
+        + 0.40 * b["dp_adj"]       # passe décisive (« DP ») ; « A » = avertissement, traité dans disc_pen
         - 1.25 * b["bp"]
     )
 
     team_def_delta = np.clip((league_avg_ga - np.nan_to_num(ga_team, nan=league_avg_ga)) / 4.5, -1.2, 1.5)
     w_coll = np.where(match_has_adv, 1.0, 1.65)
-    disc_pen = -0.85 * b["2min"] - 2.50 * b["d"]
+    disc_pen = -0.85 * b["2min"] - 2.50 * b["d"] - 0.30 * b["a"]   # a = avertissement (carton jaune)
 
     def_field = 1.65 * b["br"] + 1.35 * b["tc"] + w_coll * team_def_delta + disc_pen
 
@@ -970,7 +983,7 @@ def compute_player_ratings(box: pd.DataFrame, matches: pd.DataFrame) -> pd.DataF
     open_ga = np.maximum(0.0, open_faced - open_saves)
     ga_7m = np.maximum(0.0, b["shots_faced_7m"] - b["saves_7m"])
 
-    off_gk = 1.60 * b["goals"] + 1.25 * b["a"] - 1.25 * b["bp"]
+    off_gk = 1.60 * b["goals"] + 0.40 * b["dp_adj"] - 1.25 * b["bp"]
     def_gk = 1.35 * open_saves - 0.52 * open_ga + 2.20 * b["saves_7m"] - 0.15 * ga_7m + 1.40 * b["br"] + disc_pen
 
     impact_off = np.where(is_gk, off_gk, off_field)
@@ -997,7 +1010,7 @@ def compute_player_ratings(box: pd.DataFrame, matches: pd.DataFrame) -> pd.DataF
     usage = pd.Series(
         np.where(
             played & (~is_gk.to_numpy()),
-            1.0 + b["shots"] + b["a"] + b["bp"] + b["pp"] + b["2p"] + 1.5 * (b["br"] + b["tc"]) + 0.5 * b["dp"],
+            1.0 + b["shots"] + b["bp"] + b["pp"] + b["2p"] + 1.5 * (b["br"] + b["tc"]) + 0.5 * b["dp_adj"],
             0.0,
         ),
         index=b.index,
@@ -1083,8 +1096,7 @@ def compute_availability(
 
         raw_off_pts = (
             past_b["goals"]
-            + 0.7 * past_b["a"]
-            + 0.5 * past_b["dp"]
+            + 0.5 * (past_b["dp_adj"] if "dp_adj" in past_b.columns else past_b["dp"])   # passes décisives (DP)
             - 0.6 * past_b["bp"]
             + 0.35 * past_b["impact_score"].clip(lower=0.0)
         ).clip(lower=0.0)
