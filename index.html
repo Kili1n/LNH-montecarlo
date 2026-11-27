@@ -352,7 +352,7 @@ tr[data-mid]:hover td{background:var(--tint)}
 <table><tr><th>Attaque</th><th>Points</th><th>Défense et discipline</th><th>Points</th></tr>
 <tr><td>But de jeu</td><td>+1,50</td><td>Ballon récupéré</td><td>+2,00</td></tr>
 <tr><td>Tir de jeu manqué</td><td>−0,65</td><td>Tir adverse contré</td><td>+1,80</td></tr>
-<tr><td>But à 7 m</td><td>+1,10</td><td>Contexte d’équipe*</td><td>−1,2 à +1,5</td></tr>
+<tr><td>But à 7 m</td><td>+1,10</td><td>Contexte d’équipe* (×1,65 sans stats défensives)</td><td>−1,2 à +1,5</td></tr>
 <tr><td>7 m manqué</td><td>−0,90</td><td>Exclusion de 2 min</td><td>−0,85</td></tr>
 <tr><td>7 m provoqué</td><td>+0,95</td><td>Disqualification</td><td>−2,50</td></tr>
 <tr><td>2 min provoquée</td><td>+1,10</td><td>Avertissement</td><td>−0,30</td></tr>
@@ -427,7 +427,7 @@ tr[data-mid]:hover td{background:var(--tint)}
 <script>
 const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const api=async(u,o)=>{const r=await fetch(u,o),j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j};
-const fmt=(x,d=1)=>Number(x).toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d}),pc=(x,d=0)=>fmt(100*x,d)+' %';
+const fmt=(x,d=1)=>(x==null||x===''||!isFinite(Number(x)))?'–':Number(x).toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d}),pc=(x,d=0)=>fmt(100*x,d)+' %';
 const hue=n=>{let h=0;for(const c of n)h=(h*31+c.charCodeAt(0))%360;return `hsl(${h} 58% 40%)`};
 const tip=$('#tip');function tipOn(e,h){tip.innerHTML=h;tip.style.display='block';tip.style.left=Math.min(e.clientX+14,innerWidth-250)+'px';tip.style.top=e.clientY+14+'px'}function tipOff(){tip.style.display='none'}
 const opts=(el,arr,sel)=>el.innerHTML=arr.map(([v,t])=>`<option value="${esc(v)}"${v==sel?' selected':''}>${esc(t)}</option>`).join('');
@@ -504,13 +504,13 @@ function playersForPeriod(key){
           name:p.name,team:p.team,games:0,minutes:0,goals:0,shots:0,
           goals_7m:0,shots_7m:0,saves:0,faced:0,saves_7m:0,faced_7m:0,
           br:0,tc:0,def_act:0,ast:0,yc:0,rc:0,sanctions:0,bp:0,two_min:0,impact:0,impact_def:0,
-          note_sum:0,def_sum:0,est_games:0,gk:p.gk||0
+          note_sum:0,def_sum:0,def_games:0,est_games:0,gk:p.gk||0
         };
         for(const f of ['games','minutes','goals','shots','goals_7m','shots_7m','saves','faced','saves_7m','faced_7m','br','tc','def_act','ast','yc','rc','sanctions','bp','two_min','impact','impact_def']){
           cur[f]+=(p[f]||0);
         }
         cur.note_sum+=(p.note||5.0)*(p.games||0);
-        cur.def_sum+=(p.def_note||5.0)*(p.games||0);
+        if(p.def_note!=null){cur.def_sum+=p.def_note*(p.def_games||p.games||0);cur.def_games+=(p.def_games||p.games||0)}
         if(p.est_clock)cur.est_games+=(p.games||0);
         acc.set(id,cur);
       }
@@ -521,7 +521,7 @@ function playersForPeriod(key){
       pct_7m:p.shots_7m>0?100*p.goals_7m/p.shots_7m:0,
       save_pct:p.faced>0?100*p.saves/p.faced:0,
       note:p.games>0?p.note_sum/p.games:5.0,
-      def_note:p.games>0?p.def_sum/p.games:5.0,
+      def_note:p.def_games>0?p.def_sum/p.def_games:null,
       est_clock:p.est_games>(p.games/2),
     })).sort((a,b)=>b[sortKey]-a[sortKey]);
   };
@@ -590,13 +590,13 @@ const SC_METRICS=[
 {k:'pct_7m',l:'% de réussite aux 7 m',d:1,b:'high',u:' %'},
 {k:'save_pct',l:'% d’arrêts des gardiens',d:1,b:'high',u:' %'},
 {k:'ast_m',l:'Passes décisives par match (depuis 2023/24)',d:1,b:'high'},
-{k:'br_m',l:'Balles récupérées par match',d:1,b:'high'},
-{k:'tc_m',l:'Contres par match',d:1,b:'high'},
+{k:'br_m',l:'Balles récupérées par match (depuis 2023/24)',d:1,b:'high'},
+{k:'tc_m',l:'Contres par match (depuis 2023/24)',d:1,b:'high'},
 {k:'bp_m',l:'Balles perdues par match',d:1,b:'low'},
 {k:'yc_m',l:'Avertissements (cartons jaunes) par match',d:2,b:'low'},
 {k:'two_min_m',l:'Exclusions de 2 min par match',d:1,b:'low'},
 {k:'note',l:'Note /10 moyenne',d:2,b:'high'},
-{k:'def_note',l:'Note défensive LNH moyenne',d:2,b:'high'},
+{k:'def_note',l:'Note défensive /10 moyenne (depuis 2023/24)',d:2,b:'high'},
 {k:'j',l:'Matchs joués',d:0}
 ];
 const SC_PRESETS=[
@@ -605,7 +605,7 @@ const SC_PRESETS=[
 {l:'Domicile × extérieur',x:'home_win_pct',y:'away_win_pct',s:'j'},
 {l:'Remontada',x:'cb_pct',y:'kept_pct',s:'h2_diff'},
 {l:'Discipline',x:'two_min_m',y:'bp_m',s:'pts_m'},
-{l:'Notes LNH',x:'note',y:'def_note',s:'pts_m'}
+{l:'Notes /10',x:'note',y:'def_note',s:'pts_m'}
 ];
 let SC={x:'gf_m',y:'ga_m',s:'pts_m',hi:'',data:[],token:0};
 const scDef=k=>SC_METRICS.find(m=>m.k===k);
@@ -681,7 +681,7 @@ function drawScatter(){
     g.onmouseleave=tipOff;g.onclick=()=>{tipOff();openClubModal(t.team)};
   });
   const r=pearson(xs,ys);
-  $('#scNote').textContent=`${T.length} clubs. Corrélation entre les deux axes : r = ${fmt(r,2)} (${Math.abs(r)>.7?'lien fort':Math.abs(r)>.4?'lien net':'lien faible'}).${ms?` Taille des bulles : ${ms.l.toLowerCase()}.`:''}${dir?' Lignes pointillées : moyenne des clubs.':''}`;
+  $('#scNote').textContent=`${T.length} clubs${SC.data.length>T.length?` (${SC.data.length-T.length} exclu${SC.data.length-T.length>1?'s':''} : donnée non relevée sur la période)`:''}. Corrélation entre les deux axes : r = ${fmt(r,2)} (${Math.abs(r)>.7?'lien fort':Math.abs(r)>.4?'lien net':'lien faible'}).${ms?` Taille des bulles : ${ms.l.toLowerCase()}.`:''}${dir?' Lignes pointillées : moyenne des clubs.':''}`;
 }
 
 function bump(){const sel=$('#bumpTeam').value,active=new Set(selectedSeasons());
@@ -737,7 +737,7 @@ function players(){
   const d=playersForPeriod(periodKey());
   const suffix=PL_MODE==='match'?' / m.':PL_MODE==='p60'?' / 60m':'';
 
-  const card=(title,arr,sortFn,mainFn,subFn)=>`<div class="card"><h3 style="margin-bottom:6px">${title}</h3>${arr.length?sortAndSlicePlayers(arr,sortFn).map((p,i)=>`<div class="rank clickable" data-player="${esc(p.name)}"><b class="num">${i+1}</b><div><b>${esc(p.name)}</b><br><small>${esc(p.team)} · ${p.games} m. (${Math.round(p.minutes||0)} min)</small></div><div style="text-align:right"><b class="num">${mainFn(p)}</b><br><i>${subFn(p)}</i></div></div>`).join(''):'<div class="empty">Aucune feuille de match pour cette période.</div>'}</div>`;
+  const card=(title,arr,sortFn,mainFn,subFn,emptyMsg)=>`<div class="card"><h3 style="margin-bottom:6px">${title}</h3>${arr.length?sortAndSlicePlayers(arr,sortFn).map((p,i)=>`<div class="rank clickable" data-player="${esc(p.name)}"><b class="num">${i+1}</b><div><b>${esc(p.name)}</b><br><small>${esc(p.team)} · ${p.games} m. (${Math.round(p.minutes||0)} min)</small></div><div style="text-align:right"><b class="num">${mainFn(p)}</b><br><i>${subFn(p)}</i></div></div>`).join(''):`<div class="empty">${emptyMsg||'Aucune feuille de match pour cette période.'}</div>`}</div>`;
 
   $('#players').innerHTML=
     card('Note /10', d.mvp,
@@ -745,7 +745,7 @@ function players(){
       p => PL_MODE === 'total'
         ? fmt(p.impact, 0) + ' pts'
         : (PL_MODE === 'match' ? fmt(p.note, 2) + ' / 10' : fmt(scalePlayerVal(p, p.impact), 2) + suffix),
-      p => `Note ${fmt(p.note, 2)}/10 · défense ${fmt(p.def_note, 2)}/10 · ${p.est_clock ? '~' : ''}${Math.round(p.minutes || 0)} min`)+
+      p => `Note ${fmt(p.note, 2)}/10${p.def_note!=null?` · défense ${fmt(p.def_note, 2)}/10`:''} · ${p.est_clock ? '~' : ''}${Math.round(p.minutes || 0)} min`)+
     card('Meilleurs buteurs',d.scorers,
       p=>scalePlayerVal(p,p.goals),
       p=>PL_MODE==='total'?String(p.goals):fmt(scalePlayerVal(p,p.goals),2)+suffix,
@@ -761,14 +761,16 @@ function players(){
       p=>PL_MODE==='total'?`${p.goals_7m}/${p.shots_7m}`:fmt(scalePlayerVal(p,p.goals_7m),2)+suffix,
       p=>`${fmt(p.pct_7m,0)} % aux 7m`)+
     // Nouvelle métrique défensive : points d'impact défensif (récupérations, contres, bloc collectif, discipline)
-    card('Note défensive LNH',d.defense,
+    card('Note défensive /10 (depuis 2023/24)',d.defense,
       p=>PL_MODE==='match'?p.def_note:scalePlayerVal(p,p.impact_def),
       p=>PL_MODE==='total'?fmt(p.impact_def,0)+' pts':PL_MODE==='match'?fmt(p.def_note,2)+' / 10':fmt(scalePlayerVal(p,p.impact_def),2)+suffix,
-      p=>`Note déf. ${fmt(p.def_note,2)}/10 · ${p.br} récup. · ${p.tc} contrés`)+
+      p=>`Note déf. ${fmt(p.def_note,2)}/10 · ${fmt(p.br,0)} récup. · ${fmt(p.tc,0)} contrés`,
+      'Récupérations et contres ne sont relevés par la LNH que depuis 2023/24 : pas de note défensive des joueurs de champ sur cette période.')+
     card('Passes décisives (depuis 2023/24)',d.assists,
       p=>scalePlayerVal(p,p.ast),
       p=>PL_MODE==='total'?`${p.ast} PD`:fmt(scalePlayerVal(p,p.ast),2)+' PD'+suffix,
-      p=>`${p.games} matchs · ${p.goals} buts · ${p.bp} balles perd.`)+
+      p=>`${p.games} matchs · ${p.goals} buts · ${p.bp} balles perd.`,
+      'Les passes décisives ne sont relevées de façon fiable que depuis 2023/24 : aucune donnée sur cette période.')+
     card('Discipline',d.discipline,
       p=>scalePlayerVal(p,p.sanctions),
       p=>PL_MODE==='total'?`${p.sanctions} sanctions`:fmt(scalePlayerVal(p,p.sanctions),2)+' sanct.'+suffix,
@@ -794,7 +796,7 @@ function matchBoxTable(s,t){
   const rows=(s.box||{})[t]||[];
   if(!rows.length)return `<h5 style="margin:14px 0 4px;font-size:15px">${esc(t)}</h5><div class="muted" style="font-size:13px">Pas de feuille de match détaillée pour ce match.</div>`;
   const f=(a,b)=>b>0?`${a}/${b}`:'–';
-  const tr=p=>`<tr class="${p.gk?'gk':''}"><td><button type="button" class="link-btn" data-pl="${esc(p.name)}"><b>${esc(p.name)}</b></button>${p.gk?' <small class="muted">G</small>':''}</td><td>${p.min}'</td><td>${p.gk&&!p.shots?'–':`${p.goals}/${p.shots}`}</td><td>${f(p.g7,p.s7)}</td><td>${p.gk||p.faced?f(p.saves,p.faced):'–'}</td><td>${p.ast==null?'–':p.ast}</td><td>${p.br}</td><td>${p.tc}</td><td>${p.bp}</td><td>${p.yc}</td><td>${p.two}</td><td>${p.rc}</td><td class="nt">${p.note!=null?fmt(p.note,2):'–'}</td></tr>`;
+  const tr=p=>`<tr class="${p.gk?'gk':''}"><td><button type="button" class="link-btn" data-pl="${esc(p.name)}"><b>${esc(p.name)}</b></button>${p.gk?' <small class="muted">G</small>':''}</td><td>${p.min}'</td><td>${p.gk&&!p.shots?'–':`${p.goals}/${p.shots}`}</td><td>${f(p.g7,p.s7)}</td><td>${p.gk||p.faced?f(p.saves,p.faced):'–'}</td><td>${p.ast==null?'–':p.ast}</td><td>${p.br==null?'–':p.br}</td><td>${p.tc==null?'–':p.tc}</td><td>${p.bp}</td><td>${p.yc}</td><td>${p.two}</td><td>${p.rc}</td><td class="nt">${p.note!=null?fmt(p.note,2):'–'}</td></tr>`;
   return `<h5 style="margin:14px 0 4px;font-size:15px">${esc(t)}</h5><div class="scroll"><table class="tbl num box-tbl"><tr><th>Joueur</th><th>Min</th><th title="Buts / tirs">Buts</th><th title="Jets de 7 m : marqués / tentés">7 m</th><th title="Arrêts / tirs subis">Arrêts</th><th title="Passes décisives (relevées depuis 2023/24)">PD</th><th title="Ballons récupérés">BR</th><th title="Tirs contrés">TC</th><th title="Balles perdues">BP</th><th title="Avertissements">Av.</th><th title="Exclusions de 2 minutes">2'</th><th title="Disqualifications">Rg</th><th>Note /10</th></tr>${rows.map(tr).join('')}</table></div>`;
 }
 function matchSummary(s){
@@ -958,7 +960,7 @@ async function openPlayerModal(name){
     const st=d.stats,tilde=st.est_clock?'~':'';
     $('#modalSub').textContent=`${d.is_gk?'Gardien':'Joueur de champ'} · ${d.teams.join(', ')} · ${periodLabel()}`;
 
-    const lnhTiles=`<div><b class="num">${fmt(st.note,2)} / 10</b><span>Note moyenne${d.is_gk?'':` · défense ${fmt(st.def_note,2)}`} · meilleur match ${st.note_max!=null?fmt(st.note_max,2):'–'}</span></div>`;
+    const lnhTiles=`<div><b class="num">${fmt(st.note,2)} / 10</b><span>Note moyenne${d.is_gk?'':` · défense ${st.def_note!=null?fmt(st.def_note,2):'n.d.'}`} · meilleur match ${st.note_max!=null?fmt(st.note_max,2):'–'}</span></div>`;
     const kpis=d.is_gk?`<div class="kpi-mini">
       <div><b class="num">${st.games}</b><span>Matchs (${tilde}${fmt(st.min_m,1)} min/m.)</span></div>
       <div><b class="num">${fmt(st.save_pct,1)} %</b><span>${st.saves} arrêts / ${st.faced} tirs</span></div>
@@ -968,7 +970,7 @@ async function openPlayerModal(name){
       <div><b class="num">${st.games}</b><span>Matchs (${tilde}${fmt(st.min_m,1)} min/m.)</span></div>
       <div><b class="num">${st.goals} (${fmt(st.pct,0)} %)</b><span>Buts (${st.goals}/${st.shots} tirs)</span></div>
       <div><b class="num">${st.goals_7m}/${st.shots_7m}</b><span>Jets de 7 mètres</span></div>
-      <div><b class="num">${st.ast_min>0?st.ast+' PD':'PD n.d.'} · ${st.br+st.tc} Déf.</b><span>${st.br} BR · ${st.tc} TC · ${st.bp} BP · ${st.yc} avert. · ${st.two_min}×2m${st.rc?' · '+st.rc+' rouge'+(st.rc>1?'s':''):''}</span></div>
+      <div><b class="num">${st.ast_min>0?st.ast+' PD':'PD n.d.'} · ${st.br!=null?(st.br+st.tc)+' Déf.':'Déf. n.d.'}</b><span>${st.br!=null?st.br+' BR · '+st.tc+' TC · ':'BR/TC non relevés avant 2023/24 · '}${st.bp} BP · ${st.yc} avert. · ${st.two_min}×2m${st.rc?' · '+st.rc+' rouge'+(st.rc>1?'s':''):''}</span></div>
       ${lnhTiles}
     </div>`;
 

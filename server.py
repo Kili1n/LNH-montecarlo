@@ -164,6 +164,9 @@ def load_matches():
 # La LNH ne relève les passes décisives de façon complète qu'à partir de 2023/24 (≈ 45 par match contre ≈ 6 avant, 0 avant 2013) :
 # les classements de passes ne portent donc que sur ces saisons, pour ne pas comparer l'incomparable.
 DP_RELIABLE_FROM = "2023/2024"
+# Ballons récupérés, tirs contrés, 7 m et 2 min provoqués : colonnes absentes des feuilles de match avant 2023/24 (valeur 0 dans les CSV).
+# Elles sont traitées comme MANQUANTES (NaN) et non comme des zéros ; la note défensive d'un joueur de champ n'existe donc que depuis 2023/24.
+DEF_RELIABLE_FROM = DP_RELIABLE_FROM
 
 
 def _iso_date(v) -> str:
@@ -193,6 +196,14 @@ def _add_match_context(box: pd.DataFrame, m: pd.DataFrame) -> None:
     box["ast"] = np.where(box["ast_ok"], box["dp"], 0).astype(np.int32)         # passes décisives (DP)
     box["yc"] = box["a"]                                                        # avertissements (cartons jaunes)
     box["rc"] = box["d"]                                                        # disqualifications (cartons rouges)
+    box["def_ok"] = (box["season"].astype(str) >= DEF_RELIABLE_FROM).to_numpy()   # statistiques défensives relevées ?
+    nd = ~box["def_ok"].to_numpy()
+    for c in ("br", "tc", "pp", "2p"):
+        box[c] = box[c].astype("float32")
+        box.loc[nd, c] = np.nan
+    fnd = nd & ~box["is_gk"].astype(bool).to_numpy()                            # joueur de champ sans stats défensives : pas de note défensive
+    for c in ("def_note", "impact_def"):
+        box.loc[fnd, c] = np.nan
 
 
 def load_data():
@@ -221,7 +232,7 @@ def load_data():
 
 _PLAYED_COLS = ["match_id", "full_name", "team", "opponent", "date", "score", "season", "season_idx", "round", "is_gk", "goals", "shots",
                 "goals_7m", "shots_7m", "saves", "shots_faced", "saves_7m", "shots_faced_7m", "ast", "ast_ok", "yc", "rc", "br", "tc", "bp", "2min", "match_note",
-                "def_note", "impact_def", "est_seconds"]
+                "def_note", "impact_def", "est_seconds", "def_ok"]
 
 
 def played_rows() -> pd.DataFrame:
@@ -334,11 +345,14 @@ def top_players(box: pd.DataFrame | None, season: str | None) -> dict:
         note=("match_note", "mean"),
         def_note=("def_note", "mean"),
         impact_def=("impact_def", "sum"),
+        def_games=("def_ok", "sum"),
         gk=("is_gk", "max"),
     ).reset_index().rename(columns={"full_name": "name"})
 
+    nd_ = (g["def_games"] == 0) & ~g["gk"].astype(bool)            # joueur de champ sans aucune saison défensive relevée
+    g.loc[nd_, ["br", "tc", "impact_def"]] = np.nan
     g["note"] = g["note"].fillna(5.0).round(2)
-    g["def_note"] = g["def_note"].fillna(5.0).round(2)
+    g["def_note"] = g["def_note"].round(2)                         # NaN conservé : « non relevé », jamais 5,0 par défaut
     g["impact_def"] = g["impact_def"].round(1)
     g["impact"] = g["impact"].round(1)
     g["est_clock"] = g["real_clock_share"] < 0.5
@@ -354,7 +368,7 @@ def top_players(box: pd.DataFrame | None, season: str | None) -> dict:
         "name", "team", "games", "minutes", "goals", "shots", "pct",
         "goals_7m", "shots_7m", "pct_7m", "saves", "faced", "save_pct",
         "saves_7m", "faced_7m", "br", "tc", "def_act", "ast", "yc", "rc", "sanctions", "bp", "two_min",
-        "impact", "note", "def_note", "impact_def", "est_clock", "gk",
+        "impact", "note", "def_note", "impact_def", "def_games", "est_clock", "gk",
     ]
     rec = lambda d: d[cols].to_dict("records")
     min_faced = 60 if season else 150
@@ -364,9 +378,9 @@ def top_players(box: pd.DataFrame | None, season: str | None) -> dict:
     mvp_pool = g[g["games"] >= min_games_mvp]
     if len(mvp_pool) < 5:
         mvp_pool = g
-    def_pool = g[(~g.gk) & (g["games"] >= min_games_def)]
+    def_pool = g[(~g.gk) & (g["def_games"] > 0) & (g["games"] >= min_games_def)]
     if len(def_pool) < 5:
-        def_pool = g[~g.gk]
+        def_pool = g[(~g.gk) & (g["def_games"] > 0)]
     return {
         "mvp": rec(mvp_pool.sort_values(["note", "impact"], ascending=False).head(40)),
         "scorers": rec(g[~g.gk].sort_values("goals", ascending=False).head(40)),
@@ -598,14 +612,16 @@ def api_teams(qs: dict) -> dict:
                 ast=("ast", "sum"), yc=("yc", "sum"), bp=("bp", "sum"), br=("br", "sum"), tc=("tc", "sum"), two=("2min", "sum"),
             )
             ast_games = pb[pb["ast_ok"]].groupby("team")["match_id"].nunique().reindex(tg.index)   # passes décisives : saisons fiables seulement
+            def_games = pb[pb["def_ok"]].groupby("team")["match_id"].nunique().reindex(tg.index)    # stats défensives : saisons relevées seulement
             core = pb[pb["est_seconds"] >= 600]
-            notes = core.groupby("team").agg(note=("match_note", "mean"), def_note=("def_note", "mean"))
+            notes = core.groupby("team").agg(note=("match_note", "mean"))
+            notes = notes.join(core[core["def_ok"]].groupby("team")["def_note"].mean())
             ex = pd.DataFrame({
                 "shoot_pct": 100 * tg.goals / tg.shots.clip(lower=1),
                 "pct_7m": np.where(tg.s7 > 0, 100 * tg.g7 / tg.s7.clip(lower=1), np.nan),
                 "save_pct": np.where(tg.faced > 0, 100 * tg.saves / tg.faced.clip(lower=1), np.nan),
                 "ast_m": tg.ast / ast_games.where(ast_games > 0), "yc_m": tg.yc / tg.bx_games, "bp_m": tg.bp / tg.bx_games,
-                "br_m": tg.br / tg.bx_games, "tc_m": tg.tc / tg.bx_games,
+                "br_m": tg.br / def_games.where(def_games > 0), "tc_m": tg.tc / def_games.where(def_games > 0),
                 "two_min_m": tg.two / tg.bx_games,
             }, index=tg.index).join(notes).reset_index().rename(columns={"index": "team"})
             ex = ex.rename(columns={ex.columns[0]: "team"})
@@ -1051,13 +1067,15 @@ def api_player_detail(qs: dict) -> dict:
     goals_7m, shots_7m = int(bp["goals_7m"].sum()), int(bp["shots_7m"].sum())
     saves, faced = int(bp["saves"].sum()), int(bp["shots_faced"].sum())
     saves_7m, faced_7m = int(bp["saves_7m"].sum()), int(bp["shots_faced_7m"].sum())
+    bd = bp[bp["def_ok"] | bp["is_gk"].astype(bool)]                     # lignes où les stats défensives existent
+    def_min = float(bd["est_seconds"].sum()) / 60.0
     br, tc = int(bp["br"].sum()), int(bp["tc"].sum())
     ast, yc, rc = int(bp["ast"].sum()), int(bp["yc"].sum()), int(bp["rc"].sum())
     ast_min = float(bp.loc[bp["ast_ok"], "est_seconds"].sum()) / 60.0   # minutes sur les saisons où les passes décisives sont relevées
     bp_lost, two_min = int(bp["bp"].sum()), int(bp["2min"].sum())
     note = float(bp["match_note"].mean()) if bp["match_note"].notna().any() else 5.0
-    def_note = float(bp["def_note"].mean()) if bp["def_note"].notna().any() else 5.0
-    impact_def = float(bp["impact_def"].sum())
+    def_note = float(bd["def_note"].mean()) if bd["def_note"].notna().any() else None
+    impact_def = float(bd["impact_def"].sum()) if bd["impact_def"].notna().any() else None
     est_clock = bool(bp["has_real_clock"].mean() < 0.5)
 
     stats = {
@@ -1068,9 +1086,9 @@ def api_player_detail(qs: dict) -> dict:
         "saves": saves, "faced": faced, "save_pct": round(100.0 * saves / max(faced, 1), 1) if faced > 0 else 0.0,
         "saves_7m": saves_7m, "faced_7m": faced_7m,
         "save_pct_7m": round(100.0 * saves_7m / max(faced_7m, 1), 1) if faced_7m > 0 else 0.0,
-        "br": br, "tc": tc, "ast": ast, "ast_min": round(ast_min, 1), "yc": yc, "rc": rc, "bp": bp_lost, "two_min": two_min,
+        "def_min": round(def_min, 1), "br": br if bp["def_ok"].any() else None, "tc": tc if bp["def_ok"].any() else None, "ast": ast, "ast_min": round(ast_min, 1), "yc": yc, "rc": rc, "bp": bp_lost, "two_min": two_min,
         "note": round(note, 2), "note_max": (round(float(bp["match_note"].max()), 2) if bp["match_note"].notna().any() else None),
-        "def_note": round(def_note, 2), "impact_def": round(impact_def, 1),
+        "def_note": round(def_note, 2) if def_note is not None else None, "impact_def": round(impact_def, 1) if impact_def is not None else None,
     }
 
     # Radar normalisé (50 = moyenne de la ligue sur la période pour le même rôle)
@@ -1081,6 +1099,8 @@ def api_player_detail(qs: dict) -> dict:
     p_min = max(tot_min, 1.0)
     lg_note = float(lg["match_note"].mean()) if lg["match_note"].notna().any() else 5.0
     lg_def_note = float(lg["def_note"].mean()) if lg["def_note"].notna().any() else 5.0
+    lg_def = lg[lg["def_ok"]]
+    lg_def_min = max(float(lg_def["est_seconds"].sum()) / 60.0, 1.0)
 
     def _norm(val: float, avg: float) -> int:
         if avg <= 0:
@@ -1105,15 +1125,17 @@ def api_player_detail(qs: dict) -> dict:
         lg_sh_pct = 100.0 * float(lg["goals"].sum()) / max(float(lg["shots"].sum()), 1.0)
         lg_ast_min = max(float(lg.loc[lg["ast_ok"], "est_seconds"].sum()) / 60.0, 1.0)
         lg_ast_60 = 60.0 * float(lg["ast"].sum()) / lg_ast_min
-        lg_def_60 = 60.0 * float((lg["br"] + lg["tc"]).sum()) / lg_min
+        lg_def_60 = 60.0 * float((lg_def["br"] + lg_def["tc"]).sum()) / lg_def_min
         radar = [
             ax("Buts / 60m", _norm(60.0 * goals / p_min, lg_g_60), f"{60.0 * goals / p_min:.1f}", f"{lg_g_60:.1f}", "goals_60"),
             ax("Précision tir", _norm(stats["pct"], lg_sh_pct), f"{stats['pct']} %", f"{lg_sh_pct:.1f} %", "pct"),
             (ax("Passes D. / 60m", _norm(60.0 * ast / ast_min, lg_ast_60), f"{60.0 * ast / ast_min:.1f}", f"{lg_ast_60:.1f}", "ast_60") if ast_min >= 60
              else ax("Passes D. / 60m", 0, "n.d. (relevées depuis 2023/24)", f"{lg_ast_60:.1f}", "ast_60")),
-            ax("Défense / 60m", _norm(60.0 * (br + tc) / p_min, lg_def_60), f"{60.0 * (br + tc) / p_min:.1f}", f"{lg_def_60:.1f}", "def_60"),
+            (ax("Défense / 60m", _norm(60.0 * (br + tc) / def_min, lg_def_60), f"{60.0 * (br + tc) / def_min:.1f}", f"{lg_def_60:.1f}", "def_60") if def_min >= 60
+             else ax("Défense / 60m", 0, "n.d. (relevée depuis 2023/24)", f"{lg_def_60:.1f}", "def_60")),
             ax("Note /10", _norm(note, lg_note), f"{note:.2f} / 10", f"{lg_note:.2f} / 10", "note"),
-            ax("Note défensive LNH", _norm(def_note, lg_def_note), f"{def_note:.2f} / 10", f"{lg_def_note:.2f} / 10", "def_note"),
+            (ax("Note défensive /10", _norm(def_note, lg_def_note), f"{def_note:.2f} / 10", f"{lg_def_note:.2f} / 10", "def_note") if def_note is not None
+             else ax("Note défensive /10", 0, "n.d. (relevée depuis 2023/24)", f"{lg_def_note:.2f} / 10", "def_note")),
         ]
 
     # Historique par saison sur l'ensemble des données du joueur
@@ -1256,7 +1278,7 @@ def api_explorer(qs: dict) -> dict:
             "ast": (int(r.ast) if r.ast_ok else "–"),
             "yc": int(r.yc),
             "rc": int(r.rc),
-            "br": int(r.br),
+            "br": (int(r.br) if r.def_ok else "–"),
             "bp": int(r.bp),
             "2min": int(r.two_min),
             "opponent": r.opponent or "",
@@ -2266,7 +2288,7 @@ def api_match(qs: dict) -> dict:
                     "name": str(x.full_name), "gk": bool(x.is_gk), "min": int(x.est_seconds) // 60,
                     "goals": int(x.goals), "shots": int(x.shots), "g7": int(x.goals_7m), "s7": int(x.shots_7m),
                     "saves": int(x.saves), "faced": int(x.shots_faced), "s7_saves": int(x.saves_7m), "s7_faced": int(x.shots_faced_7m),
-                    "ast": (int(x.ast) if bool(x.ast_ok) else None), "br": int(x.br), "tc": int(x.tc), "bp": int(x.bp),
+                    "ast": (int(x.ast) if bool(x.ast_ok) else None), "br": (int(x.br) if bool(x.def_ok) else None), "tc": (int(x.tc) if bool(x.def_ok) else None), "bp": int(x.bp),
                     "yc": int(x.yc), "two": int(x.two_min),
                     "rc": int(x.rc),
                     "note": round(float(x.match_note), 2) if pd.notna(x.match_note) else None})
