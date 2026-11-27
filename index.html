@@ -823,8 +823,8 @@ async function openClubModal(team){
     }
 
     const rosterCard=d.roster.length?`<div class="card"><h4 style="margin:0 0 8px;font-size:15px">Effectif utilisé sur la période (cliquer sur un joueur)</h4>
-      <div class="scroll"><table class="tbl num"><tr><th>Joueur</th><th>Poste</th><th>M.</th><th>Min/m.</th><th>Buts / Arrêts</th><th>Note /10</th></tr>
-      ${d.roster.map(p=>`<tr><td><button type="button" class="link-btn" data-pl="${esc(p.name)}"><b>${esc(p.name)}</b></button></td><td>${p.gk?'Gardien':'Champ'}</td><td>${p.games}</td><td>${fmt(p.min_m,1)}</td><td>${p.gk?`${p.saves}/${p.faced}`:`${p.goals}/${p.shots}`}</td><td><b>${p.note!=null?fmt(p.note,2):'–'}</b></td></tr>`).join('')}
+      <div class="scroll"><table class="tbl num"><tr><th>Joueur</th><th>Poste</th><th>M.</th><th>Min/m.</th><th title="Buts marqués / tirs tentés">Buts / tirs</th><th title="Arrêts réalisés / tirs subis (gardiens)">Arrêts / tirs subis</th><th>Note /10</th></tr>
+      ${d.roster.map(p=>`<tr><td><button type="button" class="link-btn" data-pl="${esc(p.name)}"><b>${esc(p.name)}</b></button></td><td>${p.gk?'Gardien':'Champ'}</td><td>${p.games}</td><td>${fmt(p.min_m,1)}</td><td>${p.shots>0||!p.gk?`${p.goals}/${p.shots}`:'–'}</td><td>${p.faced>0?`${p.saves}/${p.faced}`:'–'}</td><td><b>${p.note!=null?fmt(p.note,2):'–'}</b></td></tr>`).join('')}
       </table></div></div>`:'';
 
     body.innerHTML=kpis+`<div class="grid2">${haCard}${recentCard}</div>`+rankSvg+rosterCard;

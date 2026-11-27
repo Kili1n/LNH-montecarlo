@@ -2340,6 +2340,11 @@ if __name__ == "__main__":
     ap.add_argument("--force", action="store_true", help="avec --build-cache : relance aussi les simulations déjà calculées")
     ap.add_argument("--sims", type=int, default=CACHE_SIMS, help=f"simulations par bundle (défaut {CACHE_SIMS})")
     args = ap.parse_args()
+    for _stream in (sys.stdout, sys.stderr):   # consoles Windows (cp1252) : ne plante pas sur « → » ou les accents
+        try:
+            _stream.reconfigure(errors="replace")
+        except Exception:
+            pass
     OUT.mkdir(parents=True, exist_ok=True)
     if not DATA.is_dir():
         sys.exit(f"Dossier de données introuvable : {DATA}")
