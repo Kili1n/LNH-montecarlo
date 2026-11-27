@@ -163,6 +163,13 @@ def load_matches():
 DP_RELIABLE_FROM = "2023/2024"
 
 
+def _iso_date(v) -> str:
+    """Date ISO « AAAA-MM-JJ » ou chaîne vide. Dans les CSV (match.csv) la date est toujours AAAA-MM-JJ ou absente (matchs à venir non
+    programmés) ; une valeur manquante devenait la chaîne « nan », que le navigateur affichait « Invalid Date »."""
+    s = str(v).strip()
+    return s[:10] if re.match(r"^\d{4}-\d{2}-\d{2}", s) else ""
+
+
 def _add_match_context(box: pd.DataFrame, m: pd.DataFrame) -> None:
     """Ajoute à la feuille de match (EN PLACE, sans copie) la date, la journée, l'adversaire et le score."""
     mi = m.drop_duplicates("match_id").set_index("match_id")
@@ -1677,7 +1684,7 @@ def _h2h(m_played: pd.DataFrame, a: str, b: str, exclude_mid: str | None = None)
     rows = []
     for r in d.itertuples():
         ga, gb = (r.home_ft_goals, r.away_ft_goals) if r.home_team == a else (r.away_ft_goals, r.home_ft_goals)
-        rows.append({"date": str(r.date), "season": str(r.season), "round": int(r.round), "home": r.home_team, "away": r.away_team,
+        rows.append({"date": _iso_date(r.date), "season": str(r.season), "round": int(r.round), "home": r.home_team, "away": r.away_team,
                      "score": f"{int(r.home_ft_goals)}–{int(r.away_ft_goals)}", "a_goals": int(ga), "b_goals": int(gb),
                      "winner": a if ga > gb else b if gb > ga else None, "a_home": r.home_team == a})
     wa = sum(1 for x in rows if x["winner"] == a); wb = sum(1 for x in rows if x["winner"] == b); dr = len(rows) - wa - wb
@@ -1980,7 +1987,7 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
                     ra = tab_a[tab_a["t"] == t].iloc[0]
                     tinfo[t]["after"] = {"rank": int(ra["rank"]), "pts": int(ra["pts"]), "j": int(ra["j"]), "gd": int(ra["gd"])}
             stake = _swing_stake(sw, h, a) if sw else {"score": 0.0, "zone": None, "team": None}
-            sheet = {"match_id": mid, "round": int(r.round), "date": str(r.date), "time": (str(r.time)[:5] if "time" in rows.columns and pd.notna(r.time) else ""),
+            sheet = {"match_id": mid, "round": int(r.round), "date": _iso_date(r.date), "time": (str(r.time)[:5] if "time" in rows.columns and pd.notna(r.time) else ""),
                      "venue": (str(r.venue) if "venue" in rows.columns and pd.notna(r.venue) and str(r.venue).strip() else ""),
                      "home": h, "away": a, "status": "played" if mode == "prev" else "upcoming", "teams": tinfo,
                      "form": {h: _form(tb, h), a: _form(tb, a)},
@@ -2016,7 +2023,7 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
         order = sorted(range(len(sheets)), key=lambda i: -sheets[i]["stake"]["score"])
         for pos_, i in enumerate(order):
             sheets[i]["stake_rank"] = pos_ + 1
-        dates = sorted(x["date"] for x in sheets)
+        dates = sorted(x["date"] for x in sheets if x["date"])
         return {"round": rnd, "run": rid, "dates": [dates[0], dates[-1]] if dates else [], "zones": z, "n_sims": sw_pack["n_sims"], "matches": sheets}
 
     out = {"version": 1, "season": S, "teams": teams, "last_played_round": K, "built": time.strftime("%Y-%m-%d %H:%M:%S"), "data_stamp": _stamp(),

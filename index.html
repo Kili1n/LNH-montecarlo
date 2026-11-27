@@ -222,15 +222,19 @@ svg text{font-family:Inter,sans-serif}
 .pbar span{display:flex;align-items:center;justify-content:center;white-space:nowrap}
 .bigscore{font:700 44px/1 Newsreader,serif;text-align:center}
 .cent{text-align:center;font-size:13px}.cent small{display:block;color:var(--mute);margin-top:3px}
-.stk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px}
+.stk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:16px}
 .stk-grid h5{margin:0 0 6px;font-size:15px}
 .stk-ul{margin:0 0 10px;padding-left:18px;font-size:13.5px}.stk-ul li{margin:2px 0}
 .note-li{padding:8px 0;border-bottom:1px solid var(--rule);font-size:14px;line-height:1.45}.note-li:last-child{border-bottom:0}
 .h2h-bar{display:flex;height:30px;border-radius:5px;overflow:hidden;font-weight:700;font-size:13px;color:#fff;margin:6px 0 8px}
 .h2h-bar span{display:flex;align-items:center;justify-content:center}
-.bf{display:grid;grid-template-columns:1fr 168px 1fr;gap:10px;align-items:center;font-size:13px;margin:6px 0}
-.bf .l,.bf .r{display:flex;align-items:center;gap:7px}.bf .l{justify-content:flex-end}.bf .m{text-align:center;color:var(--mute);font-size:12px}
+.bf{display:grid;grid-template-columns:minmax(0,1fr) minmax(96px,150px) minmax(0,1fr);gap:8px;align-items:center;font-size:13px;margin:6px 0}
+.bf .l,.bf .r{display:flex;align-items:center;gap:6px;min-width:0}.bf .l{justify-content:flex-end}.bf .m{text-align:center;color:var(--mute);font-size:12px;line-height:1.25}
+.bf .bw{flex:1 1 0;min-width:8px;display:flex}.bf .l .bw{justify-content:flex-end}
 .bf i{display:block;height:9px;border-radius:4px;background:#C9D0DD}.bf i.win{background:var(--blue)}
+.bf .rk,.bf b{white-space:nowrap}
+.stk-grid>*{min-width:0}
+.tbl.lastm td.tm{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
 .bf .rk{color:var(--mute);font-size:11.5px}
 .duel{display:grid;grid-template-columns:1fr 130px 1fr;gap:10px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--rule);align-items:baseline}
 .duel .m{text-align:center;color:var(--mute);font-size:12px}.duel .l{text-align:right}
@@ -1625,8 +1629,12 @@ initSearch();
 let PRESS=null,PRESS_P=null,PR={mode:'next',mid:null};
 const frOrd=n=>n===1?'1er':n+'e';
 const rankTxt=t=>t.j?frOrd(t.rank):'Début de saison';
-const frDate=d=>d?new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}):'';
-const frDay=d=>d?new Date(String(d).slice(0,10)+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long'}):'';
+// Dates des CSV : « AAAA-MM-JJ » ou absentes (matchs à venir non programmés). Toute autre valeur (« nan », « NaT »…) est ignorée.
+const isoD=d=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(d==null?'':d));return m?`${m[1]}-${m[2]}-${m[3]}`:''};
+const fmtD=(d,o)=>{const i=isoD(d);if(!i)return '';const t=new Date(i+'T12:00:00');return isNaN(t)?'':t.toLocaleDateString('fr-FR',o)};
+const frDate=d=>fmtD(d,{weekday:'long',day:'numeric',month:'long'});
+const frDay=d=>fmtD(d,{day:'numeric',month:'long'});
+const dotSep=x=>x?' · '+x:'';
 const ZTXT=(z,k)=>({title:'le titre',podium:'le podium',top:`le top ${k}`,rel:'le maintien'})[z]||'';
 function deltaHtml(b,c,badUp){const d=(c-b)*100;if(Math.abs(d)<.5)return '<small class="delta-0">≈</small>';const good=badUp?d<0:d>0;return `<small class="${good?'delta-pos':'delta-neg'}">${d>0?'+':'−'}${fmt(Math.abs(d),Math.abs(d)<10?1:0)}</small>`}
 
@@ -1705,7 +1713,7 @@ function afficheSection(s){
     <div class="cent"><small>Avant le match, le modèle donnait ${pc(r.p_real)} à cette issue${r.surprise?' : <b style="color:var(--ball)">surprise</b>':''}.${s.proba&&s.proba.exp_h!=null?` Buts attendus : ${fmt(s.proba.exp_h,1)} – ${fmt(s.proba.exp_a,1)}.`:''}</small></div>`;
   }else{
     const p=s.proba||{};
-    cen=`<div class="cent"><b>${frDate(s.date)}</b><small>${[s.time,s.venue].filter(Boolean).map(esc).join(' · ')}</small></div>${probaBar(p)}
+    cen=`<div class="cent"><b>${frDate(s.date)||'Date à confirmer'}</b><small>${[s.time,s.venue].filter(Boolean).map(esc).join(' · ')}</small></div>${probaBar(p)}
     <div class="cent"><small>1 : ${esc(s.home)} · N : nul · 2 : ${esc(s.away)}</small>${p.modal?`<small>Score le plus fréquent : <b>${p.modal[0]}–${p.modal[1]}</b> (${pc(p.modal[2],1)}) · buts attendus ${fmt(p.exp_h,1)} – ${fmt(p.exp_a,1)}</small>`:''}</div>`;
   }
   return `<div class="sh-sec"><h4>L’affiche</h4><p class="sub">Classement, forme et hommes forts de chaque équipe${s.status==='played'?', puis ce qui s’est passé':''}.</p><div class="afg">${teamPanel(s,s.home,false)}<div>${cen}</div>${teamPanel(s,s.away,true)}</div></div>`;
@@ -1759,11 +1767,11 @@ function faceSection(s){
     ${x.biggest&&x.biggest.winner?`<li>Plus large victoire : <b>${esc(x.biggest.winner)}</b> ${esc(x.biggest.score)} (${esc(x.biggest.season)})</li>`:''}
     ${x.streak?`<li>${esc(x.streak.team)} sur ${x.streak.n} victoires de suite dans ce duel</li>`:''}
     <li>${esc(h)} à domicile dans ce duel : ${x.a_home.w} V · ${x.a_home.d} N · ${x.a_home.n-x.a_home.w-x.a_home.d} D</li></ul>
-    <div class="scroll"><table class="tbl num"><tr><th style="text-align:left">Dernières rencontres</th><th>Saison</th><th>J.</th><th>Score</th></tr>${x.last.map(r=>`<tr><td style="text-align:left">${esc(r.home)} – ${esc(r.away)}</td><td>${esc(r.season)}</td><td>${r.round}</td><td><b>${esc(r.score)}</b></td></tr>`).join('')}</table></div>`;
+    <div class="scroll"><table class="tbl num lastm"><tr><th style="text-align:left">Dernières rencontres : domicile</th><th>Score</th><th style="text-align:left">Extérieur</th><th>Saison</th><th>J.</th></tr>${x.last.map(r=>`<tr><td class="tm" style="text-align:left">${esc(r.home)}</td><td style="text-align:center"><b>${esc(r.score)}</b></td><td class="tm" style="text-align:left">${esc(r.away)}</td><td>${esc(r.season)}</td><td>${r.round}</td></tr>`).join('')}</table></div>`;
   }
   const prof=(s.profile||[]).map(p=>{
     const mx=Math.max(Math.abs(p.home),Math.abs(p.away),.0001),bh=p.higher_better?p.home>p.away:p.home<p.away,ba=p.higher_better?p.away>p.home:p.away<p.home;
-    return `<div class="bf"><div class="l"><span class="rk">${frOrd(p.rank_home)}/${p.of}</span><b class="num">${fmt(p.home,p.key.endsWith('pct')?1:2)}</b><i class="${bh?'win':''}" style="width:${Math.round(p.home/mx*90)}px"></i></div><div class="m">${esc(p.label)}</div><div class="r"><i class="${ba?'win':''}" style="width:${Math.round(p.away/mx*90)}px"></i><b class="num">${fmt(p.away,p.key.endsWith('pct')?1:2)}</b><span class="rk">${frOrd(p.rank_away)}/${p.of}</span></div></div>`}).join('');
+    return `<div class="bf"><div class="l"><span class="rk">${frOrd(p.rank_home)}/${p.of}</span><b class="num">${fmt(p.home,p.key.endsWith('pct')?1:2)}</b><span class="bw"><i class="${bh?'win':''}" style="width:${Math.max(0,Math.round(p.home/mx*100))}%"></i></span></div><div class="m">${esc(p.label)}</div><div class="r"><span class="bw"><i class="${ba?'win':''}" style="width:${Math.max(0,Math.round(p.away/mx*100))}%"></i></span><b class="num">${fmt(p.away,p.key.endsWith('pct')?1:2)}</b><span class="rk">${frOrd(p.rank_away)}/${p.of}</span></div></div>`}).join('');
   const dh=s.duels[h]||{},da=s.duels[a]||{};
   const duel=(label,f)=>{const l=f(dh),r=f(da);return l||r?`<div class="duel"><div class="l">${l||'–'}</div><div class="m">${label}</div><div>${r||'–'}</div></div>`:''};
   const duels=duel('Buteurs',d=>d.scorer?`<b>${esc(d.scorer.name)}</b> ${d.scorer.goals} buts`:'')+duel('Passeurs',d=>d.playmaker?`<b>${esc(d.playmaker.name)}</b> ${d.playmaker.ast} PD`:'')+duel('Gardiens',d=>d.keeper?`<b>${esc(d.keeper.name)}</b> ${fmt(d.keeper.pct,0)} %`:'')+duel('Meilleure note',d=>d.star?`<b>${esc(d.star.name)}</b> ${fmt(d.star.note,2)}`:'');
@@ -1772,7 +1780,7 @@ function faceSection(s){
 }
 function pressText(s){
   const R=curRound(),z=R.zones,L=[];
-  L.push(`J${s.round} · ${s.home} – ${s.away} · ${frDate(s.date)}${s.time?' · '+s.time:''}${s.venue?' · '+s.venue:''}`,headline(s),'');
+  L.push(`J${s.round} · ${s.home} – ${s.away} · ${frDate(s.date)||'date à confirmer'}${s.time?' · '+s.time:''}${s.venue?' · '+s.venue:''}`,headline(s),'');
   L.push('CLASSEMENT');for(const t of [s.home,s.away]){const i=s.teams[t];L.push(`- ${t} : ${rankTxt(i)}, ${i.pts} pts (${i.j} matchs, diff. ${sgn(i.gd,0)}). ${i.lines.join(' ; ')}.`)}
   if(s.status==='played')L.push(`Résultat : ${s.result.hg}–${s.result.ag}${s.result.ht?` (mi-temps ${s.result.ht[0]}–${s.result.ht[1]})`:''}.`);
   else if(s.proba&&s.proba.p1!=null)L.push(`Probabilités (1/N/2) : ${pc(s.proba.p1)} / ${pc(s.proba.pN)} / ${pc(s.proba.p2)}.${s.proba.modal?` Score le plus fréquent : ${s.proba.modal[0]}–${s.proba.modal[1]}.`:''}`);
@@ -1791,12 +1799,12 @@ function renderPress(){
   $('#pressRound').innerHTML=[['prev','◀ Journée précédente'],['next','Journée suivante ▶']].map(([m,l])=>PRESS[m]?`<button type="button" data-m="${m}" aria-pressed="${PR.mode===m}">${l} · J${PRESS[m].round}</button>`:`<button type="button" disabled title="Pas de journée disponible">${l}</button>`).join('');
   $('#pressRound').querySelectorAll('button[data-m]').forEach(b=>b.onclick=()=>{PR.mode=b.dataset.m;PR.mid=null;renderPress()});
   if(!R){$('#pressBody').innerHTML='<div class="empty">Aucune journée à afficher.</div>';return}
-  const played=PR.mode==='prev',d=R.dates;
+  const played=PR.mode==='prev',dd=(R.dates||[]).map(isoD).filter(Boolean);
   const strip=R.matches.map(m=>`<button type="button" class="mcard" data-mid="${esc(m.match_id)}" aria-pressed="${m.match_id===PR.mid}"><b>${esc(m.home)} – ${esc(m.away)}</b><small>${played?`Score ${m.result.hg}–${m.result.ag}${m.result.surprise?' · surprise':''}`:`${frDay(m.date)}${m.time?' · '+esc(m.time):''}`}</small><small>${m.stake.zone?`Enjeu : ${fmt(m.stake.score,0)} pts sur ${ZTXT(m.stake.zone,R.zones.top_k)}`:'Peu d’enjeu au classement'}${m.stake_rank===1?' · ★ affiche de la journée':''}</small></button>`).join('');
   const s=curSheet();
-  $('#pressBody').innerHTML=`<div class="pr-head"><h3>Journée ${R.round} <small>${played?'déjà jouée':'à venir'} · ${d.length?(d[0]===d[1]?frDate(d[0]):`du ${frDay(d[0])} au ${frDay(d[1])}`):''}</small></h3><small>${R.n_sims.toLocaleString('fr-FR')} simulations lancées à la journée ${R.round-1} · saison ${esc(PRESS.season)}</small></div>
+  $('#pressBody').innerHTML=`<div class="pr-head"><h3>Journée ${R.round} <small>${played?'déjà jouée':'à venir'} · ${dd.length?(dd[0]===dd[dd.length-1]?frDate(dd[0]):`du ${frDay(dd[0])} au ${frDay(dd[dd.length-1])}`):'dates à confirmer'}</small></h3><small>${R.n_sims.toLocaleString('fr-FR')} simulations lancées à la journée ${R.round-1} · saison ${esc(PRESS.season)}</small></div>
   <div class="strip">${strip}</div>
-  <article class="sheet" id="pressSheet"><div class="kick">${played?'Retour sur le match':'Avant-match'} · Journée ${s.round} · ${frDate(s.date)}${s.time?' · '+esc(s.time):''}${s.venue?' · '+esc(s.venue):''}</div>
+  <article class="sheet" id="pressSheet"><div class="kick">${played?'Retour sur le match':'Avant-match'} · Journée ${s.round} · ${frDate(s.date)||'date à confirmer'}${s.time?' · '+esc(s.time):''}${s.venue?' · '+esc(s.venue):''}</div>
   <h3 class="mt">${esc(s.home)} – ${esc(s.away)}</h3><p class="hl">${esc(headline(s))}</p>
   ${afficheSection(s)}${enjeuSection(s)}${capsSection(s)}${faceSection(s)}</article>`;
   $('#pressBody').querySelectorAll('.mcard').forEach(b=>b.onclick=()=>{PR.mid=b.dataset.mid;renderPress()});
