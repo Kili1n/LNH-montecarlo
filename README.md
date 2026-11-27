@@ -108,6 +108,17 @@ Collecter une nouvelle saison (dépendances supplémentaires : `requests`, `beau
 python tools/run_pipeline_lnh.py
 ```
 
+### Mise à jour automatique (GitHub Actions)
+Le plan gratuit de Render ne permet pas de tâche planifiée : [.github/workflows/weekly-update.yml](.github/workflows/weekly-update.yml) s'en charge **chaque lundi à 05:30 UTC** (et à la demande depuis l'onglet *Actions* → *Run workflow*) :
+
+1. `tools/update_weekly.py` met à jour les CSV de la saison en cours : calendrier LNH → nouvelles feuilles de match PDF → `match.csv` / `players_boxscore.csv` → fiches des nouveaux joueurs (`players.csv`).
+2. `python server.py --build-cache --force` reconstruit `cache/`. La simulation principale part de l'**avant-dernière journée jouée** (K-1), ce qui permet de comparer les prédictions aux résultats de la dernière journée ; la fiche journaliste reprend K-1 (retour sur la journée écoulée) et K (journée suivante).
+3. `tools/check_cache.py` contrôle le cache, puis le workflow commite sur `main` : Render redéploie.
+
+**Mode échec.** Calendrier LNH vide ou en recul, match terminé absent du CSV, erreur réseau ou de parsing, régression du nombre de matchs, cache incohérent : le script restaure les CSV d'origine, **rien n'est commité** (le site garde les données et le cache de la semaine précédente), le journal est conservé en artefact et une *issue* `maj-hebdo` est ouverte (fermée automatiquement au prochain succès). Sans nouvelle donnée, le cache n'est pas reconstruit.
+
+Prérequis GitHub : *Settings → Actions → General → Workflow permissions* en « Read and write » ; si `main` est protégée, autoriser `github-actions[bot]` à y pousser. Au changement de saison, ajouter son identifiant LNH dans `SAISONS_ID` (`tools/download_pdf_lnh.py`). Test local sans toucher au site LNH : `python tools/update_weekly.py --skip-download --skip-players` ; lecture seule du calendrier : `--dry-run`.
+
 ### Déploiement
 Hébergé sur **Render** (service web Python, démarrage `python server.py`), code sur GitHub, domaine personnalisé. Variables utiles : `CACHE_SIMS`, `MAX_SIMS`, `MIN_FREE_MB`, `AUTO_BUILD_CACHE`.
 

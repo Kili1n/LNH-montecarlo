@@ -1,0 +1,131 @@
+name: Mise à jour hebdomadaire (données + cache)
+
+# Le plan Render Free ne sait pas planifier de tâche : GitHub Actions s'en charge.
+# Chaque lundi : scraper LNH -> CSV -> reconstruction de cache/ -> commit sur main -> Render redéploie.
+# En cas d'échec : RIEN n'est commité (le site garde les données et le cache précédents) et une issue « maj-hebdo » est ouverte.
+on:
+  schedule:
+    - cron: "30 5 * * 1"        # lundi 05:30 UTC (06:30 ou 07:30 à Paris), après les matchs du week-end
+  workflow_dispatch:             # lancement manuel depuis l'onglet Actions
+    inputs:
+      force_rebuild:
+        description: "Reconstruire le cache même sans nouvelle donnée"
+        type: boolean
+        default: false
+
+concurrency:
+  group: weekly-update
+  cancel-in-progress: false
+
+permissions:
+  contents: write                # commit du cache et des CSV
+  issues: write                  # mode échec : ouverture / fermeture de l'issue
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PYTHONUNBUFFERED: "1"
+      PYTHONIOENCODING: "utf-8"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            tools/requirements.txt
+
+      - name: Installer les dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r tools/requirements.txt
+
+      - name: 1/3 Scraper LNH -> CSV (calendrier, feuilles de match, fiches joueurs)
+        run: python tools/update_weekly.py
+
+      - name: Données modifiées ?
+        id: diff
+        run: |
+          git add -A data
+          if git diff --cached --quiet -- data && [ "${{ inputs.force_rebuild }}" != "true" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Aucune nouvelle donnée : le cache existant reste valable." | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --cached --stat -- data | tail -5
+          fi
+
+      - name: 2/3 Reconstruire cache/ (simulations + fiche journaliste)
+        if: steps.diff.outputs.changed == 'true'
+        run: python server.py --build-cache --force
+
+      - name: 3/3 Contrôler le cache (avant-dernière journée, fiche journaliste)
+        if: steps.diff.outputs.changed == 'true'
+        run: python tools/check_cache.py
+
+      - name: Commiter et pousser (Render redéploie)
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          LAST=$(python -c "import sys; sys.path.insert(0, '.'); import server; m, s = server.load_matches(); print(server.last_played_round(m, s[-1]))")
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A data cache
+          git commit -m "chore(data): mise à jour du lundi (J${LAST}) — CSV, cache et fiche journaliste"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Résumé
+        if: success()
+        run: |
+          { echo "### Mise à jour du $(date -u +%F)"; echo; cat update_report.md 2>/dev/null; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fermer l'issue d'échec ouverte
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for n in $(gh issue list --label maj-hebdo --state open --json number -q '.[].number'); do
+            gh issue close "$n" --comment "Mise à jour réussie ($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)."
+          done
+
+      # ---------------------------------------------------------------- MODE ÉCHEC
+      - name: Conserver les journaux
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: echec-maj-hebdo
+          path: |
+            update_report.md
+            cache/status.json
+          if-no-files-found: ignore
+
+      - name: Signaler l'échec (issue GitHub)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          {
+            echo "La mise à jour hebdomadaire a échoué le $(date -u '+%F %H:%M') UTC."
+            echo
+            echo "**Rien n'a été commité** : le site continue de servir les données et le cache de la semaine précédente."
+            echo
+            echo "Journal : $RUN"
+            echo
+            if [ -f update_report.md ]; then echo "<details><summary>Rapport</summary>"; echo; cat update_report.md; echo; echo "</details>"; fi
+            echo
+            echo "Pistes : page calendrier LNH modifiée (tools/download_pdf_lnh.py), nouvelle saison absente de SAISONS_ID, PDF illisible (tools/parser_pdf_lnh.py), réseau. Relancer depuis l'onglet Actions une fois corrigé."
+          } > issue_body.md
+          gh label create maj-hebdo --color D93F0B --description "Échec de la mise à jour hebdomadaire" 2>/dev/null || true
+          N=$(gh issue list --label maj-hebdo --state open --json number -q '.[0].number')
+          if [ -n "$N" ]; then
+            gh issue comment "$N" --body-file issue_body.md
+          else
+            gh issue create --title "Mise à jour hebdomadaire échouée" --label maj-hebdo --body-file issue_body.md
+          fi

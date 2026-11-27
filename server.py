@@ -18,7 +18,8 @@ DATA_DIR = "./data/data_csv"     # contient un sous-dossier par saison : match.c
 OUTPUT_DIR = "./output"          # un sous-dossier par simulation lancée
 CACHE_DIR = "./cache"            # bundles JSON prêts à afficher : À VERSIONNER (git) pour un hébergement à disque éphémère
 CACHE_SIMS = int(os.environ.get("CACHE_SIMS", 10000))   # simulations par bundle
-CACHE_CUTOFF_CURRENT = 10        # saison en cours : départ à la J10 ; saison précédente : J0
+# Cache : saison en cours simulée depuis l'AVANT-DERNIÈRE journée jouée (K-1), pour pouvoir comparer les prédictions aux résultats de la
+# dernière journée ; saison précédente depuis la J0.
 # Garde-fous mémoire (hébergements plafonnés, ex. 512 Mo) -----------------------------------------
 MAX_SIMS = int(os.environ.get("MAX_SIMS", 10000))             # plafond du nombre de simulations demandé depuis le site
 MIN_FREE_MB = int(os.environ.get("MIN_FREE_MB", 240))         # mémoire libre exigée avant de lancer une simulation (~220 Mo)
@@ -46,6 +47,8 @@ def data_fingerprint() -> str:
     Sert à savoir si le cache JSON correspond bien aux données actuelles. Recalculée seulement si un fichier change."""
     h = hashlib.sha1()
     for f in sorted(DATA.rglob("*.csv")):
+        if f.name.startswith("_"):      # fichiers de travail du scraper (ex. _cache_players.csv) : sans effet sur les simulations
+            continue
         st = f.stat()
         key = (str(f), st.st_mtime_ns, st.st_size)
         if key not in _fp_memo:
@@ -2383,9 +2386,16 @@ def write_run_bundle(rid: str, runs: list | None = None, meta_: dict | None = No
     return b
 
 
-def cache_specs(seasons: list[str]) -> list[tuple[str, int]]:
-    """Saison en cours (dernière des données) à la J10, puis saison précédente à la J0."""
-    specs = [(seasons[-1], CACHE_CUTOFF_CURRENT)]
+def last_played_round(m: pd.DataFrame, season: str) -> int:
+    mS = m[(m["season"] == season) & m["played"]]
+    return int(mS["round"].max()) if len(mS) else 0
+
+
+def cache_specs(seasons: list[str], m: pd.DataFrame | None = None) -> list[tuple[str, int]]:
+    """Saison en cours (dernière des données) depuis l'avant-dernière journée jouée, puis saison précédente à la J0."""
+    if m is None:
+        m, _ = load_matches()
+    specs = [(seasons[-1], max(last_played_round(m, seasons[-1]) - 1, 0))]
     if len(seasons) >= 2:
         specs.append((seasons[-2], 0))
     return specs
@@ -2430,7 +2440,7 @@ def build_cache(n: int = CACHE_SIMS, force: bool = False) -> list[str]:
             S = seasons[-1]
             mS = m[m["season"] == S]
             K = int(mS[mS["played"]]["round"].max()) if mS["played"].any() else 0
-            wanted = list(cache_specs(seasons))
+            wanted = list(cache_specs(seasons, m))
             if ((mS["round"] == K + 1) & ~mS["played"]).any():
                 wanted.append((S, K))            # fiche journaliste : J+suivante
             if K >= 1:
@@ -2445,7 +2455,7 @@ def build_cache(n: int = CACHE_SIMS, force: bool = False) -> list[str]:
             _cache_status("building", "Écriture des fichiers JSON…")
             load_data()
             fp, built = data_fingerprint(), time.strftime("%Y-%m-%d %H:%M:%S")
-            specs = cache_specs(seasons)
+            specs = cache_specs(seasons, m)
             runs = [{"id": _run_id(s, c, n), "season": s, "cutoff": c, "n": n, "file": f"{_run_id(s, c, n)}.json", "conditional": True} for s, c in specs]
             rids = [r["id"] for r in runs]
             for r in runs[1:]:

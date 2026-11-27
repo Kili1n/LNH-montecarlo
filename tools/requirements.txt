@@ -1,0 +1,5 @@
+# Dépendances du scraper et de la mise à jour hebdomadaire (en plus de ../requirements.txt)
+requests>=2.31
+beautifulsoup4>=4.12
+tqdm>=4.66
+pdfminer.six>=20231228

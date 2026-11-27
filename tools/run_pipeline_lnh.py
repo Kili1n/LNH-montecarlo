@@ -5,14 +5,8 @@ from pathlib import Path
 import requests
 from tqdm import tqdm
 
-from download_pdf_lnh import (
-    COMPETITION_ID,
-    DELAI_REQUETE as DELAI_DL,
-    SAISONS_ID,
-    creer_session as creer_session_dl,
-    trier_pdfs_a_telecharger,
-)
-from parser_pdf_lnh import parse_lnh_pdf
+from download_pdf_lnh import SAISONS_ID, telecharger_feuilles_saison
+from parser_pdf_lnh import generer_csvs
 from scrap_players_lnh import (
     DELAI_REQUETE as DELAI_SCRAP,
     charger_joueurs_uniques,
@@ -81,81 +75,29 @@ def ecrire_csv(chemin: Path, lignes: list[dict], fieldnames: list[str] | None = 
 # ÉTAPE 1 : TÉLÉCHARGEMENT DES PDF DE LA SAISON
 # ==============================================================================
 def etape_1_telecharger_pdfs(saison: str, dossier_pdfs: Path, rapport: dict):
+    """Délègue à download_pdf_lnh (calendrier, PDF manquants, calendrier_futur.csv, matchs_sans_pdf.csv)."""
     if saison not in SAISONS_ID:
         raise ValueError(f"Saison '{saison}' absente de SAISONS_ID.")
-
-    season_id = SAISONS_ID[saison]
-    dossier_pdfs.mkdir(parents=True, exist_ok=True)
-    session = creer_session_dl()
-
-    a_telecharger, total_joues, deja_presents = trier_pdfs_a_telecharger(
-        session, season_id, COMPETITION_ID, dossier_pdfs
-    )
-    rapport["matchs_calendrier"] = total_joues
-    rapport["pdfs_deja_presents"] = deja_presents
-
-    if not a_telecharger:
-        print(f"  [1/3 PDF] Déjà à jour ({deja_presents}/{total_joues} fichiers).")
-        return
-
-    telecharges = 0
-    total_dl = len(a_telecharger)
-    for index, (nom_pdf, pdf_url) in enumerate(
-        tqdm(a_telecharger, desc=f"  [1/3 PDF {saison}]", unit="pdf"), start=1
-    ):
-        chemin_pdf = dossier_pdfs / nom_pdf
-        try:
-            resp = session.get(pdf_url, timeout=20)
-            resp.raise_for_status()
-            if not resp.content.startswith(b"%PDF"):
-                log_temps_reel(
-                    rapport,
-                    f"[ERREUR PDF] [{index}/{total_dl}] PDF indisponible sur le serveur : {nom_pdf}",
-                )
-                time.sleep(DELAI_DL)
-                continue
-            chemin_pdf.write_bytes(resp.content)
-            telecharges += 1
-        except requests.RequestException as e:
-            log_temps_reel(
-                rapport,
-                f"[ERREUR RÉSEAU] [{index}/{total_dl}] Téléchargement {nom_pdf} : {e}",
-            )
-        time.sleep(DELAI_DL)
-
-    rapport["pdfs_telecharges"] = telecharges
+    avant = len(list(dossier_pdfs.glob("*.pdf"))) if dossier_pdfs.is_dir() else 0
+    telecharger_feuilles_saison(saison)
+    apres = len(list(dossier_pdfs.glob("*.pdf")))
+    rapport["pdfs_deja_presents"] = avant
+    rapport["pdfs_telecharges"] = apres - avant
 
 
 # ==============================================================================
 # ÉTAPE 2 : PARSING DES PDF -> match.csv & players_boxscore.csv
 # ==============================================================================
 def etape_2_parser_pdfs(saison: str, dossier_pdfs: Path, dossier_csv: Path, rapport: dict) -> Path:
-    fichiers_pdf = sorted(dossier_pdfs.glob("*.pdf"))
-    if not fichiers_pdf:
+    """Délègue à parser_pdf_lnh.generer_csvs (fusionne aussi calendrier_futur.csv et matchs_sans_pdf.csv)."""
+    if not list(dossier_pdfs.glob("*.pdf")):
         raise FileNotFoundError(f"Aucun PDF trouvé dans {dossier_pdfs}")
-
-    all_matches = []
-    all_players = []
-
-    for pdf_path in tqdm(fichiers_pdf, desc=f"  [2/3 Parsing {saison}]", unit="pdf"):
-        try:
-            m_row, p_rows = parse_lnh_pdf(pdf_path)
-            all_matches.append(m_row)
-            all_players.extend(p_rows)
-        except Exception as e:
-            log_temps_reel(rapport, f"[ERREUR PARSING] {pdf_path.name} : {e}")
-
-    if not all_matches or not all_players:
-        raise RuntimeError(f"Aucune donnée valide extraite depuis {dossier_pdfs}")
-
-    match_csv = dossier_csv / "match.csv"
+    generer_csvs(dossier_pdfs, dossier_csv)
     boxscore_csv = dossier_csv / "players_boxscore.csv"
-
-    ecrire_csv(match_csv, all_matches)
-    ecrire_csv(boxscore_csv, all_players)
-
-    rapport["matchs_extraits"] = len(all_matches)
-    rapport["lignes_boxscore"] = len(all_players)
+    if not boxscore_csv.is_file():
+        raise RuntimeError(f"Aucune donnée valide extraite depuis {dossier_pdfs}")
+    rapport["matchs_extraits"] = sum(1 for _ in open(dossier_csv / "match.csv", encoding="utf-8-sig")) - 1
+    rapport["lignes_boxscore"] = sum(1 for _ in open(boxscore_csv, encoding="utf-8-sig")) - 1
     return boxscore_csv
 
 
