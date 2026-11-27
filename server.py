@@ -27,6 +27,8 @@ MEMORY_LIMIT_MB = int(os.environ.get("MEMORY_LIMIT_MB", 0))   # plafond de l'hé
 AUTO_BUILD_CACHE = os.environ.get("AUTO_BUILD_CACHE") == "1"  # génération du cache au démarrage : désactivée par défaut
 ALLOW_KEEP_MATCHES = os.environ.get("ALLOW_KEEP_MATCHES") == "1"  # export sim_matches (≈ 900 Mo !) : désactivé sur le web
 PORT = int(os.environ.get("PORT", 8000))
+MAX_BODY_BYTES = 64 * 1024                                    # taille maximale d'un corps de requête POST
+MAX_ACTIVE_JOBS = int(os.environ.get("MAX_ACTIVE_JOBS", 2))   # simulations en cours + en attente, toutes origines confondues
 # -----------------------------------------------------------------------------
 HERE = Path(__file__).resolve().parent
 DATA, OUT, CACHE = (HERE / DATA_DIR).resolve(), (HERE / OUTPUT_DIR).resolve(), (HERE / CACHE_DIR).resolve()
@@ -2492,6 +2494,11 @@ def build_cache(n: int = CACHE_SIMS, force: bool = False) -> list[str]:
                 print(f"[cache] fiche journaliste non générée : {e}", flush=True)
             _write_json(CACHE / "default.json", {**first, "meta": meta()})
             _write_json(CACHE / "stamp.json", {"data_fp": fp, "built": built, "n": n, "runs": runs})
+            keep = {"default.json", "press.json", "stamp.json", "status.json"} | {r["file"] for r in runs} | {f"{r['id']}.cond.json" for r in runs}
+            for f in CACHE.glob("*.json"):       # bundles périmés (simulations lancées depuis le site, anciennes saisons) : pas de déchets versionnés
+                if f.name not in keep:
+                    f.unlink(missing_ok=True)
+                    print(f"[cache]   supprimé (périmé) : {f.name}", flush=True)
             for f in sorted(CACHE.glob("*.json")):
                 print(f"[cache]   {f.name} : {f.stat().st_size / 1024:.0f} Ko", flush=True)
         _cache_status("ready", built)
@@ -2642,7 +2649,12 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         parts = [x for x in urlparse(self.path).path.split("/") if x]
         try:
-            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+            ln = int(self.headers.get("Content-Length", 0))
+            if ln < 0 or ln > MAX_BODY_BYTES:      # un corps démesuré ne doit pas être lu en mémoire (512 Mo de RAM sur Render)
+                return self.send({"error": "Corps de requête trop volumineux"}, 413)
+            body = json.loads(self.rfile.read(ln) or b"{}")
+            if not isinstance(body, dict):
+                raise ValueError
         except Exception:
             return self.send({"error": "Corps de requête JSON invalide"}, 400)
         if parts[:2] == ["api", "sim"] and len(parts) == 4 and parts[3] == "conditional":
@@ -2659,10 +2671,20 @@ class H(BaseHTTPRequestHandler):
         if parts != ["api", "simulate"]:
             return self.send({"error": "not found"}, 404)
         try:
-            season, cutoff = str(body["season"]), max(0, int(body.get("cutoff_round", 0)))
+            season, cutoff = str(body["season"]), int(body.get("cutoff_round", 0))
             n = int(np.clip(int(body.get("n_simulations", 5000)), 200, max(MAX_SIMS, 200)))
+            m_, seasons_ = load_matches()
+            if season not in seasons_:
+                return self.send({"error": f"Saison inconnue : {season[:20]}"}, 400)
+            n_rounds = int(m_.loc[m_["season"] == season, "round"].max())
+            cutoff = int(np.clip(cutoff, 0, n_rounds))
         except Exception:
             return self.send({"error": "Paramètres invalides"}, 400)
+        active = sum(1 for j in JOBS.values() if j.get("status") in ("queued", "running"))
+        if active >= MAX_ACTIVE_JOBS:            # chaque simulation occupe ~220 Mo et le créneau est unique : on ne laisse pas la file grossir
+            return self.send({"error": "Une simulation est déjà en cours et la file d'attente est pleine : réessayez dans un instant."}, 429)
+        for k in [k for k, v in JOBS.items() if v.get("status") in ("done", "error", "cancelled")][:-20]:   # on ne garde que les 20 derniers jobs terminés
+            JOBS.pop(k, None); _JOB_CTL.pop(k, None)
         jid = uuid.uuid4().hex[:8]
         JOBS[jid] = {"status": "queued", "log": [], "run": None}
         _JOB_CTL[jid] = {"cancel": threading.Event(), "proc": None}
