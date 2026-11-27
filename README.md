@@ -138,3 +138,7 @@ Hébergé sur **Render** (service web Python, démarrage `python server.py`), co
 * Évaluation chiffrée de la calibration (score de Brier, diagramme de fiabilité) affichée sur le site.
 
 *Données : feuilles de match publiques de la LNH. Projet indépendant, non affilié à la Ligue Nationale de Handball.*
+
+## Audit
+
+Le rapport d'audit complet (méthode, chiffres, corrections, limites, décisions en attente) est dans [AUDIT.md](AUDIT.md). `python tools/audit_data.py` rejoue le contrôle d'intégrité des CSV.
