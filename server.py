@@ -3,7 +3,7 @@
 Lancer :  python server.py   puis ouvrir http://localhost:8000"""
 from __future__ import annotations
 
-import argparse, contextlib, gzip, hashlib, io, json, math, os, re, subprocess, sys, threading, time, unicodedata, uuid
+import argparse, contextlib, gzip, hashlib, io, json, math, os, re, shutil, subprocess, sys, threading, time, unicodedata, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -1301,25 +1301,44 @@ def _run_id(season: str, cutoff: int, n: int) -> str:
 
 _SIM_THREAD_SLOT = threading.Semaphore(1)
 _HELD_LOCKS: list = []
+_JOB_CTL: dict[str, dict] = {}      # contrôle des simulations lancées depuis le site : {"cancel": Event, "proc": Popen | None}
+
+
+class JobCancelled(Exception):
+    """Simulation annulée depuis le site."""
 
 
 class _sim_slot:
     """Une seule simulation à la fois, tous processus confondus (serveur web + générateur de cache) :
     chacune occupe ~220 Mo, et deux en parallèle dépassent un plafond de 512 Mo."""
 
-    def __init__(self, hold_until_exit: bool = False):
+    def __init__(self, hold_until_exit: bool = False, cancel: threading.Event | None = None):
+        self.cancel = cancel
         # hold_until_exit : le créneau n'est rendu qu'à la mort du processus. Sous Linux le noyau libère la mémoire d'un processus
         # AVANT de fermer ses fichiers : la simulation suivante ne démarre donc jamais pendant que celui-ci occupe encore sa mémoire.
         self.hold = hold_until_exit
 
     def __enter__(self):
-        _SIM_THREAD_SLOT.acquire()
+        while not _SIM_THREAD_SLOT.acquire(timeout=0.5):      # file d'attente interruptible
+            if self.cancel is not None and self.cancel.is_set():
+                raise JobCancelled()
         self._f = None
         try:
             import fcntl
             OUT.mkdir(parents=True, exist_ok=True)
             self._f = open(OUT / ".sim.lock", "w")
-            fcntl.flock(self._f, fcntl.LOCK_EX)
+            while True:
+                try:
+                    fcntl.flock(self._f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if self.cancel is not None and self.cancel.is_set():
+                        self._f.close()
+                        _SIM_THREAD_SLOT.release()
+                        raise JobCancelled()
+                    time.sleep(0.5)
+        except JobCancelled:
+            raise
         except Exception:   # Windows : verrou de thread seul
             pass
         return self
@@ -1336,7 +1355,7 @@ class _sim_slot:
             _SIM_THREAD_SLOT.release()
 
 
-def _wait_for_memory(on_line=None, timeout: float | None = None) -> None:
+def _wait_for_memory(on_line=None, timeout: float | None = None, cancel: threading.Event | None = None) -> None:
     """Attend que la mémoire libre permette de lancer une simulation ; échoue proprement plutôt que de faire tuer le serveur."""
     timeout = float(os.environ.get("MEM_WAIT_S", 150)) if timeout is None else timeout
     t0 = time.time()
@@ -1349,10 +1368,14 @@ def _wait_for_memory(on_line=None, timeout: float | None = None) -> None:
         if on_line:
             on_line(f"En attente de mémoire libre ({avail:.0f} Mo disponibles, {MIN_FREE_MB} Mo nécessaires)…")
         sim.trim_memory()
-        time.sleep(4)
+        for _ in range(8):                                    # 4 s, mais l'annulation est prise en compte tout de suite
+            if cancel is not None and cancel.is_set():
+                raise JobCancelled()
+            time.sleep(0.5)
 
 
-def _simulate(season: str, cutoff: int, n: int, keep_matches: bool = False, on_line=None, inproc: bool = False, slot_held: bool = False) -> str:
+def _simulate(season: str, cutoff: int, n: int, keep_matches: bool = False, on_line=None, inproc: bool = False, slot_held: bool = False,
+              ctl: dict | None = None) -> str:
     """Lance simulation_montecarlo.py et renvoie l'identifiant du run.
     Sous-processus par défaut (la mémoire est rendue à la fin) ; inproc=True dans le générateur de cache, qui s'exécute
     déjà dans son propre processus : on évite ainsi de cumuler ses ~140 Mo avec ceux de la simulation."""
@@ -1365,8 +1388,11 @@ def _simulate(season: str, cutoff: int, n: int, keep_matches: bool = False, on_l
         cmd.append("--no-export-matches")
     if on_line:
         on_line("En file d'attente : une autre simulation est peut-être en cours…")
-    with (contextlib.nullcontext() if slot_held else _sim_slot()):
-        _wait_for_memory(on_line)
+    cancel = ctl["cancel"] if ctl else None
+    with (contextlib.nullcontext() if slot_held else _sim_slot(cancel=cancel)):
+        if cancel is not None and cancel.is_set():
+            raise JobCancelled()
+        _wait_for_memory(on_line, cancel=cancel)
         if on_line:
             on_line("Simulation en cours…")
         if inproc:
@@ -1375,19 +1401,48 @@ def _simulate(season: str, cutoff: int, n: int, keep_matches: bool = False, on_l
             sim.trim_memory()
         else:
             p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=HERE)
+            if ctl is not None:
+                ctl["proc"] = p
+                if cancel.is_set():               # annulée entre-temps
+                    p.kill()
             for line in p.stdout:
                 if on_line:
                     on_line(line.rstrip())
-            if p.wait() != 0:
+            rc = p.wait()
+            if cancel is not None and cancel.is_set():
+                raise JobCancelled()
+            if rc != 0:
                 raise RuntimeError(f"La simulation {run_id} a échoué")
     (OUT / run_id / "data_fp.txt").write_text(data_fingerprint())
     return run_id
 
 
+def cancel_job(jid: str) -> dict:
+    """Annule une simulation lancée depuis le site : sortie de la file d'attente, ou arrêt du processus en cours (mémoire rendue)."""
+    job, ctl = JOBS.get(jid), _JOB_CTL.get(jid)
+    if job is None or ctl is None:
+        return {"status": "unknown"}
+    if job.get("status") in ("done", "error", "cancelled", "finalizing"):
+        return {"status": job["status"], "too_late": job["status"] in ("done", "finalizing")}
+    ctl["cancel"].set()
+    p = ctl.get("proc")
+    if p is not None and p.poll() is None:
+        try:
+            p.terminate()
+            threading.Timer(3.0, lambda: p.poll() is None and p.kill()).start()
+        except Exception:
+            pass
+    job["log"].append("Annulation demandée…")
+    return {"status": "cancelling"}
+
+
 def run_job(jid: str, season: str, cutoff: int, n: int, keep_matches: bool):
     job = JOBS[jid]
+    ctl = _JOB_CTL.setdefault(jid, {"cancel": threading.Event(), "proc": None})
     n = int(max(1, min(n, MAX_SIMS)))
     job.update(status="queued", run=_run_id(season, cutoff, n), started=time.time())
+    run_dir_ = OUT / _run_id(season, cutoff, n)
+    existed = run_dir_.is_dir()
 
     def on_line(line: str):
         job["log"].append(line)
@@ -1395,7 +1450,7 @@ def run_job(jid: str, season: str, cutoff: int, n: int, keep_matches: bool):
         if line.startswith("Simulation en cours"):
             job["status"] = "running"
     try:
-        rid = _simulate(season, cutoff, n, keep_matches, on_line)
+        rid = _simulate(season, cutoff, n, keep_matches, on_line, ctl=ctl)
         job["status"] = "finalizing"   # la simulation est finie (créneau libéré) : seule l'écriture des JSON reste à faire
         job["log"].append("Écriture des fichiers…")
         try:   # fichiers statiques du run (affichage instantané + simulateur conditionnel dans le navigateur)
@@ -1403,9 +1458,15 @@ def run_job(jid: str, season: str, cutoff: int, n: int, keep_matches: bool):
         except Exception as e:  # noqa
             job["log"].append(f"Bundle JSON non écrit : {e}")
         job["status"] = "done"
+    except JobCancelled:
+        if not existed:     # sortie partielle d'une simulation interrompue : on ne la laisse pas traîner
+            shutil.rmtree(run_dir_, ignore_errors=True)
+        job["log"].append("Simulation annulée.")
+        job["status"] = "cancelled"
     except Exception as e:  # noqa
         job["log"].append(str(e)); job["status"] = "error"
     finally:
+        ctl["proc"] = None
         sim.trim_memory()
 
 
@@ -2561,6 +2622,8 @@ class H(BaseHTTPRequestHandler):
                 return self.send({"error": str(e)}, 400)
             except Exception as e:  # noqa
                 return self.send({"error": str(e)}, 500)
+        if parts[:2] == ["api", "jobs"] and len(parts) == 4 and parts[3] == "cancel":
+            return self.send(cancel_job(parts[2]))
         if parts != ["api", "simulate"]:
             return self.send({"error": "not found"}, 404)
         try:
@@ -2570,6 +2633,7 @@ class H(BaseHTTPRequestHandler):
             return self.send({"error": "Paramètres invalides"}, 400)
         jid = uuid.uuid4().hex[:8]
         JOBS[jid] = {"status": "queued", "log": [], "run": None}
+        _JOB_CTL[jid] = {"cancel": threading.Event(), "proc": None}
         threading.Thread(target=run_job, args=(jid, season, cutoff, n, bool(body.get("keep_matches"))), daemon=True).start()
         self.send({"job": jid})
 

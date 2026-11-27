@@ -50,6 +50,7 @@ Un document imprimable (PDF) avant chaque journée : l'affiche, l'enjeu chiffré
 6. **Mise à jour dynamique.** Pendant la saison simulée, les forces sont réajustées match après match.
 7. **Règlement officiel.** Barème à 2 points ; égalités départagées par mini-championnat en confrontations directes (réappliqué récursivement), puis différence de buts particulière, puis générale.
 8. **Validation.** Un mode de *backtest* (`--backtest-seasons`) rejoue des saisons passées pour comparer prévisions et résultats réels.
+9. **Absences aléatoires (optionnel, désactivé par défaut).** `--param inj_enabled=true` tire dans chaque simulation, indépendamment, des absences de joueurs (blessures et indisponibilités) : taux de 10,8 % par journée pour un joueur régulier et durées issues d'une estimation de Kaplan-Meier sur 7 532 absences observées entre 2007 et 2026. L'effet passe par le poids offensif et défensif du joueur dans son équipe, centré sur l'absentéisme moyen déjà contenu dans les ratings. Mesuré sur un backtest de 19 saisons, il n’améliore pas la précision (légère dégradation du score de probabilité du rang réel et des points attendus) : il reste donc désactivé.
 
 ---
 

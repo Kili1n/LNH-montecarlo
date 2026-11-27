@@ -405,7 +405,7 @@ tr[data-mid]:hover td{background:var(--tint)}
 <label>Simulations<select id="fN"><option>1000</option><option>2000</option><option selected>5000</option><option>10000</option><option>20000</option></select></label>
 
 <button class="go" id="fGo" type="submit" style="margin-left:auto">Lancer la simulation</button></div>
-<div class="prog" id="prog"><i></i></div><div class="log" id="log"></div>
+<div class="prog" id="prog"><i></i></div><div class="log" id="log"></div><button type="button" class="alt" id="fCancel" style="display:none;margin-top:8px">Annuler le lancement</button>
 <div class="row" style="margin:14px 0 0"><label>Résultats déjà calculés<select id="runSel"></select></label></div>
 <div class="sync" id="mcSync" role="status">Aucun résultat affiché.</div></form></section>
 
@@ -1275,12 +1275,16 @@ async function refreshRuns(load){
   else syncNotice();
   return RUNS;
 }
-$('#simForm').onsubmit=async e=>{e.preventDefault();const b=$('#fGo');b.disabled=true;$('#prog').style.display='block';$('#log').textContent='Démarrage…';
+$('#simForm').onsubmit=async e=>{e.preventDefault();const b=$('#fGo'),cb=$('#fCancel');b.disabled=true;$('#prog').style.display='block';$('#log').textContent='Démarrage…';cb.style.display='';cb.disabled=false;cb.textContent='Annuler le lancement';
+const endUi=()=>{b.disabled=false;cb.style.display='none';$('#prog').style.display='none'};
 try{const {job}=await api('/api/simulate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({season:$('#fSeason').value,cutoff_round:+$('#fCut').value,n_simulations:+$('#fN').value})});
+cb.onclick=async()=>{cb.disabled=true;cb.textContent='Annulation…';try{await api('/api/jobs/'+job+'/cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})}catch(x){cb.disabled=false;cb.textContent='Annuler le lancement'}};
 const t=setInterval(async()=>{try{const j=await api('/api/jobs/'+job);$('#log').textContent=(j.log||[]).slice(-1)[0]||'Simulation en cours…';
-if(j.status==='done'){clearInterval(t);b.disabled=false;$('#prog').style.display='none';$('#log').textContent='Terminé.';await refreshRuns(false);$('#runSel').value=j.run;loadRun(j.run)}
-if(j.status==='error'){clearInterval(t);b.disabled=false;$('#prog').style.display='none';$('#log').innerHTML='<span class="err">Échec : '+esc((j.log||[]).slice(-3).join(' | '))+'</span>'}}catch(x){clearInterval(t);b.disabled=false;$('#prog').style.display='none';$('#log').innerHTML='<span class="err">'+esc(x.message)+'</span>'}},1200)}
-catch(x){b.disabled=false;$('#prog').style.display='none';$('#log').innerHTML='<span class="err">'+esc(x.message)+'</span>'}};
+if(j.status==='finalizing')cb.style.display='none';
+if(j.status==='done'){clearInterval(t);endUi();$('#log').textContent='Terminé.';await refreshRuns(false);$('#runSel').value=j.run;loadRun(j.run)}
+if(j.status==='cancelled'){clearInterval(t);endUi();$('#log').textContent='Simulation annulée.'}
+if(j.status==='error'){clearInterval(t);endUi();$('#log').innerHTML='<span class="err">Échec : '+esc((j.log||[]).slice(-3).join(' | '))+'</span>'}}catch(x){clearInterval(t);endUi();$('#log').innerHTML='<span class="err">'+esc(x.message)+'</span>'}},1200)}
+catch(x){endUi();$('#log').innerHTML='<span class="err">'+esc(x.message)+'</span>'}};
 
 function showRun(sim,up,id){
   SIM=sim;UP=up;SIM.id=id;UP.sort((a,b)=>a.round-b.round||a.date.localeCompare(b.date));

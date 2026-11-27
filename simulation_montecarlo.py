@@ -325,11 +325,29 @@ class ModelParams:
     absence_core_presence: float = 0.5
     gk_weight: float = 1.8
     use_roster_turnover: bool = True
+    # --- Absences aléatoires (blessures et indisponibilités) : DÉSACTIVÉES par défaut (--param inj_enabled=true) ---
+    # Calibrées sur les feuilles de match 2007-2026 : 7 532 épisodes d'absence pour 69 957 matchs de joueurs « réguliers »
+    # (au moins 60 % des 8 matchs précédents, présents au match d'avant). Durées : voir INJ_DURATION_PMF.
+    inj_enabled: bool = False
+    inj_rate: float = 0.108             # probabilité par journée qu'un joueur régulier, présent au match précédent, manque le suivant
+    inj_dur_mult: float = 1.0           # multiplicateur de durée (1 = durées observées)
+    inj_min_presence: float = 0.5       # présence minimale pour entrer dans le tirage (comme absence_core_presence)
+    inj_max_roster: int = 16            # nombre maximal de joueurs tirés par club
+    inj_center: bool = True             # centre l'effet sur l'absentéisme moyen (déjà contenu dans les ratings) : n'ajoute que de la dispersion
     # --- Incertitude Monte Carlo ---
     rating_noise_sd: float = 0.024
     promoted_noise_mult: float = 1.65
     # --- Classement ---
     reapply_h2h: bool = True
+
+
+# Loi des durées d'absence (en journées), estimée par Kaplan-Meier sur les absences observées (les absences non terminées en fin de
+# saison, départs compris, sont traitées comme censurées). INJ_DURATION_PMF[k-1] = P(durée = k) pour k = 1..20 ;
+# INJ_TAIL_PROB = probabilité d'une absence « longue » (> 20 journées), traitée comme absence jusqu'à la fin de la saison.
+INJ_DURATION_PMF = (0.5495, 0.1739, 0.0773, 0.0476, 0.0257, 0.0190, 0.0124, 0.0090, 0.0051, 0.0040,
+                    0.0041, 0.0016, 0.0021, 0.0035, 0.0010, 0.0006, 0.0007, 0.0009, 0.0000, 0.0000)
+INJ_TAIL_PROB = 1.0 - sum(INJ_DURATION_PMF)
+INJ_TAIL_LEN = 99
 
 
 def parse_param_overrides(items: Optional[list[str]]) -> dict:
@@ -1104,6 +1122,133 @@ def compute_roster_turnover(
         adj_rev = p.season_reversion * (0.75 + 0.35 * share_retained)
         out[team] = float(np.clip(adj_rev, 0.45, 0.90))
     return out
+
+
+def build_injury_rosters(
+    box: Optional[pd.DataFrame],
+    all_matches: pd.DataFrame,
+    fx: pd.DataFrame,
+    teams: list[str],
+    s_idx: int,
+    cutoff_round: int,
+    p: ModelParams,
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Pour chaque club : parts offensives et défensives (somme ≤ 1) des joueurs réguliers, calculées sur ses 30 derniers matchs connus
+    (saison en cours jusqu'au cutoff, complétée par la saison précédente). Les joueurs déjà absents au cutoff (gérés par
+    `compute_availability`) et, quand `current_club` est connu, ceux qui ont quitté le club sont exclus du tirage."""
+    empty = (np.zeros(0), np.zeros(0))
+    out = [empty for _ in teams]
+    if box is None or box.empty:
+        return out
+    played = all_matches[all_matches["played"] & ((all_matches["season_idx"] < s_idx) |
+                                                 ((all_matches["season_idx"] == s_idx) & (all_matches["round"] <= cutoff_round)))]
+    for t_idx, team in enumerate(teams):
+        tm = played[(played["home_team"] == team) | (played["away_team"] == team)].sort_values(["season_idx", "round"], kind="mergesort")
+        ids = tm["match_id"].astype(str).tolist()[-30:]
+        if len(ids) < max(p.absence_min_games, p.absence_lookback + 1):
+            continue
+        tb = box[(box["team"] == team) & box["match_id"].isin(set(ids))]
+        if tb.empty:
+            continue
+        recent_ids = set(ids[-p.absence_lookback:])
+        g = _value_table(tb, len(ids), p)
+        if g is None:
+            continue
+        tot_off, tot_def = float(g["off_val"].sum()), float(g["def_val"].sum())
+        pl_flag = tb["played_match"] if "played_match" in tb.columns else (tb["seconds_played"] > 0)
+        rec = tb[tb["match_id"].isin(recent_ids) & pl_flag.astype(bool)].groupby(["last_name", "first_name"]).size().rename("rec")
+        g = g.merge(rec.reset_index(), on=["last_name", "first_name"], how="left")
+        g["rec"] = g["rec"].fillna(0)
+        keep = (g["presence"] >= p.inj_min_presence) & ~((g["presence"] >= p.absence_core_presence) & (g["rec"] <= 0))
+        if "current_club" in tb.columns:      # a quitté le club (info players.csv, ~1/3 des joueurs)
+            cur = tb.groupby(["last_name", "first_name"])["current_club"].last().rename("cur").reset_index()
+            g = g.merge(cur, on=["last_name", "first_name"], how="left")
+            left = g["cur"].notna() & (g["cur"].fillna("").map(_sort_key) != _sort_key(team))
+            keep &= ~left
+        g = g[keep]
+        if g.empty:
+            continue
+        off = (g["off_val"] / tot_off).to_numpy() if tot_off > 0 else np.zeros(len(g))
+        dfn = (g["def_val"] / tot_def).to_numpy() if tot_def > 0 else np.zeros(len(g))
+        order = np.argsort(-np.maximum(off, dfn))[: p.inj_max_roster]
+        out[t_idx] = (off[order].astype(np.float32), dfn[order].astype(np.float32))
+    return out
+
+
+def sample_injury_penalties(
+    seed: Optional[int],
+    rosters: list[tuple[np.ndarray, np.ndarray]],
+    n_sims: int,
+    n_rounds: int,
+    p: ModelParams,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Tire, INDÉPENDAMMENT dans chaque simulation, les absences de chaque joueur de chaque club sur les `n_rounds` journées à venir.
+    Un joueur sain commence une absence avec la probabilité `inj_rate` (pas de nouvelle absence s'il vient de revenir) ; sa durée suit
+    la loi observée (INJ_DURATION_PMF + queue « fin de saison »).
+    Retour : pénalités log offensive et défensive, tableaux float32 (club, simulation, journée) ; elles s'ajoutent aux malus d'absence
+    existants (même échelle : `absence_off_per_share` / `absence_def_per_share`). Générateur séparé de celui des scores : activer ou non
+    les blessures ne décale pas les tirages de scores."""
+    rng = np.random.default_rng([0 if seed is None else int(seed), 91823])
+    T = len(rosters)
+    pen_off = np.zeros((T, n_sims, n_rounds), dtype=np.float32)
+    pen_def = np.zeros((T, n_sims, n_rounds), dtype=np.float32)
+    pmf = np.array(list(INJ_DURATION_PMF) + [INJ_TAIL_PROB], dtype=float)
+    pmf = pmf / pmf.sum()
+    lens = np.array(list(range(1, len(INJ_DURATION_PMF) + 1)) + [INJ_TAIL_LEN])
+    lens = np.maximum(1, np.rint(lens * p.inj_dur_mult)).astype(np.int16)
+    for t, (off_sh, def_sh) in enumerate(rosters):
+        K = len(off_sh)
+        if K == 0:
+            continue
+        rem = np.zeros((n_sims, K), dtype=np.int16)          # journées d'absence restantes
+        was_out = np.zeros((n_sims, K), dtype=bool)          # absent à la journée précédente
+        for r in range(n_rounds):
+            can = (rem == 0) & ~was_out
+            starts = can & (rng.random((n_sims, K)) < p.inj_rate)
+            n_st = int(starts.sum())
+            if n_st:
+                rem[starts] = lens[rng.choice(len(lens), size=n_st, p=pmf)]
+            out_now = rem > 0
+            pen_off[t, :, r] = out_now @ off_sh
+            pen_def[t, :, r] = out_now @ def_sh
+            rem = np.maximum(rem - 1, 0).astype(np.int16)
+            was_out = out_now
+        if p.inj_center:                                      # absentéisme moyen déjà intégré aux ratings : on ne garde que l'écart
+            pen_off[t] -= pen_off[t].mean(axis=0, keepdims=True)
+            pen_def[t] -= pen_def[t].mean(axis=0, keepdims=True)
+    # effet sur les buts attendus (échelle du malus d'absence déterministe) : une défense affaiblie fait monter les buts de l'adversaire
+    return (-p.absence_off_per_share * pen_off).astype(np.float32), (p.absence_def_per_share * pen_def).astype(np.float32)
+
+
+def _value_table(past_b: pd.DataFrame, n_past: int, p: ModelParams) -> Optional[pd.DataFrame]:
+    """Valeur offensive / défensive de chaque joueur d'un club sur une série de matchs (présence, impact moyen)."""
+    raw_off_pts = (
+        past_b["goals"]
+        + 0.5 * (past_b["dp_adj"] if "dp_adj" in past_b.columns else past_b["dp"])
+        - 0.6 * past_b["bp"]
+        + 0.35 * past_b["impact_score"].clip(lower=0.0)
+    ).clip(lower=0.0)
+    raw_def_pts = np.where(
+        past_b["is_gk"],
+        (1.2 * past_b["saves"] + 0.5 * past_b["impact_score"].clip(lower=0.0)).clip(lower=0.0) * p.gk_weight,
+        (1.2 * past_b["br"] + 1.0 * past_b["tc"] + 0.35 * past_b["impact_score"].clip(lower=0.0)).clip(lower=0.0),
+    )
+    work = past_b.assign(
+        played_flag=(past_b["played_match"] if "played_match" in past_b.columns else (past_b["seconds_played"] > 0)).astype(int),
+        _off=raw_off_pts,
+        _def=raw_def_pts,
+    )
+    g = (
+        work.groupby(["last_name", "first_name"])
+        .agg(games=("played_flag", "sum"), off_sum=("_off", "sum"), def_sum=("_def", "sum"), gk=("is_gk", "max"))
+        .reset_index()
+    )
+    g["presence"] = g["games"] / max(n_past, 1)
+    g["off_val"] = (g["off_sum"] / g["games"].clip(lower=1)) * g["presence"]
+    g["def_val"] = (g["def_sum"] / g["games"].clip(lower=1)) * g["presence"]
+    if float(g["off_val"].sum()) <= 0 and float(g["def_val"].sum()) <= 0:
+        return None
+    return g
 
 
 def compute_availability(
@@ -2049,8 +2194,11 @@ def simulate_season(
     seed: Optional[int] = None,
     season: str = "",
     keep_match_details: bool = True,
+    injury_rosters: Optional[list[tuple[np.ndarray, np.ndarray]]] = None,
 ) -> SimulationStore:
-    """keep_match_details=False : ne conserve pas les 4 tableaux offRTG/defRTG par match (≈ 30 Mo pour 10 000
+    """injury_rosters : parts offensives / défensives des joueurs par club (voir build_injury_rosters) ; avec `p.inj_enabled`, des
+    absences aléatoires indépendantes sont tirées dans chaque simulation.
+    keep_match_details=False : ne conserve pas les 4 tableaux offRTG/defRTG par match (≈ 30 Mo pour 10 000
     simulations), qui ne servent qu'à l'export sim_matches."""
     rng = np.random.default_rng(seed)
     S, M, T = n_simulations, len(fx), len(dc.teams)
@@ -2077,6 +2225,14 @@ def simulate_season(
     noise_scale = np.where(dc.is_promoted, p.rating_noise_sd * p.promoted_noise_mult, p.rating_noise_sd)
     noise_done = p.rating_noise_sd <= 0
 
+    inj_off = inj_def = None
+    inj_col: dict[int, int] = {}
+    if p.inj_enabled and injury_rosters and any(len(o) for o, _ in injury_rosters):
+        future_rounds = sorted({int(r) for r in R if r > cutoff_round})
+        inj_col = {r: j for j, r in enumerate(future_rounds)}
+        if future_rounds:
+            inj_off, inj_def = sample_injury_penalties(seed, injury_rosters, S, len(future_rounds), p)
+
     for i in range(M):
         if not noise_done and R[i] > cutoff_round:
             state.alpha += rng.normal(0.0, noise_scale[None, :], size=state.alpha.shape)
@@ -2084,7 +2240,12 @@ def simulate_season(
             noise_done = True
 
         h, a = int(H[i]), int(A[i])
-        lh, la = predict_dc(state, h, a, AOH[i], AOA[i], ADH[i], ADA[i], RD[i], dc, p)
+        aoh, aoa, adh, ada = AOH[i], AOA[i], ADH[i], ADA[i]
+        if inj_off is not None and int(R[i]) in inj_col:          # absences aléatoires : un vecteur par simulation
+            jc = inj_col[int(R[i])]
+            aoh, aoa = aoh + inj_off[h, :, jc], aoa + inj_off[a, :, jc]
+            adh, ada = adh + inj_def[h, :, jc], ada + inj_def[a, :, jc]
+        lh, la = predict_dc(state, h, a, aoh, aoa, adh, ada, RD[i], dc, p)
 
         if keep_match_details:
             off_h_all[:, i] = np.exp(dc.mu_eff + state.alpha[:, h])
@@ -2209,6 +2370,8 @@ def rank_metrics(comp: pd.DataFrame) -> dict[str, float]:
         "Exact_rank_share": float((d == 0).mean()),
         "MAE_points": float(comp["Pts_Diff"].abs().mean()),
         "Mean_P_Real_Rank": float(comp["P_Real_Rank"].mean()),
+        "Log_score_rank": float(-np.log(np.clip(comp["P_Real_Rank"].to_numpy(dtype=float), 1e-4, None)).mean()),
+        "Within3_share": float((np.abs(d) <= 3).mean()),
         "CI90_coverage": float(comp["In_90_CI"].mean()),
     }
 
@@ -2293,7 +2456,9 @@ def run_pipeline(
     real = compute_standings(fx, teams, p.reapply_h2h)
 
     trim_memory()
-    store = simulate_season(fx, dc, p, n_simulations, cutoff_round, seed, season, keep_match_details=keep_match_details)
+    inj_rosters = build_injury_rosters(box, all_matches, fx, teams, s_idx, cutoff_round, p) if p.inj_enabled else None
+    store = simulate_season(fx, dc, p, n_simulations, cutoff_round, seed, season, keep_match_details=keep_match_details,
+                            injury_rosters=inj_rosters)
     agg, rank_probs = aggregate_simulation(store, min(n_relegated, len(teams) - 1), 3, top_k, pred_by)
     comp = build_comparison(real, agg, rank_probs, teams, fx)
 
@@ -2368,6 +2533,9 @@ def run_multi_season_backtest(
             "MAE_Rank": rm.get("MAE_rank", np.nan),
             "Spearman": rm.get("Spearman", np.nan),
             "MAE_Pts": rm.get("MAE_points", np.nan),
+            "Within3": rm.get("Within3_share", np.nan),
+            "P_RealRank": rm.get("Mean_P_Real_Rank", np.nan),
+            "LogScore": rm.get("Log_score_rank", np.nan),
             "CI90_Cov": rm.get("CI90_coverage", np.nan),
         })
     return pd.DataFrame(summary_rows)
