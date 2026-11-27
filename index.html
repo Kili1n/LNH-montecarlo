@@ -896,7 +896,7 @@ async function openPlayerModal(name){
       <div id="radarBox"></div></div>`;
 
     const bestCard=`<div class="card"><h4 style="margin:0 0 8px;font-size:15px">Meilleurs matchs sur la période</h4>
-      ${d.best_games.map(g=>`<div class="rank" style="grid-template-columns:1fr auto"><div><b>${d.is_gk?`${g.saves}/${g.faced} arrêts`:`${g.goals}/${g.shots} buts`}</b> vs ${esc(g.opponent)} ${g.score?`(${g.score})`:''}<br><small>${esc(g.date)} · ${esc(g.season)} · ${esc(g.team)}</small></div><div style="text-align:right"><b class="num">${g.note!=null?fmt(g.note,2):'–'}</b><br><i>note /10</i>${g.lnh_score!=null?`<br><small>score LNH ${fmt(g.lnh_score,1)}</small>`:''}</div></div>`).join('')}
+      ${d.best_games.map(g=>`<div class="rank" style="grid-template-columns:1fr auto"><div><b>${d.is_gk?`${g.saves}/${g.faced} arrêts`:`${g.goals}/${g.shots} buts`}</b> vs ${esc(g.opponent)} ${g.score?`(${g.score})`:''}<br><small>${esc(g.date)} · ${esc(g.season)} · ${esc(g.team)}</small></div><div style="text-align:right"><b class="num">${g.note!=null?fmt(g.note,2):'–'}</b><br><i>note /10</i></div></div>`).join('')}
     </div>`;
 
     const histCard=d.seasons_history.length?`<div class="card"><h4 style="margin:0 0 8px;font-size:15px">Parcours saison par saison</h4>
@@ -1056,7 +1056,7 @@ const EXP_COLS={
   ],
   players:[
     ['player','Joueur','player'],['team','Club','team'],['goals_shots','Buts/Tirs','goals'],
-    ['saves_faced','Arrêts','saves'],['note','Note /10','note'],['lnh_score','Score LNH','lnh_score'],['minutes','Temps','seconds_played'],
+    ['saves_faced','Arrêts','saves'],['note','Note /10','note'],['minutes','Temps','seconds_played'],
     ['ast','Passes D.','ast'],['br','B. récup.','br'],['bp','B. perd.','bp'],['yc','Avert.','yc'],['2min','2 min','2min'],['rc','Rouge','rc'],
     ['opponent','Adversaire','opponent'],['date','Date','date'],['season','Saison','season'],['round','J.','round']
   ]

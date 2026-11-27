@@ -210,7 +210,7 @@ def load_data():
 
 
 _PLAYED_COLS = ["match_id", "full_name", "team", "opponent", "date", "score", "season", "season_idx", "round", "is_gk", "goals", "shots",
-                "goals_7m", "shots_7m", "saves", "shots_faced", "saves_7m", "shots_faced_7m", "ast", "ast_ok", "yc", "rc", "br", "tc", "bp", "2min", "match_note", "lnh_score",
+                "goals_7m", "shots_7m", "saves", "shots_faced", "saves_7m", "shots_faced_7m", "ast", "ast_ok", "yc", "rc", "br", "tc", "bp", "2min", "match_note",
                 "def_note", "impact_def", "est_seconds"]
 
 
@@ -773,8 +773,7 @@ def compute_records(seasons_raw: str = "all") -> dict:
                 p_top("saves", "Plus d'arrêts", "arrêts", lambda r: f"{int(r.saves)}/{int(r.shots_faced)} {base(r)}", mask=gk_mask),
                 p_top("saves_7m", "Plus d'arrêts sur 7 m", "arrêts à 7 m", lambda r: f"{int(r.saves_7m)}/{int(r.shots_faced_7m)} {base(r)}", mask=gk_mask),
                 p_top("save_ratio", "Meilleur % d'arrêts (15 tirs minimum)", "% d'arrêts", lambda r: f"{int(r.saves)}/{int(r.shots_faced)} {base(r)}", d=1, mask=gk_mask),
-                p_top("match_note", "Meilleure note /10 sur un match (modèle du site)", "/ 10", lambda r: f"{base(r)}" + (f" · score LNH officiel {r.lnh_score:.1f}".replace(".", ",") if r.lnh_score > 0 else ""), d=2),
-                p_top("lnh_score", "Meilleur score LNH officiel sur un match (depuis 2023/24)", "pts", base, d=1),
+                p_top("match_note", "Meilleure note /10 sur un match", "/ 10", lambda r: f"{base(r)}", d=2),
             ]})
 
             # ---- 5. Joueurs : saison & série --------------------------------
@@ -1036,7 +1035,6 @@ def api_player_detail(qs: dict) -> dict:
         "opponent": str(r.opponent) if pd.notna(r.opponent) else "", "score": str(r.score),
         "goals": int(r.goals), "shots": int(r.shots), "saves": int(r.saves), "faced": int(r.shots_faced),
         "note": round(float(r.match_note), 2) if pd.notna(r.match_note) else None,
-        "lnh_score": round(float(r.lnh_score), 1) if float(r.lnh_score) > 0 else None,   # score LNH officiel (depuis 2023/24)
     } for r in bp_m.head(5).itertuples()]
 
     return {
@@ -1054,7 +1052,7 @@ def _prepare_explorer_df(dataset: str) -> pd.DataFrame:
             return pd.DataFrame()
         b = pf[pf["played_match"]].copy()
         b["player"] = b["full_name"]
-        for col in ["goals", "shots", "saves", "shots_faced", "est_seconds", "ast", "yc", "rc", "br", "bp", "two_min", "match_note", "lnh_score"]:
+        for col in ["goals", "shots", "saves", "shots_faced", "est_seconds", "ast", "yc", "rc", "br", "bp", "two_min", "match_note"]:
             b[col] = pd.to_numeric(b[col], errors="coerce")
             if col != "match_note":
                 b[col] = b[col].fillna(0)
@@ -1123,7 +1121,7 @@ def api_explorer(qs: dict) -> dict:
     if dataset == "players":
         sort_map = {
             "player": "player", "team": "team", "goals": "goals", "saves": "saves",
-            "note": "match_note", "lnh_score": "lnh_score", "seconds_played": "est_seconds",
+            "note": "match_note", "seconds_played": "est_seconds",
             "ast": "ast", "yc": "yc", "rc": "rc", "br": "br", "bp": "bp", "2min": "two_min",
             "opponent": "opponent", "date": "date", "season": "season", "round": "round",
         }
@@ -1158,7 +1156,6 @@ def api_explorer(qs: dict) -> dict:
             "br": int(r.br),
             "bp": int(r.bp),
             "2min": int(r.two_min),
-            "lnh_score": (round(float(r.lnh_score), 1) if r.lnh_score > 0 else "–"),
             "opponent": r.opponent or "",
             "date": r.date,
             "season": r.season,

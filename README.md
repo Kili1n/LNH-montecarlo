@@ -117,7 +117,7 @@ Hébergé sur **Render** (service web Python, démarrage `python server.py`), co
 | Fichier | Rôle | Colonnes clés |
 | :--- | :--- | :--- |
 | `match.csv` | Calendrier et résultats | `match_id`, `season`, `round`, `date`, `home_team`, `away_team`, `home_ft_goals`, `away_ft_goals` (vide si non joué) |
-| `players_boxscore.csv` | Statistiques individuelles par match | `match_id`, `team`, `goals`, `shots`, `goals_7m`, `saves`, `shots_faced`, `lnh_score`… |
+| `players_boxscore.csv` | Statistiques individuelles par match | `match_id`, `team`, `goals`, `shots`, `goals_7m`, `saves`, `shots_faced`… |
 | `players.csv` | Effectifs et transferts | `team`, `first_name`, `last_name`, `position`, `current_club` |
 
 ## Pistes d'amélioration

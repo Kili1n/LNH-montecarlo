@@ -873,10 +873,7 @@ def load_player_tables(
         # int32 (et non int16) : pandas conserve ce type dans les sommes, et 100 * (buts d'une saison) dépasse 32 767
         # (ex. 100 * 1 160 buts du PSG) -> pourcentages négatifs par débordement. Coût mémoire : ~4 Mo.
         box[c] = np.clip(np.rint(col), -32000, 32000).astype(np.int32)
-    # Score LNH officiel (colonne « lnh_score » des CSV) : relevé seulement depuis 2023/24 (0 avant), conservé pour affichage et comparaison.
-    # Il n'entre PAS dans la note /10 du site, qui est calculée par le modèle sur toutes les saisons.
-    box["lnh_score"] = (pd.to_numeric(box["lnh_score"], errors="coerce").fillna(0.0) if "lnh_score" in box.columns else 0.0)
-    box["lnh_score"] = np.asarray(box["lnh_score"], dtype=np.float32)
+    box = box.drop(columns=["lnh_score"], errors="ignore")  # colonne non utilisée par le site
     box["match_id"] = box["match_id"].astype(str)
     box = box.drop_duplicates(subset=["season", "match_id", "team", "last_name", "first_name"], keep="last")
 
