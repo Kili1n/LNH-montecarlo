@@ -225,6 +225,11 @@ svg text{font-family:Inter,sans-serif}
 .stk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:16px}
 .stk-grid h5{margin:0 0 6px;font-size:15px}
 .stk-ul{margin:0 0 10px;padding-left:18px;font-size:13.5px}.stk-ul li{margin:2px 0}
+.rec-li{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin:0 0 8px;border:1px solid var(--rule);border-left:4px solid var(--blue);border-radius:6px;background:#fff;font-size:14px;line-height:1.45}
+.rec-li.top{border-left-color:var(--ball);background:#FFF6EE}.rec-li.top .rec-t{font-weight:600}
+.rec-li .badge{flex:none;margin-top:1px}.rec-li .badge.vue{background:#fff;border:1px solid var(--blue)}
+.rec-li mark{background:#FBE7BF;color:#5E3B00;padding:0 3px;border-radius:3px}
+.rec-hero{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
 .note-li{padding:8px 0;border-bottom:1px solid var(--rule);font-size:14px;line-height:1.45}.note-li:last-child{border-bottom:0}
 .h2h-bar{display:flex;height:30px;border-radius:5px;overflow:hidden;font-weight:700;font-size:13px;color:#fff;margin:6px 0 8px}
 .h2h-bar span{display:flex;align-items:center;justify-content:center}
@@ -859,7 +864,7 @@ function buildRadarSvg(A,B){
 }
 
 let PM={a:null,b:null};
-const rankBadge=b=>b.rank===1?'<span class="badge gold">N°1 de la base</span>':b.rank<=3?'<span class="badge gold">Top 3</span>':b.rank<=10?'<span class="badge">Top 10</span>':`<span class="badge">${b.rank}e sur ${b.of}</span>`;
+const rankBadge=b=>b.rank===1?'<span class="badge gold">N°1 en Starligue</span>':b.rank<=3?'<span class="badge gold">Top 3</span>':b.rank<=10?'<span class="badge">Top 10</span>':`<span class="badge">${b.rank}e sur ${b.of}</span>`;
 
 function playerRecordsCard(d){
   const r=d.records;
@@ -868,7 +873,7 @@ function playerRecordsCard(d){
   const sb=r.season_best.map(b=>`<div class="rec-line"><div><b>${esc(b.label)}</b><br><small>${esc(b.detail)}</small></div><div class="rv2">${esc(b.display)}</div></div>`).join('');
   const st=r.streak?`<div class="rec-line"><div><b>Plus longue série de matchs avec un but</b><br><small>${esc(r.streak.detail)}</small></div><div class="rv2">${r.streak.length}</div></div>`:'';
   const pl=r.placements.length?`<div class="form-dots" style="margin:0 0 10px">${r.placements.slice(0,8).map(p=>`<span class="badge ${p.rank===1?'gold':''}" title="${esc(p.detail)}">${p.rank===1?'Record : ':'N°'+p.rank+' · '}${esc(p.label)} (${esc(p.display)})</span>`).join('')}</div>`:'';
-  return `<div class="card"><h4 style="margin:0 0 2px;font-size:15px">Records personnels</h4><p style="margin:0 0 10px;font-size:12.5px;color:var(--mute)">Meilleures performances sur un match, toutes saisons confondues dans la base${r.placements.length?', et places au palmarès de la Starligue':''}.</p>${pl}<div class="grid2"><div>${best}</div><div>${sb}${st}</div></div></div>`;
+  return `<div class="card"><h4 style="margin:0 0 2px;font-size:15px">Records personnels</h4><p style="margin:0 0 10px;font-size:12.5px;color:var(--mute)">Meilleures performances sur un match, toutes saisons confondues, en Starligue ${sinceTxt()}${r.placements.length?', et places au palmarès de la Starligue':''}.</p>${pl}<div class="grid2"><div>${best}</div><div>${sb}${st}</div></div></div>`;
 }
 
 function renderRadarBox(){
@@ -1570,7 +1575,7 @@ function buildItems(q){
     if(SIM&&SIM.teams.includes(t))acts.push({l:'Calendrier',fn:()=>goClubCalendar(t)});
     acts.push({l:'Prochain match',fn:()=>{closeSearch();openPress({club:t})}});
     const c=sv&&sv.clubs.find(x=>x.team===t);
-    out.push({g:'Clubs',title:t,meta:c?`${c.seasons} saison${c.seasons>1?'s':''} dans la base${c.current?' · saison en cours':` · dernière : ${c.last_season}`}`:'Club',acts});
+    out.push({g:'Clubs',title:t,meta:c?`${c.seasons} saison${c.seasons>1?'s':''} en Starligue (données ${sinceTxt()})${c.current?' · saison en cours':` · dernière : ${c.last_season}`}`:'Club',acts});
   }
   if(sv)for(const p of sv.players)out.push({g:'Joueurs',title:p.name,meta:`${p.gk?'Gardien':'Joueur de champ'} · ${p.team} · ${p.games} matchs${p.note!=null?` · note ${fmt(p.note,2)}`:''}`,acts:[{l:'Fiche',fn:()=>{closeSearch();openPlayerModal(p.name)}}]});
   for(const s of knownSeasons())if(matches(foldTxt('saison '+s),toks)&&toks.some(t=>/\d/.test(t)||'saison'.startsWith(t)))out.push({g:'Saisons',title:`Saison ${s}`,meta:'Ouvrir l’historique sur cette saison',acts:[{l:'Voir',fn:()=>goSeason(s)}]});
@@ -1635,6 +1640,8 @@ const fmtD=(d,o)=>{const i=isoD(d);if(!i)return '';const t=new Date(i+'T12:00:00
 const frDate=d=>fmtD(d,{weekday:'long',day:'numeric',month:'long'});
 const frDay=d=>fmtD(d,{day:'numeric',month:'long'});
 const dotSep=x=>x?' · '+x:'';
+// La base ne remonte pas à l'origine de la Starligue : on précise toujours « depuis 20XX » pour ne pas laisser croire à des totaux de carrière.
+const sinceTxt=()=>'depuis '+(((PRESS&&PRESS.since)||'').replace('depuis ','')||((typeof H!=='undefined'&&H&&H.seasons&&H.seasons[0])?String(H.seasons[0]).slice(0,4):'2007'));
 const ZTXT=(z,k)=>({title:'le titre',podium:'le podium',top:`le top ${k}`,rel:'le maintien'})[z]||'';
 function deltaHtml(b,c,badUp){const d=(c-b)*100;if(Math.abs(d)<.5)return '<small class="delta-0">≈</small>';const good=badUp?d<0:d>0;return `<small class="${good?'delta-pos':'delta-neg'}">${d>0?'+':'−'}${fmt(Math.abs(d),Math.abs(d)<10?1:0)}</small>`}
 
@@ -1749,16 +1756,28 @@ function enjeuSection(s){
   return `<div class="sh-sec"><h4>L’enjeu au classement</h4><p class="sub">${played?'Où en étaient les deux clubs, et ce que ce résultat a changé.':'Où en sont les deux clubs et ce que le résultat peut changer.'}</p>
   <div class="stk-grid"><div>${lines(s.home)}</div><div>${lines(s.away)}</div></div>${badge}${tabs}</div>`;
 }
+// Record : pastille « RECORD » / « N°k » (battu ou égalé) ou « Record en vue » (à portée / prolongé), et la référence en surbrillance.
+function recItem(x){
+  let t=String(x.text||''),badge='',top=false;
+  const m=/^(RECORD (?:DE LA BASE|EN STARLIGUE)|N°\d+ (?:de la base|en Starligue))(?: \([^)]*\))? · /.exec(t);
+  if(m){t=t.slice(m[0].length);top=x.rank===1||/^RECORD/.test(m[1]);badge=`<span class="badge gold">${top?'RECORD':'N°'+(x.rank||'')}</span>`}
+  else if(x.kind==='record')badge='<span class="badge gold">Record</span>';
+  else if(/détient actuellement le record/.test(t)){top=true;badge='<span class="badge gold">RECORD</span>'}
+  else badge='<span class="badge vue">Record en vue</span>';
+  const html=esc(t).replace(/\(record (?:de la base|en Starligue)[^)]*\)/,r=>`<mark>${r}</mark>`);
+  return `<div class="rec-li${top?' top':''}">${badge}<div class="rec-t">${html}</div></div>`;
+}
 function capsSection(s){
   const played=s.status==='played',ms=s.milestones||[],rc=s.records||[];
   const col=(t,arr,empty)=>`<div><h5 style="margin:0 0 4px;font-size:15px">${t}</h5>${arr.length?arr.map(x=>`<div class="note-li">${esc(x.text)}</div>`).join(''):`<div class="muted" style="font-size:13px">${empty}</div>`}</div>`;
-  return `<div class="sh-sec"><h4>${played?'Caps franchis et records':'Caps et records en approche'}</h4><p class="sub">${played?'Seuils symboliques passés (50, 100, 250… buts, passes, arrêts, matchs dans la base) et records de la base établis, égalés ou prolongés lors de cette rencontre.':'Seuils symboliques à portée (50, 100, 250… buts, passes, arrêts, matchs dans la base) et records de la base que ce match peut faire tomber ou prolonger.'}</p>
-  <div class="stk-grid">${col(played?'Caps franchis':'Caps en approche',ms,played?'Aucun cap franchi.':'Aucun cap à portée.')}${col('Records',rc,played?'Aucun record de la base lié à ce match.':'Aucun record à portée.')}</div></div>`;
+  const recCol=`<div><h5 style="margin:0 0 6px;font-size:15px">${played?'Records battus, égalés ou prolongés':'Records en vue'}</h5>${rc.length?[...rc].sort((a,b)=>(a.kind==='record'?0:1)-(b.kind==='record'?0:1)||(a.rank||50)-(b.rank||50)).map(recItem).join(''):`<div class="muted" style="font-size:13px">${played?'Aucun record en Starligue lié à ce match.':'Aucun record à portée.'}</div>`}</div>`;
+  return `<div class="sh-sec"><h4>${played?'Caps franchis et records':'Caps et records en approche'}</h4><p class="sub">${played?'Seuils symboliques passés (50, 100, 250… buts, passes, arrêts, matchs en Starligue ${sinceTxt()}) et records en Starligue établis, égalés ou prolongés lors de cette rencontre.':'Seuils symboliques à portée (50, 100, 250… buts, passes, arrêts, matchs en Starligue ${sinceTxt()}) et records en Starligue que ce match peut faire tomber ou prolonger.'}</p>
+  <div class="stk-grid">${recCol}${col(played?'Caps franchis':'Caps en approche',ms,played?'Aucun cap franchi.':'Aucun cap à portée.')}</div></div>`;
 }
 function faceSection(s){
   const h=s.home,a=s.away,x=s.h2h||{n:0};
   let h2='';
-  if(!x.n)h2='<div class="muted">Première confrontation dans la base.</div>';
+  if(!x.n)h2=`<div class="muted">Première confrontation en Starligue ${sinceTxt()}.</div>`;
   else{
     const dr=x.n-x.w_a-x.w_b;
     h2=`<div class="h2h-bar"><span style="flex:${Math.max(x.w_a,.0001)};background:#1747C9">${x.w_a?x.w_a+' V':''}</span><span style="flex:${Math.max(dr,.0001)};background:#8A91A1">${dr?dr+' N':''}</span><span style="flex:${Math.max(x.w_b,.0001)};background:#F25C2A">${x.w_b?x.w_b+' V':''}</span></div>
@@ -1775,7 +1794,7 @@ function faceSection(s){
   const dh=s.duels[h]||{},da=s.duels[a]||{};
   const duel=(label,f)=>{const l=f(dh),r=f(da);return l||r?`<div class="duel"><div class="l">${l||'–'}</div><div class="m">${label}</div><div>${r||'–'}</div></div>`:''};
   const duels=duel('Buteurs',d=>d.scorer?`<b>${esc(d.scorer.name)}</b> ${d.scorer.goals} buts`:'')+duel('Passeurs',d=>d.playmaker?`<b>${esc(d.playmaker.name)}</b> ${d.playmaker.ast} PD`:'')+duel('Gardiens',d=>d.keeper?`<b>${esc(d.keeper.name)}</b> ${fmt(d.keeper.pct,0)} %`:'')+duel('Meilleure note',d=>d.star?`<b>${esc(d.star.name)}</b> ${fmt(d.star.note,2)}`:'');
-  return `<div class="sh-sec"><h4>Face-à-face</h4><p class="sub">L’historique des confrontations dans la base, puis le profil comparé de la saison${s.status==='played'?' (avant cette journée)':''}.</p>
+  return `<div class="sh-sec"><h4>Face-à-face</h4><p class="sub">L’historique des confrontations en Starligue ${sinceTxt()}, puis le profil comparé de la saison${s.status==='played'?' (avant cette journée)':''}.</p>
   <div class="stk-grid"><div>${h2}</div><div><h5 style="margin:0 0 6px;font-size:15px">Profil comparé <small class="muted">(rang sur ${(s.profile[0]||{}).of||'–'} clubs)</small></h5>${prof}${duels?`<h5 style="margin:16px 0 4px;font-size:15px">Duels de joueurs</h5>${duels}`:''}</div></div></div>`;
 }
 function pressText(s){
@@ -1788,8 +1807,8 @@ function pressText(s){
   L.push('',s.status==='played'?'CAPS FRANCHIS ET RECORDS':'CAPS ET RECORDS EN APPROCHE');
   const items=[...(s.milestones||[]),...(s.records||[])];(items.length?items:[{text:'Rien de notable.'}]).forEach(x=>L.push('- '+x.text));
   L.push('','FACE-À-FACE');const x=s.h2h;
-  if(x&&x.n){L.push(`- ${x.n} confrontations dans la base : ${s.home} ${x.w_a} V, ${x.d} N, ${s.away} ${x.w_b} V ; ${fmt(x.avg_total,1)} buts par match.`);(x.last||[]).slice(0,3).forEach(r=>L.push(`  · ${r.season} J${r.round} : ${r.home} ${r.score} ${r.away}`))}
-  else L.push('- Première confrontation dans la base.');
+  if(x&&x.n){L.push(`- ${x.n} confrontations en Starligue ${sinceTxt()} : ${s.home} ${x.w_a} V, ${x.d} N, ${s.away} ${x.w_b} V ; ${fmt(x.avg_total,1)} buts par match.`);(x.last||[]).slice(0,3).forEach(r=>L.push(`  · ${r.season} J${r.round} : ${r.home} ${r.score} ${r.away}`))}
+  else L.push(`- Première confrontation en Starligue ${sinceTxt()}.`);
   return L.join('\n');
 }
 function renderPress(){
@@ -1804,7 +1823,7 @@ function renderPress(){
   const s=curSheet();
   $('#pressBody').innerHTML=`<div class="pr-head"><h3>Journée ${R.round} <small>${played?'déjà jouée':'à venir'} · ${dd.length?(dd[0]===dd[dd.length-1]?frDate(dd[0]):`du ${frDay(dd[0])} au ${frDay(dd[dd.length-1])}`):'dates à confirmer'}</small></h3><small>${R.n_sims.toLocaleString('fr-FR')} simulations lancées à la journée ${R.round-1} · saison ${esc(PRESS.season)}</small></div>
   <div class="strip">${strip}</div>
-  <article class="sheet" id="pressSheet"><div class="kick">${played?'Retour sur le match':'Avant-match'} · Journée ${s.round} · ${frDate(s.date)||'date à confirmer'}${s.time?' · '+esc(s.time):''}${s.venue?' · '+esc(s.venue):''}</div>
+  <article class="sheet" id="pressSheet"><div class="kick">${played?'Retour sur le match':'Avant-match'} · Journée ${s.round} · ${frDate(s.date)||'date à confirmer'}${s.time?' · '+esc(s.time):''}${s.venue?' · '+esc(s.venue):''}</div>${(s.records||[]).some(x=>x.kind==='record'&&x.rank===1)?'<div class="rec-hero"><span class="badge gold">Record en Starligue battu ou égalé dans ce match</span></div>':''}
   <h3 class="mt">${esc(s.home)} – ${esc(s.away)}</h3><p class="hl">${esc(headline(s))}</p>
   ${afficheSection(s)}${enjeuSection(s)}${capsSection(s)}${faceSection(s)}</article>`;
   $('#pressBody').querySelectorAll('.mcard').forEach(b=>b.onclick=()=>{PR.mid=b.dataset.mid;renderPress()});

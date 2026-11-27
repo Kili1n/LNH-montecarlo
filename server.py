@@ -614,6 +614,84 @@ def api_teams(qs: dict) -> dict:
 
 
 # ---- Records ----------------------------------------------------------------
+def _since() -> str:
+    """« depuis 2007 » : première saison couverte par les données. La base ne remonte pas à l'origine de la Starligue : tout total ou
+    record affiché doit le préciser, pour ne pas passer pour un total de carrière."""
+    _, _, seasons = load_data()
+    return f"depuis {str(seasons[0])[:4]}" if seasons else ""
+
+
+def _team_calendar() -> dict:
+    """(club, match_id) -> (rang du match dans le calendrier du club, 1er de sa saison ?, dernier de sa saison ?, season_idx, journée).
+    Calendrier = TOUS les matchs joués du club en Starligue (avec ou sans feuille de match)."""
+    m, _, _ = load_data()
+    with _lock:
+        if "team_cal" in _cache:
+            return _cache["team_cal"]
+    mp = m[m["played"]]
+    c = pd.concat([
+        mp[["match_id", "season_idx", "round", "date", "home_team"]].rename(columns={"home_team": "team"}),
+        mp[["match_id", "season_idx", "round", "date", "away_team"]].rename(columns={"away_team": "team"}),
+    ], ignore_index=True).sort_values(["team", "season_idx", "round", "date"], kind="mergesort")
+    c["tidx"] = c.groupby("team").cumcount()
+    c["first"] = c.groupby(["team", "season_idx"]).cumcount() == 0
+    c["last"] = c.groupby(["team", "season_idx"]).cumcount(ascending=False) == 0
+    cal = {(str(t), str(mid)): (int(i), bool(f), bool(l), int(si), int(r))
+           for t, mid, i, f, l, si, r in zip(c["team"], c["match_id"], c["tidx"], c["first"], c["last"], c["season_idx"], c["round"])}
+    with _lock:
+        _cache["team_cal"] = cal
+    return cal
+
+
+def _linked(prev, cur, same_team: bool) -> bool:
+    """Deux apparitions consécutives d'un joueur sont-elles deux matchs consécutifs de son équipe, sans saison hors Starligue entre les deux ?"""
+    if prev is None or cur is None or cur[3] - prev[3] > 1:
+        return False
+    if same_team:
+        return cur[0] == prev[0] + 1
+    return prev[2] and cur[1] and cur[3] == prev[3] + 1      # changement de club : fin de saison -> début de la suivante
+
+
+def _longest_scoring_run(grp: pd.DataFrame, cal: dict) -> tuple[int, int, int]:
+    """Plus longue série de matchs consécutifs AVEC un but. Elle casse quand le joueur manque un match de son équipe
+    (blessure, banc, absence de feuille) ou quitte la Starligue entre deux saisons."""
+    teams, mids, goals = grp["team"].astype(str).tolist(), grp["match_id"].astype(str).tolist(), grp["goals"].to_numpy()
+    best, cur, start, prev, prev_team = (0, -1, -1), 0, 0, None, None
+    for i in range(len(goals)):
+        info = cal.get((teams[i], mids[i]))
+        if goals[i] > 0:
+            if cur > 0 and _linked(prev, info, teams[i] == prev_team):
+                cur += 1
+            else:
+                cur, start = 1, i
+            if cur > best[0]:
+                best = (cur, start, i)
+        else:
+            cur = 0
+        prev, prev_team = info, teams[i]
+    return best
+
+
+def _current_scoring_run(grp: pd.DataFrame, cal: dict, team: str, team_last_idx: int) -> int:
+    """Série EN COURS : le joueur doit avoir joué (et marqué lors de) le tout dernier match de son équipe."""
+    teams, mids, goals = grp["team"].astype(str).tolist(), grp["match_id"].astype(str).tolist(), grp["goals"].to_numpy()
+    if not len(goals) or teams[-1] != team:
+        return 0
+    info = cal.get((teams[-1], mids[-1]))
+    if info is None or info[0] != team_last_idx:
+        return 0
+    n = 0
+    for i in range(len(goals) - 1, -1, -1):
+        if goals[i] <= 0:
+            break
+        n += 1
+        if i == 0:
+            break
+        if not _linked(cal.get((teams[i - 1], mids[i - 1])), cal.get((teams[i], mids[i])), teams[i - 1] == teams[i]):
+            break
+    return n
+
+
 def _longest_run(flags) -> tuple[int, int, int]:
     """(longueur, index de début, index de fin) de la plus longue série de True."""
     best, cur, start = (0, -1, -1), 0, 0
@@ -810,8 +888,9 @@ def compute_records(seasons_raw: str = "all") -> dict:
             # série de matchs consécutifs avec au moins un but (joueurs de champ)
             fld = pp[~pp["is_gk"].astype(bool)].sort_values(["full_name", "season_idx", "round", "date"], kind="mergesort")
             runs = []
+            cal = _team_calendar()
             for name, grp in fld.groupby("full_name", sort=False):
-                ln, a0, b0 = _longest_run((grp["goals"] > 0).to_numpy())
+                ln, a0, b0 = _longest_scoring_run(grp, cal)
                 if ln >= 3:
                     runs.append((ln, name, str(grp["team"].iloc[b0]), str(grp["season"].iloc[a0]), str(grp["season"].iloc[b0]),
                                  int(grp["round"].iloc[a0]), int(grp["round"].iloc[b0]), str(grp["date"].iloc[b0])))
@@ -830,6 +909,18 @@ def compute_records(seasons_raw: str = "all") -> dict:
             groups.append({"id": "players_season", "title": "Joueurs : saison, série et cumul",
                            "blurb": "Records sur une saison, séries de buts et totaux sur la période sélectionnée.", "records": recs})
 
+    # Joueur qui n'a plus joué en Starligue depuis une saison antérieure à la dernière : on le signale à côté de son record.
+    if pf is not None:
+        pr_all = played_rows()
+        last_season = pr_all.groupby("full_name")["season"].max()
+        latest = str(pr_all["season"].max())
+        for g_ in groups:
+            for r_ in g_["records"]:
+                for row_ in r_["top"]:
+                    if row_.get("kind") == "player" and str(last_season.get(row_["holder"], latest)) < latest:
+                        row_["gone"] = True
+                        row_["detail"] = f"{row_['detail']} · n'est plus en Starligue (dernier match : {last_season.get(row_['holder'])})"
+
     n_players = int(played_rows()["full_name"].nunique()) if pf is not None else 0
     res = {"period": seasons_raw, "matches": int(len(mp)), "players": n_players, "groups": _jsonable(groups)}
     with _lock:
@@ -843,7 +934,7 @@ def api_records(qs: dict) -> dict:
 
 
 def player_records(name: str, is_gk: bool) -> dict:
-    """Records personnels sur toute la carrière présente dans la base + places au palmarès de la Starligue."""
+    """Records personnels sur toute la période couverte par les données (depuis 2007) + places au palmarès de la Starligue."""
     pp = played_rows()
     mine = pp[pp["full_name"] == name]
     if mine.empty:
@@ -1778,6 +1869,15 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
     pf = player_frame()
     pfp = played_rows() if pf is not None else pd.DataFrame()
     s_idx = int(mS["season_idx"].iloc[0])
+    SINCE = _since()
+    SINCE_AST = f"depuis {DP_RELIABLE_FROM[:4]}"     # les passes décisives ne sont relevées qu'à partir de 2023/24
+    since_for = lambda stat: SINCE_AST if stat == "ast" else SINCE
+    cal = _team_calendar()
+    cur_key = s_idx * 1000 + K
+    team_last = {}      # club -> rang de son dernier match joué (calendrier du club)
+    for (t_, _mid), (ti_, _f, _l, si_, r_) in cal.items():
+        if si_ * 1000 + r_ <= cur_key and ti_ > team_last.get(t_, -1):
+            team_last[t_] = ti_
     if len(pfp):
         pfp = pfp.assign(key=pfp["season_idx"].astype(np.int32) * 1000 + pfp["round"].astype(np.int32))
     gk_of = pfp.groupby("full_name")["is_gk"].max().to_dict() if len(pfp) else {}
@@ -1843,7 +1943,7 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
                 val = int(r[stat]); nxt = next((t for t in MILESTONES[stat] if t > val), None)
                 if nxt and nxt - val <= MILESTONE_WINDOW[stat]:
                     items.append({"name": nm, "team": team, "stat": stat, "total": val, "target": nxt, "remaining": nxt - val,
-                                  "text": f"{nm} ({team}) : {val} {STAT_LABEL[stat]} dans la base, plus que {nxt - val} pour atteindre {nxt}"})
+                                  "text": f"{nm} ({team}) : {val} {STAT_LABEL[stat]} en Starligue {since_for(stat)}, plus que {nxt - val} pour atteindre {nxt}"})
         items.sort(key=lambda x: (x["remaining"] / MILESTONE_WINDOW[x["stat"]], -x["total"]))
         return items[:5]
 
@@ -1858,7 +1958,7 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
                     for thr in MILESTONES[stat]:
                         if b_ < thr <= a_:
                             items.append({"name": nm, "team": team, "stat": stat, "target": thr, "total": a_,
-                                          "text": f"{nm} ({team}) passe la barre des {thr} {STAT_LABEL[stat]} dans la base ({a_} au total)"})
+                                          "text": f"{nm} ({team}) passe la barre des {thr} {STAT_LABEL[stat]} en Starligue {since_for(stat)} ({a_} au total)"})
         return items[:8]
 
     def records_next(team: str, tm_state: pd.DataFrame, ids: list[str], team_played: int, team_total: int, table_row) -> list[dict]:
@@ -1871,7 +1971,7 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
             cur = cs[key]
             r0 = rec.get(rid_, {}).get("top", [None])[0] if rec.get(rid_, {}).get("top") else None
             if cur >= (3 if key != "unbeaten" else 5) and r0:
-                txt = f"{team} reste sur {cur} {noun} (record de la base : {int(r0['value'])}, {r0['holder']}, {r0['season']})"
+                txt = f"{team} reste sur {cur} {noun} (record en Starligue {SINCE} : {int(r0['value'])}, {r0['holder']}, {r0['season']})"
                 if nxt_txt and key != "home_unbeaten":
                     txt += f". {nxt_txt.format(n=cur + 1)}"
                 items.append({"kind": "streak", "team": team, "text": txt})
@@ -1883,11 +1983,11 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
             runs_ = []
             for nm in sq:
                 g = pfp[(pfp["full_name"] == nm) & (pfp["key"] <= s_idx * 1000 + K)].sort_values("key")
-                run_ = _trail(g["goals"] > 0)
+                run_ = _current_scoring_run(g, cal, team, team_last.get(team, -1))
                 if run_ >= 4 and r0:
                     runs_.append((run_, nm))
             for run_, nm in sorted(runs_, reverse=True)[:2]:   # les 2 plus longues séries du club
-                items.append({"kind": "player_streak", "team": team, "text": f"{nm} ({team}) a marqué lors de ses {run_} derniers matchs (record de la base : {int(r0['value'])}, {r0['holder']})"})
+                items.append({"kind": "player_streak", "team": team, "text": f"{nm} ({team}) a marqué lors de ses {run_} derniers matchs (record en Starligue {SINCE} : {int(r0['value'])}, {r0['holder']}{" – n'est plus en Starligue" if r0.get('gone') else ''})"})
             # rythme de saison vs record
             for col, rid_, noun in (("goals", "ps_goals", "buts"), ("ast", "ps_ast", "passes décisives"), ("saves", "ps_saves", "arrêts")):
                 recs = rec.get(rid_, {}).get("top")
@@ -1904,9 +2004,9 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
                 top = recs[0]
                 if proj >= 0.9 * top["value"] and int(r[col]) >= 0.4 * top["value"]:
                     if top["holder"] == r.full_name and top["season"] == S:
-                        txt = f"{r.full_name} ({team}) détient actuellement le record de la base de {noun} sur une saison ({int(r[col])})"
+                        txt = f"{r.full_name} ({team}) détient actuellement le record en Starligue {since_for(col)} de {noun} sur une saison ({int(r[col])})"
                     else:
-                        txt = f"{r.full_name} ({team}) : {int(r[col])} {noun} cette saison, {int(round(proj))} à ce rythme (record de la base : {int(top['value'])}, {top['holder']}, {top['season']})"
+                        txt = f"{r.full_name} ({team}) : {int(r[col])} {noun} cette saison, {int(round(proj))} à ce rythme (record en Starligue {since_for(col)} : {int(top['value'])}, {top['holder']}, {top['season']})"
                     items.append({"kind": "season_pace", "team": team, "text": txt})
         # rythme du club
         if team_played >= 5:
@@ -1916,11 +2016,11 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
                     continue
                 proj = val / team_played * team_total; top = recs[0]
                 if (proj <= 1.05 * top["value"]) if better_low else (proj >= 0.95 * top["value"]):
-                    items.append({"kind": "team_pace", "team": team, "text": f"{team} : {int(val)} {noun} en {team_played} matchs, {int(round(proj))} à ce rythme sur la saison (record de la base : {int(top['value'])}, {top['holder']}, {top['season']})"})
+                    items.append({"kind": "team_pace", "team": team, "text": f"{team} : {int(val)} {noun} en {team_played} matchs, {int(round(proj))} à ce rythme sur la saison (record en Starligue {SINCE} : {int(top['value'])}, {top['holder']}, {top['season']})"})
         return items
 
     def records_made(mrow, names_by_team: dict, tm_after: pd.DataFrame) -> list[dict]:
-        """Records de la base établis ou égalés lors de ce match (classements « top 5 » datés du jour du match)."""
+        """Records en Starligue établis ou égalés lors de ce match (classements « top 5 » datés du jour du match)."""
         items = []
         d0 = str(mrow.date)
         h, a = mrow.home_team, mrow.away_team
@@ -1931,13 +2031,13 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
                 ok_ = (t["kind"] == "team" and t["holder"] in (h, a)) or (t["kind"] == "match" and t["holder"] == f"{h} – {a}") or \
                       (t["kind"] == "player" and t["team"] in (h, a) and t["holder"] in set().union(*names_by_team.values()))
                 if ok_:
-                    items.append({"kind": "record", "rank": i + 1, "text": f"{'RECORD DE LA BASE' if i == 0 else 'N°' + str(i + 1) + ' de la base'} · {r['label']} : {t['holder']}, {t['display']} {r['unit']} ({t['detail']})"})
+                    items.append({"kind": "record", "rank": i + 1, "text": f"{'RECORD EN STARLIGUE' if i == 0 else 'N°' + str(i + 1) + ' en Starligue'} ({since_for('ast') if str(rid_).endswith('_ast') else SINCE}) · {r['label']} : {t['holder']}, {t['display']} {r['unit']} ({t['detail']})"})
         items.sort(key=lambda x: x["rank"])
         for team in (h, a):
             cs = _streaks_now(tm_after, team)
             if cs["win"] >= 4:
                 r0 = rec.get("win_streak", {}).get("top", [None]); r0 = r0[0] if r0 else None
-                items.append({"kind": "streak", "rank": 99, "text": f"{team} signe sa {_ord(cs['win'])} victoire de suite" + (f" (record de la base : {int(r0['value'])})" if r0 else "")})
+                items.append({"kind": "streak", "rank": 99, "text": f"{team} signe sa {_ord(cs['win'])} victoire de suite" + (f" (record en Starligue {SINCE} : {int(r0['value'])})" if r0 else "")})
         return items[:8]
 
     def performers(mid: str, team: str) -> dict:
@@ -2026,7 +2126,7 @@ def build_press(n: int = CACHE_SIMS) -> dict | None:
         dates = sorted(x["date"] for x in sheets if x["date"])
         return {"round": rnd, "run": rid, "dates": [dates[0], dates[-1]] if dates else [], "zones": z, "n_sims": sw_pack["n_sims"], "matches": sheets}
 
-    out = {"version": 1, "season": S, "teams": teams, "last_played_round": K, "built": time.strftime("%Y-%m-%d %H:%M:%S"), "data_stamp": _stamp(),
+    out = {"version": 1, "season": S, "since": SINCE, "teams": teams, "last_played_round": K, "built": time.strftime("%Y-%m-%d %H:%M:%S"), "data_stamp": _stamp(),
            "next": make_round(next_round, "next") if next_round else None,
            "prev": make_round(prev_round, "prev") if prev_round else None}
     return out
