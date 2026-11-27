@@ -812,7 +812,7 @@ async function openMatchModal(id){
     body.scrollTop=0;
   }catch(e){body.innerHTML=`<div class="empty err">${esc(e.message)}</div>`}
 }
-document.addEventListener('click',e=>{const el=e.target.closest('[data-mid]');if(el&&el.dataset.mid){e.preventDefault();openMatchModal(el.dataset.mid)}});
+document.addEventListener('click',e=>{const el=e.target.closest('[data-mid]');if(el&&el.dataset.mid&&!el.closest('.mcard')){e.preventDefault();openMatchModal(el.dataset.mid)}});
 
 // ---------- Fiches détaillées Club & Joueur (Modal) ----------
 let MODAL_CTX=null;   // comment rouvrir la fiche affichée (bouton « Retour » de la fiche match)
@@ -1739,7 +1739,7 @@ function probaBar(p){
   if(!p||p.p1==null)return '';
   return `<div class="pbar" title="Domicile ${pc(p.p1,1)} · nul ${pc(p.pN,1)} · extérieur ${pc(p.p2,1)}"><span style="flex:${p.p1};background:#1747C9">${p.p1>.12?pc(p.p1):''}</span><span style="flex:${p.pN};background:#8A91A1">${p.pN>.1?pc(p.pN):''}</span><span style="flex:${p.p2};background:#F25C2A">${p.p2>.12?pc(p.p2):''}</span></div>`;
 }
-const formChips=l=>`<div class="fch">${(l||[]).map(x=>`<span class="f${x.res}"${x.match_id?` data-mid="${esc(x.match_id)}"`:''} title="J${x.round} · ${x.home?'à domicile vs':'à l’extérieur @'} ${esc(x.opp)} ${esc(x.score)}">${{W:'V',D:'N',L:'D'}[x.res]}</span>`).join('')||'<small class="muted">Début de saison</small>'}</div>`;
+const formChips=l=>`<div class="fch">${(l||[]).map(x=>`<span class="f${x.res}" title="J${x.round} · ${x.home?'à domicile vs':'à l’extérieur @'} ${esc(x.opp)} ${esc(x.score)}">${{W:'V',D:'N',L:'D'}[x.res]}</span>`).join('')||'<small class="muted">Début de saison</small>'}</div>`;
 function teamPanel(s,team,right){
   const t=s.teams[team],d=s.duels[team]||{},pf=(s.performers||{})[team]||{};
   const rk=s.status==='played'&&t.after?`${t.j?frOrd(t.rank):'Départ'} → ${frOrd(t.after.rank)}`:rankTxt(t);
@@ -1833,7 +1833,7 @@ function faceSection(s){
     ${x.biggest&&x.biggest.winner?`<li>Plus large victoire : <b>${esc(x.biggest.winner)}</b> ${esc(x.biggest.score)} (${esc(x.biggest.season)})</li>`:''}
     ${x.streak?`<li>${esc(x.streak.team)} sur ${x.streak.n} victoires de suite dans ce duel</li>`:''}
     <li>${esc(h)} à domicile dans ce duel : ${x.a_home.w} V · ${x.a_home.d} N · ${x.a_home.n-x.a_home.w-x.a_home.d} D</li></ul>
-    <div class="scroll"><table class="tbl num lastm"><tr><th style="text-align:left">Dernières rencontres : domicile</th><th>Score</th><th style="text-align:left">Extérieur</th><th>Saison</th><th>J.</th></tr>${x.last.map(r=>`<tr${r.match_id?` data-mid="${esc(r.match_id)}"`:''}><td class="tm" style="text-align:left">${esc(r.home)}</td><td style="text-align:center"><b>${esc(r.score)}</b></td><td class="tm" style="text-align:left">${esc(r.away)}</td><td>${esc(r.season)}</td><td>${r.round}</td></tr>`).join('')}</table></div>`;
+    <div class="scroll"><table class="tbl num lastm"><tr><th style="text-align:left">Dernières rencontres : domicile</th><th>Score</th><th style="text-align:left">Extérieur</th><th>Saison</th><th>J.</th><th></th></tr>${x.last.map(r=>`<tr><td class="tm" style="text-align:left">${esc(r.home)}</td><td style="text-align:center"><b>${esc(r.score)}</b></td><td class="tm" style="text-align:left">${esc(r.away)}</td><td>${esc(r.season)}</td><td>${r.round}</td><td>${r.match_id?`<button type="button" class="alt" data-mid="${esc(r.match_id)}">Voir la fiche</button>`:''}</td></tr>`).join('')}</table></div>`;
   }
   const prof=(s.profile||[]).map(p=>{
     const mx=Math.max(Math.abs(p.home),Math.abs(p.away),.0001),bh=p.higher_better?p.home>p.away:p.home<p.away,ba=p.higher_better?p.away>p.home:p.away<p.home;
@@ -1866,14 +1866,14 @@ function renderPress(){
   $('#pressRound').querySelectorAll('button[data-m]').forEach(b=>b.onclick=()=>{PR.mode=b.dataset.m;PR.mid=null;renderPress()});
   if(!R){$('#pressBody').innerHTML='<div class="empty">Aucune journée à afficher.</div>';return}
   const played=PR.mode==='prev',dd=(R.dates||[]).map(isoD).filter(Boolean);
-  const strip=R.matches.map(m=>`<button type="button" class="mcard" data-mid="${esc(m.match_id)}" aria-pressed="${m.match_id===PR.mid}"><b>${esc(m.home)} – ${esc(m.away)}</b><small>${played?`Score ${m.result.hg}–${m.result.ag}${m.result.surprise?' · surprise':''}`:`${frDay(m.date)}${m.time?' · '+esc(m.time):''}`}</small><small>${m.stake.zone?`Enjeu : ${fmt(m.stake.score,0)} pts sur ${ZTXT(m.stake.zone,R.zones.top_k)}`:'Peu d’enjeu au classement'}${m.stake_rank===1?' · ★ affiche de la journée':''}</small></button>`).join('');
+  const strip=R.matches.map(m=>`<button type="button" class="mcard" data-sel="${esc(m.match_id)}" aria-pressed="${m.match_id===PR.mid}"><b>${esc(m.home)} – ${esc(m.away)}</b><small>${played?`Score ${m.result.hg}–${m.result.ag}${m.result.surprise?' · surprise':''}`:`${frDay(m.date)}${m.time?' · '+esc(m.time):''}`}</small><small>${m.stake.zone?`Enjeu : ${fmt(m.stake.score,0)} pts sur ${ZTXT(m.stake.zone,R.zones.top_k)}`:'Peu d’enjeu au classement'}${m.stake_rank===1?' · ★ affiche de la journée':''}</small></button>`).join('');
   const s=curSheet();
   $('#pressBody').innerHTML=`<div class="pr-head"><h3>Journée ${R.round} <small>${played?'déjà jouée':'à venir'} · ${dd.length?(dd[0]===dd[dd.length-1]?frDate(dd[0]):`du ${frDay(dd[0])} au ${frDay(dd[dd.length-1])}`):'dates à confirmer'}</small></h3><small>${R.n_sims.toLocaleString('fr-FR')} simulations lancées à la journée ${R.round-1} · saison ${esc(PRESS.season)}</small></div>
   <div class="strip">${strip}</div>
-  <article class="sheet" id="pressSheet"><div class="kick">${played?'Retour sur le match':'Avant-match'} · Journée ${s.round} · ${frDate(s.date)||'date à confirmer'}${s.time?' · '+esc(s.time):''}${s.venue?' · '+esc(s.venue):''}</div>${(s.records||[]).some(x=>x.kind==='record'&&x.rank===1)?'<div class="rec-hero"><span class="badge gold">Record en Starligue battu ou égalé dans ce match</span></div>':''}
+  <article class="sheet" id="pressSheet">${s.status==='played'&&s.match_id?`<div style="float:right;margin:0 0 8px 12px"><button type="button" class="alt" data-mid="${esc(s.match_id)}">Voir la fiche complète du match</button></div>`:''}<div class="kick">${played?'Retour sur le match':'Avant-match'} · Journée ${s.round} · ${frDate(s.date)||'date à confirmer'}${s.time?' · '+esc(s.time):''}${s.venue?' · '+esc(s.venue):''}</div>${(s.records||[]).some(x=>x.kind==='record'&&x.rank===1)?'<div class="rec-hero"><span class="badge gold">Record en Starligue battu ou égalé dans ce match</span></div>':''}
   <h3 class="mt">${esc(s.home)} – ${esc(s.away)}</h3><p class="hl">${esc(headline(s))}</p>
   ${afficheSection(s)}${enjeuSection(s)}${capsSection(s)}${faceSection(s)}</article>`;
-  $('#pressBody').querySelectorAll('.mcard').forEach(b=>b.onclick=()=>{PR.mid=b.dataset.mid;renderPress()});
+  $('#pressBody').querySelectorAll('.mcard').forEach(b=>b.onclick=()=>{PR.mid=b.dataset.sel;renderPress()});
   $('#pressBody').querySelectorAll('button[data-cl]').forEach(b=>b.onclick=()=>openClubModal(b.dataset.cl));
 }
 $('#pressPrint').onclick=()=>window.print();
