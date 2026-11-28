@@ -203,6 +203,7 @@ svg text{font-family:Inter,sans-serif}
 .pr-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline;margin:0 0 12px}
 .pr-head h3{font:700 26px Newsreader,serif;margin:0}.pr-head small{color:var(--mute)}
 .strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:10px;margin:0 0 22px}
+#pressSheet{scroll-margin-top:118px}
 .mcard{text-align:left;background:var(--card);border:1px solid var(--rule);border-radius:6px;padding:10px 12px;cursor:pointer;font:inherit;color:inherit}
 .mcard:hover{border-color:var(--blue)}.mcard[aria-pressed=true]{border-color:var(--ball);box-shadow:0 0 0 2px rgba(242,92,42,.25)}
 .mcard b{display:block;font-size:14px;margin-bottom:2px}.mcard small{color:var(--mute);font-size:12px;display:block}
@@ -1873,7 +1874,7 @@ function renderPress(){
   <article class="sheet" id="pressSheet">${s.status==='played'&&s.match_id?`<div style="float:right;margin:0 0 8px 12px"><button type="button" class="alt" data-mid="${esc(s.match_id)}">Voir la fiche complète du match</button></div>`:''}<div class="kick">${played?'Retour sur le match':'Avant-match'} · Journée ${s.round} · ${frDate(s.date)||'date à confirmer'}${s.time?' · '+esc(s.time):''}${s.venue?' · '+esc(s.venue):''}</div>${(s.records||[]).some(x=>x.kind==='record'&&x.rank===1)?'<div class="rec-hero"><span class="badge gold">Record en Starligue battu ou égalé dans ce match</span></div>':''}
   <h3 class="mt">${esc(s.home)} – ${esc(s.away)}</h3><p class="hl">${esc(headline(s))}</p>
   ${afficheSection(s)}${enjeuSection(s)}${capsSection(s)}${faceSection(s)}</article>`;
-  $('#pressBody').querySelectorAll('.mcard').forEach(b=>b.onclick=()=>{PR.mid=b.dataset.sel;renderPress()});
+  $('#pressBody').querySelectorAll('.mcard').forEach(b=>b.onclick=()=>{PR.mid=b.dataset.sel;renderPress();const sh=$('#pressSheet');if(sh)sh.scrollIntoView({behavior:'smooth',block:'start'})});   // glisse jusqu'au détail du match choisi
   $('#pressBody').querySelectorAll('button[data-cl]').forEach(b=>b.onclick=()=>openClubModal(b.dataset.cl));
 }
 $('#pressPrint').onclick=()=>window.print();
